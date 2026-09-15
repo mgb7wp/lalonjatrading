@@ -26,3 +26,20 @@ sitio/informes/sintetico_*.html
 # historial de git es exactamente eso: una prueba fechada y dificil de falsear
 # de cuando se capturo cada dato. Es lo que con el tiempo convierte
 # `origen_pit: reconstruido` en `capturado`.
+
+# Secretos. `.env.example` SI se versiona (es la plantilla); `.env` jamas.
+# §51 del encargo lo exige y no estaba puesto: una clave de proveedor subida al
+# repositorio no se borra del historial con un commit de arrepentimiento.
+.env
+.env.*
+!.env.example
+
+# Frontend
+node_modules/
+.next/
+out/
+frontend/.env*.local
+
+# Herramientas
+.ruff_cache/
+.mypy_cache/

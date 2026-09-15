@@ -401,7 +401,7 @@ def test_las_importaciones_respetan_las_capas():
     Sin esta disciplina aparece el ciclo tipico de un proyecto asi: `cartera`
     necesita `riesgo`, que necesita `seleccion`, que necesita `cartera`.
     """
-    raiz = Path(__file__).resolve().parents[1] / "src" / "estrategia"
+    raiz = Path(__file__).resolve().parents[1] / "core" / "estrategia"
     nivel = {m: i for i, capa in enumerate(CAPAS) for m in capa}
 
     problemas = []
@@ -423,7 +423,7 @@ def test_las_importaciones_respetan_las_capas():
 
 def test_tipos_no_importa_nada_del_paquete():
     """`tipos` es la hoja del grafo; si importa algo, el ciclo vuelve."""
-    raiz = Path(__file__).resolve().parents[1] / "src" / "estrategia"
+    raiz = Path(__file__).resolve().parents[1] / "core" / "estrategia"
     arbol = ast.parse((raiz / "tipos.py").read_text(encoding="utf-8"))
     relativas = [
         n for n in ast.walk(arbol) if isinstance(n, ast.ImportFrom) and n.level > 0

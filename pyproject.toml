@@ -3,10 +3,15 @@ requires = ["setuptools>=68"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "estrategia"
-version = "0.2.0"
-description = "Estrategia mixta (fundamental + tecnica) multi-mercado, segun ESTRATEGIA.md"
+name = "lalonja"
+version = "0.3.0"
+description = "Plataforma de analisis cuantitativo de inversiones multi-mercado"
 requires-python = ">=3.11,<4"
+
+# Dependencias del NUCLEO cuantitativo (core/estrategia). Deliberadamente sin
+# FastAPI, sin SQLAlchemy y sin driver de base de datos: `core` tiene que poder
+# correr un backtest sin levantar nada. Esa frontera es la regla de dependencias
+# de docs/ARCHITECTURE.md y esta comprobada en tests/test_arquitectura.py.
 dependencies = [
     "pandas>=2.1,<3",
     "numpy>=1.26,<3",
@@ -19,15 +24,55 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
+# La plataforma SaaS. Se instala aparte para que quien solo quiera el motor no
+# arrastre un servidor web ni un driver de Postgres.
+backend = [
+    "fastapi>=0.110,<1",
+    "uvicorn[standard]>=0.27",
+    "pydantic-settings>=2.2,<3",
+    "sqlalchemy>=2.0,<3",
+    "alembic>=1.13,<2",
+    "psycopg[binary]>=3.1,<4",
+    "argon2-cffi>=23.1",
+    "pyjwt>=2.8,<3",
+    "redis>=5,<6",
+    "httpx>=0.27",
+]
+workers = ["apscheduler>=3.10,<4"]
 panel = ["streamlit>=1.30", "plotly>=5.18"]
-dev = ["pytest>=8", "pytest-cov>=4"]
+dev = ["pytest>=8", "pytest-cov>=4", "ruff>=0.4"]
 
 [project.scripts]
 estrategia = "estrategia.cli:main"
 
+# `core` alberga el motor; `backend`, `workers` y `ml` son la plataforma.
+# Se declaran por separado para que la separacion sea real en el empaquetado y
+# no solo una convencion de carpetas.
 [tool.setuptools.packages.find]
-where = ["src"]
+where = ["core", "."]
+include = ["estrategia*", "backend*", "workers*", "ml*"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 filterwarnings = ["ignore::DeprecationWarning"]
+
+[tool.ruff]
+line-length = 100
+# El linter entra con el codigo nuevo y no se aplica retroactivamente al motor ni
+# a sus tests. No es dejadez: reformatear 7.600 lineas probadas y sus 92 tests
+# produce un diff enorme cuyo unico efecto es que una herramienta deje de
+# quejarse, y entierra los cambios que si importan. Cuando haya un motivo mejor
+# que "que salga verde", se migran en un commit propio y aislado.
+extend-exclude = [
+    "core/estrategia",
+    "panel",
+    "tests/ayudas.py",
+    "tests/conftest.py",
+    "tests/test_anti_sesgo.py",
+    "tests/test_estrategia.py",
+    "tests/test_fuentes.py",
+    "tests/test_motor.py",
+]
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B"]

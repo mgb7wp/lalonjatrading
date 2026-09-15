@@ -20,8 +20,8 @@ import pandas as pd
 import streamlit as st
 
 RAIZ = Path(__file__).resolve().parents[1]
-if str(RAIZ / "src") not in sys.path:
-    sys.path.insert(0, str(RAIZ / "src"))
+if str(RAIZ / "core") not in sys.path:
+    sys.path.insert(0, str(RAIZ / "core"))
 
 from estrategia import backtest as backtest_mod  # noqa: E402
 from estrategia import config as config_mod  # noqa: E402
