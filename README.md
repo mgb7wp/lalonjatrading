@@ -18,6 +18,7 @@ fase están en [`docs/`](docs/):
 | [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) | Capas, regla de dependencias, modelo de datos, flujo |
 | [`docs/DATA_SOURCES.md`](docs/DATA_SOURCES.md) | Qué hay gratis por mercado y qué habrá que pagar |
 | [`docs/ROADMAP.md`](docs/ROADMAP.md) | 18 fases con criterio de aceptación |
+| [`docs/DATABASE.md`](docs/DATABASE.md) | Las 29 tablas y por qué son así |
 | [`docs/DEPLOYMENT.md`](docs/DEPLOYMENT.md) | Cómo levantarlo |
 | [`docs/GLOSARIO.md`](docs/GLOSARIO.md) | El motor está en español y la plataforma en inglés; aquí se traduce |
 
@@ -118,23 +119,26 @@ reconstruidos.
 
 ## La plataforma
 
-En construcción. Lo que ya funciona (FASE 1 del [roadmap](docs/ROADMAP.md)): el
-esqueleto desplegable, `/health`, `/markets` y el frontend mínimo que los
-consulta.
+En construcción. Lo que ya funciona (FASES 1 y 2 del
+[roadmap](docs/ROADMAP.md)): el esqueleto desplegable, el esquema completo de
+base de datos con migraciones, `/health`, `/markets` y el frontend mínimo.
 
 ```bash
 cp .env.example .env          # y genera un JWT_SECRET, ver docs/DEPLOYMENT.md
-docker compose up --build
+docker compose up --build     # aplica migraciones y carga la referencia al arrancar
 ```
 
 - API: <http://localhost:8000/api/v1/health>
 - OpenAPI: <http://localhost:8000/docs>
 - Frontend: `cd frontend && npm install && npm run dev` → <http://localhost:3000>
 
-`/markets` no tiene ningún mercado escrito en el código: sale de
-`config/*.yaml` a través del motor. Añadir Francia es una fila de YAML, no un
+`/markets` no tiene ningún mercado escrito en el código: salen de
+`config/*.yaml` a la tabla `market` mediante una carga idempotente que **falla si
+un mercado declarado no tiene metadatos**. Añadir Francia es configuración, no un
 despliegue. Es el requisito §3 del encargo, comprobado por un test en vez de
 prometido en un documento.
+
+El esquema y el porqué de cada decisión, en [`docs/DATABASE.md`](docs/DATABASE.md).
 
 La API arranca aunque Postgres no esté levantado, y `/health` lo dice. Un health
 check que se cae con su dependencia no sirve para diagnosticar nada.

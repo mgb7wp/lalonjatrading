@@ -150,9 +150,8 @@ falla si alguien rompe esa dirección.
 
 ## 5. Modelo de datos
 
-El esquema completo y sus migraciones se documentarán en `docs/DATABASE.md`
-cuando existan (FASE 2). Aquí, las decisiones estructurales que ya están
-tomadas.
+El esquema completo y el porqué de cada decisión están en
+[DATABASE.md](DATABASE.md). Aquí, el resumen.
 
 ### Entidades de referencia
 

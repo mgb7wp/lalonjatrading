@@ -45,22 +45,37 @@ Un hallazgo del camino: **`.env` no estaba en `.gitignore`**, que es justo lo qu
 
 ---
 
-## FASE 2 — Base de datos
+## FASE 2 — Base de datos ✅ COMPLETADA
 
-Modelo relacional completo con migraciones.
+29 tablas en PostgreSQL 16, con migraciones Alembic.
 
-- Entidades de referencia: market, exchange, country, currency, calendar,
-  security (con ISIN, company_id, alta/baja), asset_type
-- Series: price (particionada), fundamental_snapshot (con `publication_date` y
-  `pit_origin`), technical_indicator
-- Trazabilidad: model_version, feature_snapshot, score, model_prediction, signal,
-  pipeline_run, data_quality_check
-- Usuario y cartera: user, portfolio, position, transaction, watchlist, alert
-- Alembic; carga inicial de los 5 mercados desde YAML
+- Referencia: country, currency, market, exchange, security (con ISIN,
+  company_id, alta/baja, línea principal), index_composition
+- Series: price (particionada por año), fundamental_snapshot (con
+  `publication_date` y `pit_origin`), technical_indicator, fx_rate,
+  corporate_action
+- Trazabilidad: model_version, feature_snapshot, score, model_prediction,
+  signal, explanation
+- Usuario y cartera: user_account, portfolio, portfolio_position,
+  portfolio_transaction, watchlist(+item), alert(+event), saved_screener
+- Operación: pipeline_run, data_quality_check, data_freshness
+- `config/referencia.yaml` + `backend/db/seed.py`: carga idempotente que **falla
+  si un mercado de `reglas.yaml` no tiene metadatos**
+- `/markets` pasa a leer de la tabla, con el mismo contrato de salida
 
-**Aceptación:** migración desde cero en limpio; los 5 mercados y el universo
-cargados; `DATABASE.md` escrito; imposible insertar un `score` sin
-`model_version_id` (FK no nula).
+**Aceptación cumplida:** la base de datos de pruebas se recrea y se migra desde
+cero **en cada ejecución de la suite**, no una vez a mano; los 5 mercados y los
+140 valores cargan y recargan sin duplicar; `autogenerate` no detecta deriva
+entre modelos y esquema; `DATABASE.md` escrito; un `score` sin
+`model_version_id` es rechazado por la base de datos, y hay un test que lo
+comprueba.
+
+122 tests (20 nuevos). Los de base de datos se saltan solos si no hay Postgres,
+para que el motor siga corriendo en un portátil sin Docker.
+
+Dos cosas que aparecieron por el camino y no estaban en el plan: Postgres trunca
+los identificadores a 63 caracteres (hay un test que falla antes de que lo haga
+la migración) y la convención de nombres duplicaba el prefijo en los `CHECK`.
 
 ---
 
