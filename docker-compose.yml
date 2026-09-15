@@ -1,0 +1,67 @@
+# Entorno de desarrollo completo: docker compose up y ya hay plataforma.
+#
+# Cuatro servicios, no mas (decision D-11 de docs/PROJECT_PLAN.md). Sin Celery:
+# APScheduler dentro del worker cubre el pipeline diario, y el presupuesto
+# reducido de §50 es una restriccion real, no un adorno. Redis esta solo como
+# cache.
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-lalonja}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-lalonja}
+      POSTGRES_DB: ${POSTGRES_DB:-lalonja}
+    ports: ["5432:5432"]
+    volumes: ["pgdata:/var/lib/postgresql/data"]
+    healthcheck:
+      # Sin esto, la API arranca antes que Postgres y falla la primera vez en
+      # cada maquina nueva, que es la peor primera impresion posible.
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-lalonja} -d ${POSTGRES_DB:-lalonja}"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  redis:
+    image: redis:7-alpine
+    command: ["redis-server", "--save", "", "--appendonly", "no"]
+    ports: ["6379:6379"]
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  api:
+    build: .
+    command: uvicorn backend.main:app --host 0.0.0.0 --port 8000 --reload
+    environment:
+      DATABASE_URL: postgresql+psycopg://${POSTGRES_USER:-lalonja}:${POSTGRES_PASSWORD:-lalonja}@postgres:5432/${POSTGRES_DB:-lalonja}
+      REDIS_URL: redis://redis:6379/0
+      JWT_SECRET: ${JWT_SECRET:-solo-para-desarrollo-no-usar-en-produccion}
+      ENTORNO: ${ENTORNO:-desarrollo}
+    ports: ["8000:8000"]
+    volumes: [".:/app"]
+    depends_on:
+      postgres: {condition: service_healthy}
+      redis: {condition: service_healthy}
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://localhost:8000/api/v1/health"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+
+  worker:
+    build: .
+    command: python -m workers.runner
+    environment:
+      DATABASE_URL: postgresql+psycopg://${POSTGRES_USER:-lalonja}:${POSTGRES_PASSWORD:-lalonja}@postgres:5432/${POSTGRES_DB:-lalonja}
+      REDIS_URL: redis://redis:6379/0
+      ENTORNO: ${ENTORNO:-desarrollo}
+    volumes: [".:/app"]
+    depends_on:
+      postgres: {condition: service_healthy}
+      redis: {condition: service_healthy}
+
+volumes:
+  pgdata:

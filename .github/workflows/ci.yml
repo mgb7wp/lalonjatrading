@@ -1,0 +1,56 @@
+name: CI
+
+on:
+  push:
+    branches: ["main", "claude/**"]
+  pull_request:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  tests:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+
+      - name: Instalar
+        run: pip install -e ".[backend,workers,dev]"
+
+      - name: Lint (solo codigo nuevo; ver pyproject)
+        run: ruff check .
+
+      - name: Formato
+        run: ruff format --check .
+
+      - name: Tests
+        # Los tests no tocan la red ni una base de datos: el motor corre sobre el
+        # proveedor sintetico y /health esta escrito para poder informar de que
+        # Postgres no responde. Un CI que necesitara servicios levantados seria
+        # un CI que falla por motivos que no son el codigo.
+        run: pytest -q
+
+  frontend:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+      - name: Instalar
+        working-directory: frontend
+        run: npm install --no-audit --no-fund
+      - name: Typecheck
+        working-directory: frontend
+        run: npm run typecheck
+      - name: Build
+        working-directory: frontend
+        run: npm run build

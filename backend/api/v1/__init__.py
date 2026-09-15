@@ -1,0 +1,11 @@
+"""Router de la version 1 de la API."""
+
+from __future__ import annotations
+
+from fastapi import APIRouter
+
+from . import health, markets
+
+router = APIRouter()
+router.include_router(health.router)
+router.include_router(markets.router)
