@@ -76,7 +76,7 @@ respuestas grabadas.
 
 Cinco pasos, y ninguno toca el motor.
 
-**1. Escribe el adaptador** en `src/estrategia/datos/`, heredando de
+**1. Escribe el adaptador** en `core/estrategia/datos/`, heredando de
 `ProveedorPrecios`, `ProveedorFundamentales` o `Proveedor` según lo que sirva.
 
 **2. Declara sus capacidades.** No es documentación: el informe las lee para

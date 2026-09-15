@@ -87,7 +87,7 @@ flecha de vuelta desde el LLM hacia los scores.
 ## 4. Estructura del repositorio
 
 ```
-core/                  Motor cuantitativo. Sin Postgres, sin HTTP, sin red salvo proveedores.
+core/estrategia/       Motor cuantitativo. Sin Postgres, sin HTTP, sin red salvo proveedores.
   datos/               proveedor.py (interfaz) · contrato.py · enrutador.py · almacen.py
                        registro.py · yfinance_proveedor.py · eodhd_proveedor.py · sintetico.py
   indicadores.py       series vectorizadas, ventanas hacia atrás
@@ -126,6 +126,11 @@ docs/                  esta carpeta
 tests/                 unit · integration · ml · anti_sesgo · backtest
 ```
 
+El paquete de Python sigue llamándose `estrategia`, no `core`. La carpeta marca
+la frontera arquitectónica; renombrar el paquete obligaría a tocar los tests, el
+comando `estrategia` y el README a cambio de nada. La decisión D-14 ya dice que
+el motor no se retoca por cuestiones de nombres.
+
 ### La regla de dependencias
 
 ```
@@ -145,8 +150,9 @@ falla si alguien rompe esa dirección.
 
 ## 5. Modelo de datos
 
-Esquema completo y migraciones en [DATABASE.md](DATABASE.md) (se escribe en
-FASE 2). Aquí, las decisiones estructurales.
+El esquema completo y sus migraciones se documentarán en `docs/DATABASE.md`
+cuando existan (FASE 2). Aquí, las decisiones estructurales que ya están
+tomadas.
 
 ### Entidades de referencia
 
@@ -335,7 +341,9 @@ de cuándo, de qué fuente y con qué huecos.
 
 Seguridad: hashing Argon2, JWT de vida corta con refresh, validación con
 Pydantic en toda entrada, rate limiting por usuario y por IP, CORS restrictivo,
-secretos sólo por variables de entorno. Detalle en [SECURITY.md](SECURITY.md).
+secretos sólo por variables de entorno. El detalle irá a `docs/SECURITY.md`
+cuando la autenticación exista de verdad (FASE 12); adelantarlo ahora sería
+documentar intenciones, no el sistema.
 
 ---
 

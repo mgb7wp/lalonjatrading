@@ -1,6 +1,35 @@
-# Estrategia mixta (fundamental + técnica), multi-mercado
+# La Lonja — plataforma de análisis cuantitativo de inversiones
 
-Implementación de la estrategia definida en [`ESTRATEGIA.md`](ESTRATEGIA.md). El
+El proyecto tiene dos capas, y conviene saber en cuál se está mirando.
+
+**El motor** (`core/estrategia/`) es la implementación de la estrategia definida
+en [`ESTRATEGIA.md`](ESTRATEGIA.md): datos, indicadores, puntuación fundamental,
+señales y backtesting sobre cinco mercados. Funciona hoy, tiene 92 tests y se usa
+desde la línea de comandos sin necesidad de base de datos ni Docker.
+
+**La plataforma** (`backend/`, `workers/`, `ml/`, `frontend/`) envuelve ese motor
+en una aplicación SaaS: API, persistencia, usuarios, carteras, rankings y
+explicaciones. Está en construcción; el plan, las decisiones y el estado de cada
+fase están en [`docs/`](docs/):
+
+| Documento | Qué contiene |
+|---|---|
+| [`docs/PROJECT_PLAN.md`](docs/PROJECT_PLAN.md) | Análisis del encargo: 14 inconsistencias resueltas, riesgos y 14 decisiones registradas |
+| [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) | Capas, regla de dependencias, modelo de datos, flujo |
+| [`docs/DATA_SOURCES.md`](docs/DATA_SOURCES.md) | Qué hay gratis por mercado y qué habrá que pagar |
+| [`docs/ROADMAP.md`](docs/ROADMAP.md) | 18 fases con criterio de aceptación |
+| [`docs/DEPLOYMENT.md`](docs/DEPLOYMENT.md) | Cómo levantarlo |
+| [`docs/GLOSARIO.md`](docs/GLOSARIO.md) | El motor está en español y la plataforma en inglés; aquí se traduce |
+
+La regla que sostiene todo lo demás: **el motor no importa nada de la
+plataforma**. Por eso se puede correr un backtest en un portátil sin levantar
+Postgres, y por eso hay un test que falla si alguien invierte esa dirección.
+
+---
+
+## El motor
+
+El
 análisis fundamental decide **qué** empresas son candidatas, el técnico decide
 **cuándo** entrar y salir, y la gestión del riesgo decide **cuánto** comprar,
 sobre un universo de cinco mercados (España, EE. UU., Alemania, India y Brasil)
@@ -16,15 +45,15 @@ se publica el informe y se expone el panel, en [`DESPLIEGUE.md`](DESPLIEGUE.md).
 > son un punto de partida razonable, no valores optimizados. Un backtest es una
 > comprobación de que el código hace lo que dice, no una previsión.
 
-## Instalación
+### Instalación
 
 ```bash
-pip install -e ".[panel,dev]"
+pip install -e ".[panel,dev]"        # solo el motor
 ```
 
 Python 3.11 o superior.
 
-## Uso
+### Uso
 
 ```bash
 # 1. Descargar datos y dejarlos en caché
@@ -87,6 +116,29 @@ El comando es idempotente por semana, así que está pensado para programarlo:
 Cuanto antes empiece, antes habrá datos capturados de verdad en lugar de
 reconstruidos.
 
+## La plataforma
+
+En construcción. Lo que ya funciona (FASE 1 del [roadmap](docs/ROADMAP.md)): el
+esqueleto desplegable, `/health`, `/markets` y el frontend mínimo que los
+consulta.
+
+```bash
+cp .env.example .env          # y genera un JWT_SECRET, ver docs/DEPLOYMENT.md
+docker compose up --build
+```
+
+- API: <http://localhost:8000/api/v1/health>
+- OpenAPI: <http://localhost:8000/docs>
+- Frontend: `cd frontend && npm install && npm run dev` → <http://localhost:3000>
+
+`/markets` no tiene ningún mercado escrito en el código: sale de
+`config/*.yaml` a través del motor. Añadir Francia es una fila de YAML, no un
+despliegue. Es el requisito §3 del encargo, comprobado por un test en vez de
+prometido en un documento.
+
+La API arranca aunque Postgres no esté levantado, y `/health` lo dice. Un health
+check que se cae con su dependencia no sirve para diagnosticar nada.
+
 ## Configuración
 
 Todos los parámetros de estrategia viven en `config/`; el código no contiene
@@ -107,7 +159,7 @@ que es más fiable que buscar números en el código.
 ## Arquitectura
 
 ```
-src/estrategia/
+core/estrategia/
   tipos.py         Estructuras y enumeraciones compartidas. No importa nada del paquete.
   config.py        Carga y valida los cuatro YAML. Único sitio que lee configuración.
   indicadores.py   Medias, ATR de Wilder y momentum, precalculados por valor.

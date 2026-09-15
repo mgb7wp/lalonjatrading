@@ -17,7 +17,8 @@ aceptación).
 
 El encargo dice «desarrollar desde cero». **Este repositorio no está vacío.**
 
-Contiene `src/estrategia/`: 7.600 líneas de Python con 92 tests en verde que ya
+Contiene el motor —hoy en `core/estrategia/`, movido ahí en la FASE 1—: 7.600
+líneas de Python con 92 tests en verde que ya
 resuelven, y resuelven bien, la parte más difícil de lo que pide el encargo:
 
 | Lo que pide el encargo | Dónde está ya resuelto |
@@ -294,7 +295,7 @@ salida dice que no está disponible.
 Estructura de directorios acordada:
 
 ```
-core/        motor cuantitativo (el actual src/estrategia, sin dependencias web ni BD)
+core/        motor cuantitativo (sin dependencias web ni de base de datos)
 backend/     FastAPI: api/, db/, auth/, services/, adapters/
 workers/     jobs programados (ingesta, indicadores, scores, señales, alertas)
 ml/          feature store, entrenamiento, registro de modelos

@@ -22,18 +22,26 @@ de datos y legales identificados con mitigación.
 
 ---
 
-## FASE 1 — Esqueleto de plataforma
+## FASE 1 — Esqueleto de plataforma ✅ COMPLETADA
 
 Envolver el motor existente en una aplicación desplegable.
 
-- Reorganizar `src/estrategia` → `core/` sin cambiar comportamiento
-- `docker-compose`: postgres, redis, api, worker
-- FastAPI con `/health`, OpenAPI, configuración por entorno, `.env.example`
-- Next.js mínimo que habla con la API
-- CI (lint + tests) y test de arquitectura (`core` no importa `backend`)
+- `src/estrategia` → `core/estrategia`, sin tocar el paquete de Python: la
+  carpeta marca la frontera, renombrar el paquete no aportaba nada
+- `docker-compose`: postgres, redis, api, worker (+ healthchecks)
+- FastAPI con `/health`, `/markets`, OpenAPI, configuración por entorno,
+  `.env.example`
+- Next.js mínimo que consulta ambos endpoints, con el aviso legal ya puesto
+- CI (ruff + pytest + typecheck y build del frontend)
+- `tests/test_arquitectura.py`: el núcleo no puede importar la plataforma
 
-**Aceptación:** `docker compose up` levanta todo; `/health` en verde; los **92
-tests existentes siguen pasando**; CI en verde.
+**Aceptación cumplida:** los 92 tests del motor siguen pasando, más 10 nuevos
+(102 en total); `ruff check` y `ruff format --check` en verde; `/health` informa
+de qué dependencia está caída en lugar de caerse con ella; `/markets` sale de
+`config/*.yaml` y no del código.
+
+Un hallazgo del camino: **`.env` no estaba en `.gitignore`**, que es justo lo que
+§51 prohíbe. Arreglado aquí.
 
 ---
 
