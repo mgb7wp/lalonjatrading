@@ -34,7 +34,10 @@ services:
 
   api:
     build: .
-    command: uvicorn backend.main:app --host 0.0.0.0 --port 8000 --reload
+    # Migraciones y referencia antes de servir. Ambas cosas son idempotentes,
+    # asi que reiniciar el contenedor no tiene efectos secundarios y nadie
+    # tiene que acordarse de un paso manual.
+    command: sh -c "python scripts/init_db.py && uvicorn backend.main:app --host 0.0.0.0 --port 8000 --reload"
     environment:
       DATABASE_URL: postgresql+psycopg://${POSTGRES_USER:-lalonja}:${POSTGRES_PASSWORD:-lalonja}@postgres:5432/${POSTGRES_DB:-lalonja}
       REDIS_URL: redis://redis:6379/0
