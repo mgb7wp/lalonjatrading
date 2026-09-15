@@ -1,0 +1,89 @@
+# Detalles de implementacion, no parametros de estrategia.
+#
+# config/reglas.yaml es una copia literal del bloque del documento y no se toca.
+# Aqui viven las tablas que el codigo necesita para llevar ese bloque a la
+# practica: a que calendario de bolsa corresponde cada mercado, a que ETF se
+# resuelven los nombres de las referencias del informe, como se mapean los
+# sectores del proveedor y con que par de divisas se convierte cada moneda.
+#
+# Estan en config, y no en el codigo, por la misma razon que los parametros: el
+# documento pide que no haya valores sueltos incrustados en los modulos.
+
+# Calendario de negociacion de cada mercado (codigos de exchange_calendars).
+# India usa XBOM: la NSE comparte festivos con la BSE, aunque los tickers del
+# universo lleven sufijo .NS.
+calendarios:
+  es: XMAD
+  us: XNYS
+  de: XETR
+  in: XBOM
+  br: BVMF
+
+# Los nombres de `referencias_informe` de reglas.yaml, resueltos a ETF con
+# precios ajustados. Se convierten a divisa base con el mismo tipo de cambio que
+# usa la cartera, como pide el documento.
+# Se eligen ETF de acumulacion cotizados en EUR en Xetra: los dividendos van
+# dentro del precio (el documento pide referencias con dividendos) y no hay que
+# convertir divisa, asi que no hay un tipo de cambio mas donde equivocarse.
+# Ojo: su fecha de lanzamiento recorta la comparacion hacia atras.
+referencias:
+  msci_world_eur:
+    ticker: "EUNL.DE"
+    nombre: "iShares Core MSCI World UCITS ETF (Acc)"
+    divisa: EUR
+  msci_emerging_markets_eur:
+    ticker: "IS3N.DE"
+    nombre: "iShares Core MSCI EM IMI UCITS ETF (Acc)"
+    divisa: EUR
+
+# Codigos de bolsa de EODHD. NO coinciden con los sufijos de Yahoo: lo que en
+# Yahoo es `RELIANCE.NS` alli es `RELIANCE.NSE`, y `SAP.DE` es `SAP.XETRA`.
+# Sin verificar contra la API: es de las primeras cosas que dira el diagnostico
+# la primera vez que se ejecute con clave.
+codigos_eodhd:
+  es: MC
+  us: US
+  de: XETRA
+  in: NSE
+  br: SA
+
+# Par de divisas con el que se convierte cada moneda a la base (EUR).
+# El codigo invierte el par cuando hace falta.
+divisas:
+  EUR: null
+  USD: "EURUSD=X"
+  INR: "EURINR=X"
+  BRL: "EURBRL=X"
+
+# Mapeo de los sectores que devuelve el proveedor a las categorias que usa el
+# documento. El documento avisa de que la clasificacion "no siempre coincide
+# entre mercados", asi que lo que el proveedor devuelva y no este aqui se marca
+# como `desconocido` y el informe lo lista, en vez de colarse silenciosamente.
+sectores:
+  # Excluidos en la version 1: los ratios del filtro fundamental no son
+  # significativos para ellos.
+  "Financial Services": bancos
+  "Financial": bancos
+  "Banks": bancos
+  "Insurance": seguros
+  "Real Estate": inmobiliarias
+  # Resto
+  "Utilities": electricas
+  "Energy": energia
+  "Basic Materials": materiales
+  "Materials": materiales
+  "Industrials": industrial
+  "Technology": tecnologia
+  "Information Technology": tecnologia
+  "Communication Services": telecomunicaciones
+  "Consumer Cyclical": consumo_discrecional
+  "Consumer Discretionary": consumo_discrecional
+  "Consumer Defensive": consumo_basico
+  "Consumer Staples": consumo_basico
+  "Healthcare": salud
+  "Health Care": salud
+
+# Categorias que excluye `universo.excluir_sectores` de reglas.yaml, y a que
+# categoria corresponde la excepcion `fundamental.excepciones_sector`.
+equivalencias_excepciones:
+  electricas: electricas

@@ -1,0 +1,164 @@
+# Valores de partida, no optimizados
+
+proveedor_datos:
+  nombre: yfinance          # gratuito, sin clave; cubre precios de la mayoría de bolsas globales
+  fundamentales_anos_disponibles: 4   # limitación conocida del proveedor gratuito
+  ampliacion_futura: eodhd  # a evaluar solo si el histórico fundamental se queda corto
+
+cartera:
+  divisa_base: EUR
+  capital_inicial_eur: 10000
+  max_posiciones: 8
+  max_por_sector: 3
+  max_por_mercado: 3           # evita concentrar riesgo cambiario/liquidez en un solo país
+  peso_maximo: 0.15
+
+universo:
+  mercados:
+    - id: es
+      sufijo: ".MC"
+      divisa: EUR
+      clasificacion: desarrollado
+    - id: us
+      sufijo: ""
+      divisa: USD
+      clasificacion: desarrollado
+    - id: de
+      sufijo: ".DE"
+      divisa: EUR
+      clasificacion: desarrollado
+    - id: in
+      sufijo: ".NS"
+      divisa: INR
+      clasificacion: emergente
+    - id: br
+      sufijo: ".SA"
+      divisa: BRL
+      clasificacion: emergente
+  # lista completa de tickers por mercado en config/universo.yaml
+  volumen_minimo_desarrollado: 500000   # en divisa base, media diaria, últimos 3 meses
+  volumen_minimo_emergente: 1000000     # más exigente: la liquidez real suele ser menor
+  excluir_sectores: [bancos, seguros, inmobiliarias]
+  # AÑADIDO v0.3: "los últimos tres meses" en sesiones del calendario del propio
+  # mercado, en lugar de aritmética de meses naturales, que cuenta distinto
+  # según los festivos de cada país.
+  sesiones_volumen: 63
+  # AÑADIDO v0.3: unidad mínima de contratación. En B3 el libro principal va en
+  # lotes de 100; con 10.000 EUR eso deja fuera bastantes valores brasileños, y
+  # es mejor que el backtest lo refleje a que compre cantidades imposibles.
+  lote_por_mercado:
+    br: 100
+
+datos:
+  precios_ajustados: true
+  retraso_trimestral_dias: 90          # valor por defecto si no hay fecha de publicación
+  retraso_anual_dias: 120
+  retraso_por_mercado:
+    in: 105
+    br: 100
+  guardar_foto_fundamentales: semanal
+  guardar_foto_fx: semanal
+  # AÑADIDO v0.3: si un valor deja de dar precios, arrastrar el último cierre
+  # indefinidamente falsea el resultado. Pasadas estas sesiones sin dato se
+  # cierra la posición al último cierre conocido y el informe lo cuenta.
+  sesiones_sin_datos_cierre_forzoso: 10
+  # AÑADIDO v0.3: el tipo de cambio de referencia del BCE se publica por la
+  # tarde, así que decidir con el de hoy es usar un dato que aún no existe.
+  # Se decide y se dimensiona con el de D-1; se valora con el de D.
+  fx_decision_dia_anterior: true
+
+fundamental:
+  minimos:
+    roe: 0.10
+    margen_operativo: 0.08
+    crecimiento_ventas_3a: 0.00
+    flujo_caja_libre_positivo: true
+    deuda_neta_ebitda_max: 3.0
+  excepciones_sector:
+    electricas:
+      deuda_neta_ebitda_max: 5.0
+  percentiles: por_mercado             # nunca comparar ratios en bruto entre mercados
+  # AÑADIDO v0.3: la cohorte sobre la que se percentila. Con `solo_aprobadas`,
+  # un mercado con dos empresas aprobadas produce un 0 y un 100, y esa segunda
+  # gana huecos frente a candidatas de mercados bien cribados. Con
+  # `universo_elegible` la cohorte es todo el universo elegible del mercado en
+  # esa fecha y la puntuación se emite solo para las aprobadas.
+  cohorte_percentiles: universo_elegible
+  # AÑADIDO v0.3: por debajo de esta cohorte el percentil no significa nada y
+  # se recurre a la cohorte del bloque (desarrollado/emergente), avisando.
+  min_empresas_percentil: 8
+  # AÑADIDO v0.3: un dato fundamental demasiado viejo no dice nada del presente.
+  # Pasados estos días sin publicación nueva, la empresa deja de pasar el filtro.
+  antiguedad_maxima_dias: 450
+  # AÑADIDO v0.3: permite correr el motor solo con la pata técnica. No es una
+  # variante de la estrategia: es la única forma de validar calendarios, stops,
+  # costes y divisas sobre un histórico largo, porque el histórico fundamental
+  # del proveedor gratuito no llega a los mínimos de `validacion`.
+  activo: true
+  puntuacion:
+    peso_calidad: 0.5
+    peso_valoracion: 0.5
+
+tecnico:
+  revision: semanal                    # señal al cierre local, orden en la apertura siguiente de cada mercado
+  calculo_medias_momentum: divisa_local
+  indices_regimen:
+    es: "^IBEX"
+    us: "^GSPC"
+    de: "^GDAXI"
+    in: "^NSEI"
+    br: "^BVSP"
+  regimen_mercado_media: 200
+  media_corta: 50
+  media_larga: 200
+  momentum_meses: 12
+  momentum_excluir_meses: 1
+  atr_periodo: 14
+
+seleccion:
+  pesos:
+    fundamental: 0.5
+    momentum: 0.5
+
+salidas:
+  stop_inicial_atr: 2.0
+  stop_dinamico_atr: 3.0
+  salir_bajo_media_larga: true
+  salir_si_falla_fundamental: true
+
+riesgo:
+  por_operacion: 0.01
+
+costes:
+  comision_fija_eur: 3.0               # ajústala a tu bróker; algunos cobran más fuera de la UE
+  comision_pct: 0.0
+  deslizamiento_pct_por_mercado:
+    desarrollado: 0.001
+    emergente: 0.003                   # mayor por defecto; ajustar por mercado si hay datos mejores
+  impuestos_transaccion: config/impuestos_transaccion.yaml   # un % y unas reglas por país
+
+referencias_informe:
+  - msci_world_eur
+  - msci_emerging_markets_eur
+
+# AÑADIDO v0.4: el panel queda accesible desde internet sin autenticación, así
+# que conviene que no ofrezca a un desconocido un botón que lanza treinta
+# backtests en la máquina de uno. En modo público se desactiva ese botón y se
+# ocultan las rutas locales; el análisis sigue disponible por línea de comandos.
+panel:
+  modo_publico: true
+
+# AÑADIDO v0.3: el documento pide el ratio de Sharpe pero no fija ni la tasa
+# libre de riesgo ni la periodicidad. Con cinco calendarios distintos, las
+# posiciones se quedan congeladas en los festivos ajenos, lo que hunde la
+# volatilidad diaria medida e infla el Sharpe; por eso el titular va en
+# rentabilidades semanales.
+metricas:
+  tasa_libre_riesgo_anual: 0.0
+  periodicidad_sharpe: semanal
+
+validacion:
+  fraccion_diseno: 0.70
+  sensibilidad_pct: 0.25
+  min_operaciones: 100
+  min_operaciones_por_mercado: 15

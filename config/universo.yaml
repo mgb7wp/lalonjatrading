@@ -1,0 +1,168 @@
+# Universo de partida, agrupado por mercado.
+#
+# AVISO: esta lista es un PUNTO DE PARTIDA sin verificar contra el proveedor de
+# datos. Los tickers, los nombres y sobre todo los sectores hay que revisarlos
+# la primera vez que se descarguen datos reales: algunos valores cambian de
+# ticker, cambian de mercado principal o dejan de cotizar. El informe avisa de
+# los que el proveedor no reconoce.
+#
+# Bancos, aseguradoras e inmobiliarias estan deliberadamente fuera, como pide
+# el documento (ratios como deuda neta/EBITDA o EV/EBIT no son significativos
+# para ellas). El filtro por sector vuelve a comprobarlo con el dato del
+# proveedor, asi que esta ausencia es una conveniencia, no la salvaguarda.
+#
+# `sector_declarado` es solo un respaldo para cuando el proveedor no devuelve
+# sector. El sector que manda es el del proveedor, mapeado en
+# config/implementacion.yaml.
+
+mercados:
+
+  es:
+    - {ticker: "ITX.MC",   nombre: "Inditex",                sector_declarado: consumo_discrecional}
+    - {ticker: "IBE.MC",   nombre: "Iberdrola",              sector_declarado: electricas}
+    - {ticker: "TEF.MC",   nombre: "Telefonica",             sector_declarado: telecomunicaciones}
+    - {ticker: "REP.MC",   nombre: "Repsol",                 sector_declarado: energia}
+    - {ticker: "AENA.MC",  nombre: "Aena",                   sector_declarado: industrial}
+    - {ticker: "FER.MC",   nombre: "Ferrovial",              sector_declarado: industrial}
+    - {ticker: "ELE.MC",   nombre: "Endesa",                 sector_declarado: electricas}
+    - {ticker: "NTGY.MC",  nombre: "Naturgy",                sector_declarado: electricas}
+    - {ticker: "AMS.MC",   nombre: "Amadeus IT",             sector_declarado: tecnologia}
+    - {ticker: "GRF.MC",   nombre: "Grifols",                sector_declarado: salud}
+    - {ticker: "ACS.MC",   nombre: "ACS",                    sector_declarado: industrial}
+    - {ticker: "CLNX.MC",  nombre: "Cellnex",                sector_declarado: telecomunicaciones}
+    - {ticker: "RED.MC",   nombre: "Redeia",                 sector_declarado: electricas}
+    - {ticker: "ENG.MC",   nombre: "Enagas",                 sector_declarado: electricas}
+    - {ticker: "MTS.MC",   nombre: "ArcelorMittal",          sector_declarado: materiales}
+    - {ticker: "ANA.MC",   nombre: "Acciona",                sector_declarado: electricas}
+    - {ticker: "LOG.MC",   nombre: "Logista",                sector_declarado: industrial}
+    - {ticker: "ROVI.MC",  nombre: "Laboratorios Rovi",      sector_declarado: salud}
+    - {ticker: "VIS.MC",   nombre: "Viscofan",               sector_declarado: consumo_basico}
+    - {ticker: "CIE.MC",   nombre: "CIE Automotive",         sector_declarado: consumo_discrecional}
+    - {ticker: "FDR.MC",   nombre: "Fluidra",                sector_declarado: industrial}
+    - {ticker: "ACX.MC",   nombre: "Acerinox",               sector_declarado: materiales}
+    - {ticker: "IAG.MC",   nombre: "IAG",                    sector_declarado: industrial}
+    - {ticker: "MEL.MC",   nombre: "Melia Hotels",           sector_declarado: consumo_discrecional}
+
+  us:
+    - {ticker: "AAPL",     nombre: "Apple",                  sector_declarado: tecnologia}
+    - {ticker: "MSFT",     nombre: "Microsoft",              sector_declarado: tecnologia}
+    - {ticker: "GOOGL",    nombre: "Alphabet",               sector_declarado: telecomunicaciones}
+    - {ticker: "AMZN",     nombre: "Amazon",                 sector_declarado: consumo_discrecional}
+    - {ticker: "NVDA",     nombre: "NVIDIA",                 sector_declarado: tecnologia}
+    - {ticker: "META",     nombre: "Meta Platforms",         sector_declarado: telecomunicaciones}
+    - {ticker: "ORCL",     nombre: "Oracle",                 sector_declarado: tecnologia}
+    - {ticker: "CSCO",     nombre: "Cisco",                  sector_declarado: tecnologia}
+    - {ticker: "ADBE",     nombre: "Adobe",                  sector_declarado: tecnologia}
+    - {ticker: "CRM",      nombre: "Salesforce",             sector_declarado: tecnologia}
+    - {ticker: "AMD",      nombre: "AMD",                    sector_declarado: tecnologia}
+    - {ticker: "JNJ",      nombre: "Johnson & Johnson",      sector_declarado: salud}
+    - {ticker: "MRK",      nombre: "Merck",                  sector_declarado: salud}
+    - {ticker: "ABBV",     nombre: "AbbVie",                 sector_declarado: salud}
+    - {ticker: "LLY",      nombre: "Eli Lilly",              sector_declarado: salud}
+    - {ticker: "PG",       nombre: "Procter & Gamble",       sector_declarado: consumo_basico}
+    - {ticker: "KO",       nombre: "Coca-Cola",              sector_declarado: consumo_basico}
+    - {ticker: "PEP",      nombre: "PepsiCo",                sector_declarado: consumo_basico}
+    - {ticker: "COST",     nombre: "Costco",                 sector_declarado: consumo_basico}
+    - {ticker: "WMT",      nombre: "Walmart",                sector_declarado: consumo_basico}
+    - {ticker: "XOM",      nombre: "Exxon Mobil",            sector_declarado: energia}
+    - {ticker: "CVX",      nombre: "Chevron",                sector_declarado: energia}
+    - {ticker: "HD",       nombre: "Home Depot",             sector_declarado: consumo_discrecional}
+    - {ticker: "MCD",      nombre: "McDonald's",             sector_declarado: consumo_discrecional}
+    - {ticker: "NKE",      nombre: "Nike",                   sector_declarado: consumo_discrecional}
+    - {ticker: "CAT",      nombre: "Caterpillar",            sector_declarado: industrial}
+    - {ticker: "HON",      nombre: "Honeywell",              sector_declarado: industrial}
+    - {ticker: "UNP",      nombre: "Union Pacific",          sector_declarado: industrial}
+    - {ticker: "LIN",      nombre: "Linde",                  sector_declarado: materiales}
+    - {ticker: "NEE",      nombre: "NextEra Energy",         sector_declarado: electricas}
+    - {ticker: "DUK",      nombre: "Duke Energy",            sector_declarado: electricas}
+    - {ticker: "SO",       nombre: "Southern Company",       sector_declarado: electricas}
+    - {ticker: "VZ",       nombre: "Verizon",                sector_declarado: telecomunicaciones}
+
+  de:
+    - {ticker: "SAP.DE",   nombre: "SAP",                    sector_declarado: tecnologia}
+    - {ticker: "SIE.DE",   nombre: "Siemens",                sector_declarado: industrial}
+    - {ticker: "DTE.DE",   nombre: "Deutsche Telekom",       sector_declarado: telecomunicaciones}
+    - {ticker: "BAS.DE",   nombre: "BASF",                   sector_declarado: materiales}
+    - {ticker: "BAYN.DE",  nombre: "Bayer",                  sector_declarado: salud}
+    - {ticker: "MRK.DE",   nombre: "Merck KGaA",             sector_declarado: salud}
+    - {ticker: "RWE.DE",   nombre: "RWE",                    sector_declarado: electricas}
+    - {ticker: "EOAN.DE",  nombre: "E.ON",                   sector_declarado: electricas}
+    - {ticker: "VOW3.DE",  nombre: "Volkswagen",             sector_declarado: consumo_discrecional}
+    - {ticker: "BMW.DE",   nombre: "BMW",                    sector_declarado: consumo_discrecional}
+    - {ticker: "MBG.DE",   nombre: "Mercedes-Benz Group",    sector_declarado: consumo_discrecional}
+    - {ticker: "ADS.DE",   nombre: "Adidas",                 sector_declarado: consumo_discrecional}
+    - {ticker: "PUM.DE",   nombre: "Puma",                   sector_declarado: consumo_discrecional}
+    - {ticker: "HEN3.DE",  nombre: "Henkel",                 sector_declarado: consumo_basico}
+    - {ticker: "BEI.DE",   nombre: "Beiersdorf",             sector_declarado: consumo_basico}
+    - {ticker: "AIR.DE",   nombre: "Airbus",                 sector_declarado: industrial}
+    - {ticker: "DHL.DE",   nombre: "DHL Group",              sector_declarado: industrial}
+    - {ticker: "BNR.DE",   nombre: "Brenntag",               sector_declarado: industrial}
+    - {ticker: "HEI.DE",   nombre: "Heidelberg Materials",   sector_declarado: materiales}
+    - {ticker: "SY1.DE",   nombre: "Symrise",                sector_declarado: materiales}
+    - {ticker: "IFX.DE",   nombre: "Infineon",               sector_declarado: tecnologia}
+    - {ticker: "CON.DE",   nombre: "Continental",            sector_declarado: consumo_discrecional}
+    - {ticker: "FRE.DE",   nombre: "Fresenius",              sector_declarado: salud}
+    - {ticker: "SRT3.DE",  nombre: "Sartorius",              sector_declarado: salud}
+    - {ticker: "ZAL.DE",   nombre: "Zalando",                sector_declarado: consumo_discrecional}
+
+  in:
+    - {ticker: "RELIANCE.NS",   nombre: "Reliance Industries",   sector_declarado: energia}
+    - {ticker: "TCS.NS",        nombre: "Tata Consultancy",      sector_declarado: tecnologia}
+    - {ticker: "INFY.NS",       nombre: "Infosys",               sector_declarado: tecnologia}
+    - {ticker: "WIPRO.NS",      nombre: "Wipro",                 sector_declarado: tecnologia}
+    - {ticker: "HCLTECH.NS",    nombre: "HCL Technologies",      sector_declarado: tecnologia}
+    - {ticker: "TECHM.NS",      nombre: "Tech Mahindra",         sector_declarado: tecnologia}
+    - {ticker: "HINDUNILVR.NS", nombre: "Hindustan Unilever",    sector_declarado: consumo_basico}
+    - {ticker: "ITC.NS",        nombre: "ITC",                   sector_declarado: consumo_basico}
+    - {ticker: "NESTLEIND.NS",  nombre: "Nestle India",          sector_declarado: consumo_basico}
+    - {ticker: "BRITANNIA.NS",  nombre: "Britannia Industries",  sector_declarado: consumo_basico}
+    - {ticker: "LT.NS",         nombre: "Larsen & Toubro",       sector_declarado: industrial}
+    - {ticker: "ADANIPORTS.NS", nombre: "Adani Ports",           sector_declarado: industrial}
+    - {ticker: "SUNPHARMA.NS",  nombre: "Sun Pharmaceutical",    sector_declarado: salud}
+    - {ticker: "DRREDDY.NS",    nombre: "Dr. Reddy's",           sector_declarado: salud}
+    - {ticker: "CIPLA.NS",      nombre: "Cipla",                 sector_declarado: salud}
+    - {ticker: "MARUTI.NS",     nombre: "Maruti Suzuki",         sector_declarado: consumo_discrecional}
+    - {ticker: "TATAMOTORS.NS", nombre: "Tata Motors",           sector_declarado: consumo_discrecional}
+    - {ticker: "TITAN.NS",      nombre: "Titan Company",         sector_declarado: consumo_discrecional}
+    - {ticker: "ASIANPAINT.NS", nombre: "Asian Paints",          sector_declarado: materiales}
+    - {ticker: "ULTRACEMCO.NS", nombre: "UltraTech Cement",      sector_declarado: materiales}
+    - {ticker: "GRASIM.NS",     nombre: "Grasim Industries",     sector_declarado: materiales}
+    - {ticker: "JSWSTEEL.NS",   nombre: "JSW Steel",             sector_declarado: materiales}
+    - {ticker: "TATASTEEL.NS",  nombre: "Tata Steel",            sector_declarado: materiales}
+    - {ticker: "HINDALCO.NS",   nombre: "Hindalco Industries",   sector_declarado: materiales}
+    - {ticker: "NTPC.NS",       nombre: "NTPC",                  sector_declarado: electricas}
+    - {ticker: "POWERGRID.NS",  nombre: "Power Grid Corp",       sector_declarado: electricas}
+    - {ticker: "ONGC.NS",       nombre: "ONGC",                  sector_declarado: energia}
+    - {ticker: "COALINDIA.NS",  nombre: "Coal India",            sector_declarado: energia}
+    - {ticker: "BPCL.NS",       nombre: "Bharat Petroleum",      sector_declarado: energia}
+    - {ticker: "BHARTIARTL.NS", nombre: "Bharti Airtel",         sector_declarado: telecomunicaciones}
+
+  br:
+    - {ticker: "PETR4.SA",  nombre: "Petrobras",              sector_declarado: energia}
+    - {ticker: "PRIO3.SA",  nombre: "PRIO",                   sector_declarado: energia}
+    - {ticker: "CSAN3.SA",  nombre: "Cosan",                  sector_declarado: energia}
+    - {ticker: "UGPA3.SA",  nombre: "Ultrapar",               sector_declarado: energia}
+    - {ticker: "VALE3.SA",  nombre: "Vale",                   sector_declarado: materiales}
+    - {ticker: "SUZB3.SA",  nombre: "Suzano",                 sector_declarado: materiales}
+    - {ticker: "GGBR4.SA",  nombre: "Gerdau",                 sector_declarado: materiales}
+    - {ticker: "CSNA3.SA",  nombre: "CSN",                    sector_declarado: materiales}
+    - {ticker: "KLBN11.SA", nombre: "Klabin",                 sector_declarado: materiales}
+    - {ticker: "ABEV3.SA",  nombre: "Ambev",                  sector_declarado: consumo_basico}
+    - {ticker: "BRFS3.SA",  nombre: "BRF",                    sector_declarado: consumo_basico}
+    - {ticker: "JBSS3.SA",  nombre: "JBS",                    sector_declarado: consumo_basico}
+    - {ticker: "RADL3.SA",  nombre: "Raia Drogasil",          sector_declarado: consumo_basico}
+    - {ticker: "WEGE3.SA",  nombre: "WEG",                    sector_declarado: industrial}
+    - {ticker: "EMBR3.SA",  nombre: "Embraer",                sector_declarado: industrial}
+    - {ticker: "RENT3.SA",  nombre: "Localiza",               sector_declarado: industrial}
+    - {ticker: "ELET3.SA",  nombre: "Eletrobras",             sector_declarado: electricas}
+    - {ticker: "EQTL3.SA",  nombre: "Equatorial Energia",     sector_declarado: electricas}
+    - {ticker: "CPLE6.SA",  nombre: "Copel",                  sector_declarado: electricas}
+    - {ticker: "CMIG4.SA",  nombre: "Cemig",                  sector_declarado: electricas}
+    - {ticker: "SBSP3.SA",  nombre: "Sabesp",                 sector_declarado: electricas}
+    - {ticker: "LREN3.SA",  nombre: "Lojas Renner",           sector_declarado: consumo_discrecional}
+    - {ticker: "MGLU3.SA",  nombre: "Magazine Luiza",         sector_declarado: consumo_discrecional}
+    - {ticker: "TOTS3.SA",  nombre: "Totvs",                  sector_declarado: tecnologia}
+    - {ticker: "HAPV3.SA",  nombre: "Hapvida",                sector_declarado: salud}
+    - {ticker: "RDOR3.SA",  nombre: "Rede D'Or",              sector_declarado: salud}
+    - {ticker: "VIVT3.SA",  nombre: "Telefonica Brasil",      sector_declarado: telecomunicaciones}
+    - {ticker: "TIMS3.SA",  nombre: "TIM Brasil",             sector_declarado: telecomunicaciones}

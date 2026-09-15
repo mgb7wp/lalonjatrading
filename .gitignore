@@ -1,0 +1,28 @@
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.venv/
+venv/
+*.egg-info/
+.coverage
+htmlcov/
+
+# Datos descargados y resultados intermedios: no se versionan, se regeneran.
+datos/cache/
+datos/resultados/
+salida/
+
+# El sitio SI se versiona —asi el archivo semanal de informes queda en el
+# historial—, pero nunca las paginas generadas con datos sinteticos: el sitio es
+# publico, y publicar una curva de capital inventada como si fuera el estado real
+# de una cartera es exactamente el error que el resto del proyecto se esfuerza en
+# evitar. Las genera el ciclo semanal a partir de datos de verdad.
+sitio/index.html
+sitio/informes/sintetico_*.html
+
+# datos/fotos/ SI se versiona, a proposito. El documento pide guardar cada
+# semana una copia de los fundamentales y del tipo de cambio con su fecha de
+# descarga, para ir construyendo un historico sin sesgo de anticipacion. El
+# historial de git es exactamente eso: una prueba fechada y dificil de falsear
+# de cuando se capturo cada dato. Es lo que con el tiempo convierte
+# `origen_pit: reconstruido` en `capturado`.

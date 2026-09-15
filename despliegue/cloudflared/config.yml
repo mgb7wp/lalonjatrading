@@ -1,0 +1,31 @@
+# Plantilla de configuracion de Cloudflare Tunnel para el panel.
+#
+# Copiala a ~/.cloudflared/config.yml y sustituye TUNEL_ID y el dominio. Los
+# pasos completos —crear el tunel, crear el registro DNS y dejarlo como
+# servicio— estan en DESPLIEGUE.md.
+#
+# El tunel sale desde tu maquina hacia Cloudflare, asi que no hay que abrir
+# ningun puerto en el router ni tener IP fija. El panel solo esta disponible
+# mientras esa maquina este encendida y cloudflared corriendo; el informe
+# estatico, que vive en Cloudflare Pages, no depende de eso.
+
+tunnel: TUNEL_ID
+credentials-file: /home/USUARIO/.cloudflared/TUNEL_ID.json
+
+ingress:
+  - hostname: panel.TU-DOMINIO.com
+    service: http://localhost:8501
+    originRequest:
+      # Streamlit se apoya en WebSockets para no recargar la pagina entera en
+      # cada interaccion. Sin estos margenes, la conexion se corta sola cada
+      # pocos minutos y el panel parece que se ha colgado.
+      noTLSVerify: false
+      connectTimeout: 30s
+      tcpKeepAlive: 30s
+      # Un backtest sobre diez anios tarda mas que el tiempo de espera por
+      # defecto.
+      httpHostHeader: panel.TU-DOMINIO.com
+
+  # Todo lo que no sea el panel se rechaza. Sin esta regla final cloudflared
+  # no arranca.
+  - service: http_status:404
