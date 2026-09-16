@@ -71,23 +71,75 @@ def test_se_queda_con_la_primera_publicacion_de_cada_periodo():
     assert resultado[dt.date(2023, 12, 31)]["valor"] == 1200.0
 
 
-def test_no_mezcla_dos_conceptos_en_la_misma_serie():
-    """Mezclar etiquetas produce saltos de crecimiento que no ocurrieron.
+def test_cose_la_serie_cuando_cambia_la_etiqueta_contable():
+    """La forma real de Apple, que es la de media EE. UU.
 
-    Si el concepto preferido cubre un ejercicio, no se completa la serie con otro
-    para los demas: son magnitudes definidas de forma distinta.
+    Apple declara sus ventas como `SalesRevenueNet` hasta 2017 y como
+    `RevenueFromContractWithCustomerExcludingAssessedTax` desde entonces, porque
+    la norma ASC 606 cambio la etiqueta. Quedandose solo con el concepto
+    preferido salen 9 de 19 ejercicios y **diez anos desaparecen en silencio**:
+    el crecimiento de ventas a tres anos deja de poder calcularse y nadie sabe
+    por que.
+
+    Los huecos se rellenan en orden de preferencia.
     """
+    from estrategia.datos.sec_proveedor import CONCEPTOS
+
     hechos = {
         **_hecho(
             "RevenueFromContractWithCustomerExcludingAssessedTax",
-            [_anual("2023-12-31", 1200.0, "2024-02-09")],
+            [
+                _anual("2018-12-31", 1200.0, "2019-02-09"),
+                _anual("2019-12-31", 1300.0, "2020-02-09"),
+            ],
         ),
-        **_hecho("Revenues", [_anual("2022-12-31", 9999.0, "2023-02-10")]),
+        **_hecho(
+            "SalesRevenueNet",
+            [
+                _anual("2016-12-31", 900.0, "2017-02-10"),
+                _anual("2017-12-31", 1000.0, "2018-02-10"),
+            ],
+        ),
     }
+    resultado = primera_publicacion(hechos, CONCEPTOS["ventas"])
+    assert sorted(f.year for f in resultado) == [2016, 2017, 2018, 2019]
+    assert resultado[dt.date(2016, 12, 31)]["valor"] == 900.0
+    assert resultado[dt.date(2019, 12, 31)]["valor"] == 1300.0
+
+
+def test_el_concepto_preferido_no_lo_pisa_uno_menos_preferido():
+    """Rellenar huecos si; sobrescribir nunca.
+
+    Donde dos etiquetas coexisten tiene que ganar siempre la preferida, o habria
+    dos versiones de la misma cifra compitiendo y el resultado dependeria del
+    orden en que se recorren los datos.
+    """
     from estrategia.datos.sec_proveedor import CONCEPTOS
 
+    hechos = {
+        **_hecho(
+            "RevenueFromContractWithCustomerExcludingAssessedTax",
+            [_anual("2018-12-31", 1200.0, "2019-02-09")],
+        ),
+        # Mismo ejercicio, otra etiqueta, y publicada ANTES: aun asi no gana.
+        **_hecho("SalesRevenueNet", [_anual("2018-12-31", 9999.0, "2019-01-02")]),
+    }
     resultado = primera_publicacion(hechos, CONCEPTOS["ventas"])
-    assert set(resultado) == {dt.date(2023, 12, 31)}, "no debe colarse el otro concepto"
+    assert resultado[dt.date(2018, 12, 31)]["valor"] == 1200.0
+    assert resultado[dt.date(2018, 12, 31)]["concepto"].startswith("RevenueFromContract")
+
+
+def test_una_reexpresion_no_gana_dentro_del_mismo_concepto():
+    """La regla de la primera publicacion sigue valiendo tras el cosido."""
+    hechos = _hecho(
+        "Revenues",
+        [
+            _anual("2022-12-31", 1000.0, "2023-02-10"),
+            _anual("2022-12-31", 1150.0, "2024-02-09"),
+        ],
+    )
+    resultado = primera_publicacion(hechos, ("Revenues",))
+    assert resultado[dt.date(2022, 12, 31)]["valor"] == 1000.0
 
 
 def test_descarta_las_magnitudes_trimestrales_de_un_10k():

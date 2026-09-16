@@ -117,12 +117,36 @@ def verificar_sec(cfg, informe: Informe) -> None:
     # en este proyecto con el EV de yfinance.
     _verificar_contrato_fundamentales(informe, "sec", df)
 
-    retraso = (df["fecha_publicacion"] - df["fin_periodo"]).dt.days
+    # Las fechas viajan como `datetime.date` de Python por todo el motor, no como
+    # marcas de tiempo de pandas, asi que `.dt` no sirve: se restan a mano.
+    # Que etiquetas XBRL cubren cada magnitud. Una serie cosida a partir de dos
+    # es lo normal cuando cambia una norma contable; lo que no puede pasar
+    # desapercibido es cuantas y donde cae el corte, porque ahi puede haber un
+    # escalon que no es un cambio del negocio.
+    from estrategia.datos.sec_proveedor import conceptos_por_magnitud
+
+    hechos: dict = {}
+    ficha = fuente.ficha("AAPL")
+    for espacio in ("us-gaap", "ifrs-full", "dei"):
+        hechos.update((ficha.get("facts") or {}).get(espacio) or {})
+    for magnitud, cuenta in conceptos_por_magnitud(hechos).items():
+        if len(cuenta) > 1:
+            partes = ", ".join(f"{k}={v}" for k, v in sorted(cuenta.items(), key=lambda x: -x[1]))
+            informe.anotar(
+                "sec",
+                f"serie de {magnitud} cosida",
+                "aviso",
+                f"{sum(cuenta.values())} ejercicios de {len(cuenta)} etiquetas: {partes}",
+            )
+
+    retraso = sorted((a - b).days for a, b in zip(df["fecha_publicacion"], df["fin_periodo"]))
+    mediana = retraso[len(retraso) // 2]
     informe.anotar(
         "sec",
         "retraso de publicacion",
         "ok",
-        f"mediana {int(retraso.median())} dias (si es un valor redondo, esta estimado)",
+        f"mediana {mediana} dias, rango {retraso[0]}-{retraso[-1]} "
+        f"(si fueran todos identicos, estaria estimado y no seria real)",
     )
 
 
