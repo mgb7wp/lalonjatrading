@@ -79,17 +79,42 @@ la migración) y la convención de nombres duplicaba el prefijo en los `CHECK`.
 
 ---
 
-## FASE 3 — Ingesta de datos
+## FASE 3 — Ingesta de datos ✅ COMPLETADA
 
-- Puente enrutador → Postgres con `UPSERT` idempotente y carga por `COPY`
-- `scripts/verify_sources.py` y cierre de los `POR VERIFICAR` de DATA_SOURCES.md
-- **Adaptador SEC EDGAR** (fundamentales EE. UU. con fecha de presentación real)
-- **Adaptador BCE** (FX oficial) y **Stooq** (respaldo de precios)
-- Persistencia de los checks de calidad en `data_quality_check`
+- Puente enrutador → Postgres: `COPY` a una temporal y `UPSERT` sobre la clave
+  natural, con `huella()` para comprobar que una recarga no cambia nada
+- `backend/adapters/nucleo.py`: la costura núcleo(es) ↔ plataforma(en), en un
+  solo sitio
+- `workers/pipeline/ingesta.py`: etapas registradas en `pipeline_run`, fallo de
+  un mercado aislado del resto, comprobaciones de calidad persistidas
+- **Adaptador SEC EDGAR**: la única fuente del proyecto que puede emitir
+  `pit_origin = captured`, quedándose con la primera publicación de cada periodo
+- **Adaptador BCE** (FX oficial) y **Stooq** (respaldo de precios, con su duda
+  sobre el ajuste por dividendos declarada en vez de disimulada)
+- `scripts/verify_sources.py` y `scripts/update_market_data.py`
+- `/health/data` con frescura, cobertura y rancidez por mercado
 
-**Aceptación:** `python scripts/update_market_data.py` carga los 5 mercados;
-**ejecutarlo dos veces no cambia una sola fila**; `/health/data` informa de
-frescura y huecos por mercado; EE. UU. con `pit_origin = captured`.
+**Aceptación cumplida:** los 5 mercados cargan (105.395 precios, 700
+fundamentales, 3.294 tipos de cambio con el proveedor sintético); **una recarga
+forzada deja las tres tablas con huella idéntica**, comprobado en el script y en
+un test; `/health/data` informa por mercado; el adaptador de EE. UU. emite
+`capturado` y hay un test que lo prueba sobre una reexpresión.
+
+144 tests (22 nuevos).
+
+**Lo que NO está cerrado, y es de verdad:** ninguno de los tres adaptadores se ha
+ejecutado nunca contra su API. El entorno bloquea `sec.gov`, `stooq.com` y
+`data-api.ecb.europa.eu` con `403`. Lo probado es el parseo, contra respuestas
+grabadas y contra el contrato. `verify_sources.py` existe precisamente para esa
+primera ejecución con red, y hasta que se haga, las filas `POR VERIFICAR` de
+DATA_SOURCES.md siguen siendo hipótesis.
+
+Tres cosas que aparecieron al ejecutarlo y no estaban en el plan: `LIKE ...
+EXCLUDING ALL` conserva el `NOT NULL` de una columna `BIGSERIAL` pero descarta su
+secuencia, así que la temporal de fundamentales rechazaba todo; el umbral de
+rancio tenía forma de precio y aplicado a fundamentales marcaba los cinco
+mercados; y el proveedor sintético emite fundamentales con fecha de publicación
+futura, que ahora se cuentan y se avisan en lugar de pasar por «último dato».
 
 ---
 

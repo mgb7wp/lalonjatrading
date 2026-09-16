@@ -3,15 +3,23 @@
 Qué se puede obtener gratis para cada mercado, qué no, y qué hay que pagar antes
 de cobrar a nadie. Es el documento que pide §50 del encargo.
 
-> **Estado de verificación.** El entorno donde se redactó este documento tiene la
-> salida de red restringida por política (`403` en CONNECT hacia `sec.gov`,
-> `ecb.europa.eu`, `stooq.com`), así que **los endpoints y límites de abajo no se
-> han podido comprobar en vivo**. Están escritos a partir de documentación
+> **Estado de verificación.** El entorno donde se desarrolla tiene la salida de
+> red restringida por política (`403` en CONNECT hacia `sec.gov`,
+> `ecb.europa.eu`, `stooq.com`), así que **los endpoints y límites de abajo
+> siguen sin comprobarse en vivo**. Están escritos a partir de documentación
 > conocida y marcados con su estado. Las cuotas y precios de las APIs cambian a
-> menudo. Antes de apoyarse en cualquiera de ellas hay que ejecutar
-> `python scripts/verify_sources.py`, que comprueba una a una y escribe el
-> resultado en este mismo formato. **Ninguna fila marcada `POR VERIFICAR` debe
-> convertirse en dependencia del pipeline sin pasar antes por ahí.**
+> menudo.
+>
+> `python scripts/verify_sources.py` ya existe (FASE 3) y es lo que convierte
+> cada hipótesis en un hecho. Ejecutado aquí devuelve `403` en las tres, que es
+> el resultado honesto. **Ninguna fila marcada `POR VERIFICAR` debe convertirse
+> en dependencia del pipeline sin pasar antes por ahí.**
+>
+> Lo que sí está probado sin red es el **parseo** de las tres fuentes nuevas,
+> contra respuestas grabadas y contra el contrato de datos
+> (`tests/test_ingesta.py`). Es donde de verdad se puede uno equivocar; lo que
+> no se puede saber sin red es si los campos que devuelve la API real se llaman
+> como dice su documentación.
 
 Para cómo se añade una fuente al código, ver [FUENTES.md](../FUENTES.md), que
 sigue vigente y describe el mecanismo (interfaz, capacidades, registro,
@@ -62,18 +70,36 @@ verificada su cobertura.
 
 | Mercado | Fuente gratuita | Fechas de publicación reales | Histórico | Estado |
 |---|---|---|---|---|
-| **EE. UU.** | **SEC EDGAR** (`data.sec.gov`, XBRL `companyfacts`) | **Sí** (`filed`) | 2009→ | POR VERIFICAR — **prioridad alta** |
-| **Brasil** | **CVM Dados Abertos** (DFP anuales, ITR trimestrales, CSV por año) | **Sí** (fecha de recepción) | ~2010→ | POR VERIFICAR — prioridad alta |
+| **EE. UU.** | **SEC EDGAR** (`data.sec.gov`, XBRL `companyfacts`) | **Sí** (`filed`) | 2009→ | **ADAPTADOR ESCRITO** (FASE 3); parseo probado, red POR VERIFICAR |
+| **Brasil** | **CVM Dados Abertos** (DFP anuales, ITR trimestrales, CSV por año) | **Sí** (fecha de recepción) | ~2010→ | POR VERIFICAR — prioridad alta (FASE 5) |
 | **España** | — | No | — | **Sin fuente gratuita fiable.** La CNMV publica los informes financieros, pero no en formato explotable de forma sistemática. BME/SIX es de pago. |
 | **India** | — | No | — | **Sin fuente gratuita fiable.** NSE y BSE exponen endpoints públicos, pero sus condiciones no permiten uso sistemático ni comercial. |
 | **Alemania** | Bundesanzeiger | Parcial | — | No explorado. Baja prioridad. |
 | *Todos (respaldo)* | yfinance | **No** (estimadas) | ~4 ejercicios | EN USO |
 
-**Por qué SEC EDGAR y CVM importan tanto:** dan la **fecha real de presentación**.
-Eso convierte `pit_origin` de `reconstructed` a `captured` y elimina la
-estimación por retraso fijo, que es el sesgo más serio que arrastra hoy el
-backtest fundamental. Son gratuitas, oficiales y su uso está expresamente
-permitido. Trabajo estimado: un adaptador cada una, ~2-3 días.
+**Por qué SEC EDGAR y CVM importan tanto:** dan la **fecha real de
+presentación**. Son gratuitas, oficiales y su uso está expresamente permitido.
+
+Y en el caso de EDGAR hay algo más fuerte que la fecha, que es lo que hace que
+sea la única fuente del proyecto que puede marcar `pit_origin = captured`:
+
+> `companyfacts` no devuelve una cifra por periodo: devuelve **todas las veces
+> que esa cifra se ha publicado**, cada una con su expediente y su fecha. Cuando
+> una empresa reexpresa sus cuentas, o repite las del año anterior como
+> comparativa, aparece otra entrada del mismo periodo con fecha posterior.
+> Quedándose con la de fecha **más antigua** se obtiene la cifra tal y como se
+> publicó entonces, no la reexpresada a hoy.
+
+Eso es literalmente lo que significa point-in-time, y ninguna otra fuente del
+proyecto puede ofrecerlo: EODHD da la fecha real pero las cifras reexpresadas, y
+yfinance no da ni una cosa ni la otra. El adaptador
+(`core/estrategia/datos/sec_proveedor.py`) lo implementa y hay un test dedicado.
+
+Dos límites del adaptador, escritos para que nadie los descubra por sorpresa:
+sólo cubre **ejercicios anuales** (10-K), que es lo que consume el filtro
+fundamental, y **no da EV**, porque la SEC publica cuentas y no cotizaciones —el
+motor lo calcula en la fecha de decisión a partir de las acciones en
+circulación—.
 
 **Qué se hace con España e India mientras tanto.** No se inventa el hueco. Esos
 mercados arrancan con la **pata técnica solamente** (`fundamental.activo: false`
@@ -146,14 +172,30 @@ Configurados hoy: `^IBEX`, `^GSPC`, `^GDAXI`, `^NSEI`, `^BVSP`.
 - **Legal:** datos abiertos oficiales.
 - **Respaldo:** yfinance.
 
-### BCE Data Portal
+### BCE Data Portal — *adaptador escrito*
 - **Aporta:** tipos de referencia EUR diarios. **Coste:** 0 €. **Legal:** abierto.
-- **Cuidado:** publicación vespertina ⇒ decidir con D-1.
+- **Cuidado:** se fijan sobre las 14:15 CET, así que decidir una operación con el
+  tipo del mismo día es usar un dato que a esa hora no existía. La configuración
+  ya lo resuelve (`fx_decision_dia_anterior: true`), pero es el tipo de sesgo que
+  se reintroduce solo en cuanto alguien «simplifica».
+- Sin datos en fines de semana ni festivos de TARGET. **No se rellenan**: el
+  motor busca el último tipo conocido en o antes de la fecha, así que el hueco se
+  resuelve solo y sin inventar una cotización que no existió.
 
-### Stooq
+### Stooq — *adaptador escrito, no apto todavía como fuente principal*
 - **Aporta:** EOD multi-mercado sin clave. **Coste:** 0 €.
-- **Fiabilidad:** buena en US/DE/ES; **cobertura IN/BR por verificar**.
-- **Uso previsto:** respaldo de precios.
+- **Uso previsto:** respaldo de precios si se cae yfinance.
+- **Lo que no se sabe, y hay que saber:** Stooq no documenta con claridad sobre
+  qué base ajusta. Que ajuste por *splits* es casi seguro; por **dividendos, no**.
+  Y la diferencia no es un detalle: si no ajusta por dividendos y se usa como
+  dueña de precios, **cada reparto se convierte en una caída que el motor leerá
+  como señal**.
+- Por eso el adaptador declara la duda en sus capacidades —de donde el informe
+  saca sus avisos—, devuelve `cierre_bruto` igual al cierre en lugar de fingir
+  que distingue dos series que no ha podido distinguir, y tiene una comprobación
+  dedicada en `verify_sources.py` que lo compara con yfinance sobre un valor con
+  dividendo alto. Si divergen de forma sistemática, no ajusta.
+- **Cobertura de IN/BR por verificar.**
 
 ### EODHD — *de pago, para comercializar*
 - **Aporta:** fundamentales con ~20 años y `filing_date` real, cobertura global, deslistadas en planes altos.
@@ -165,15 +207,20 @@ Configurados hoy: `^IBEX`, `^GSPC`, `^GDAXI`, `^NSEI`, `^BVSP`.
 
 ## 4. Plan de acción
 
-| Orden | Acción | Fase | Qué resuelve |
+| Orden | Acción | Estado | Qué resuelve |
 |---|---|---|---|
-| 1 | `scripts/verify_sources.py` y rellenar los `POR VERIFICAR` | FASE 3 | Que este documento deje de ser una hipótesis |
-| 2 | Adaptador **SEC EDGAR** | FASE 3 | PIT real en EE. UU.; elimina el retraso estimado |
-| 3 | Adaptador **CVM** | FASE 5 | PIT real en Brasil |
-| 4 | Adaptador **BCE** para FX | FASE 3 | FX oficial y estable |
-| 5 | Adaptador **Stooq** como respaldo | FASE 3 | Que caiga yfinance y no caiga el sistema |
-| 6 | Evaluar **EODHD** con clave real | FASE 8 | España, India, histórico y licencia |
-| 7 | Deslistadas y composición histórica de índices | post-MVP | Sesgo de supervivencia (RD-4) |
+| 1 | `scripts/verify_sources.py` | ✅ escrito (FASE 3) | Convierte cada hipótesis de este documento en un hecho |
+| 2 | Adaptador **SEC EDGAR** | ✅ escrito (FASE 3) | PIT **real** en EE. UU.: cifras de su momento, no reexpresadas |
+| 3 | Adaptador **BCE** para FX | ✅ escrito (FASE 3) | FX oficial y estable |
+| 4 | Adaptador **Stooq** como respaldo | ✅ escrito (FASE 3) | Que caiga yfinance y no caiga el sistema |
+| 5 | **Ejecutar `verify_sources.py` con red** y rellenar los `POR VERIFICAR` | ⏳ pendiente, requiere red | Que los tres adaptadores dejen de ser hipótesis |
+| 6 | Adaptador **CVM** | FASE 5 | PIT real en Brasil |
+| 7 | Evaluar **EODHD** con clave real | FASE 8 | España, India, histórico y licencia |
+| 8 | Deslistadas y composición histórica de índices | post-MVP | Sesgo de supervivencia (RD-4) |
+
+**El paso 5 es tuyo, no mío.** Los tres adaptadores están escritos y su parseo
+probado, pero ninguno se ha ejecutado nunca contra su API. La primera ejecución
+con red es la que dirá si los campos se llaman como dice la documentación.
 
 ---
 

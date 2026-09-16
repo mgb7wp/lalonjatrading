@@ -119,14 +119,23 @@ reconstruidos.
 
 ## La plataforma
 
-En construcción. Lo que ya funciona (FASES 1 y 2 del
-[roadmap](docs/ROADMAP.md)): el esqueleto desplegable, el esquema completo de
-base de datos con migraciones, `/health`, `/markets` y el frontend mínimo.
+En construcción. Lo que ya funciona (FASES 1 a 3 del
+[roadmap](docs/ROADMAP.md)): el esqueleto desplegable, el esquema de base de
+datos con migraciones, la ingesta de los cinco mercados, `/health`,
+`/health/data`, `/markets` y el frontend mínimo.
 
 ```bash
 cp .env.example .env          # y genera un JWT_SECRET, ver docs/DEPLOYMENT.md
 docker compose up --build     # aplica migraciones y carga la referencia al arrancar
+
+# Datos, sin red (proveedor sintético) o con ella:
+python scripts/update_market_data.py --proveedor sintetico --anos 3
+python scripts/verify_sources.py      # qué sirve de verdad cada fuente
 ```
+
+`update_market_data.py` es **idempotente**: ejecutarlo dos veces no cambia una
+sola fila, ni saltándose las etapas hechas ni reescribiéndolas con `--forzar`.
+Si un mercado falla, se registra y se sigue con el resto.
 
 - API: <http://localhost:8000/api/v1/health>
 - OpenAPI: <http://localhost:8000/docs>
