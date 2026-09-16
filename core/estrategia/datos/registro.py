@@ -77,6 +77,12 @@ def _bce(cfg: "Config") -> "Fuente":
     return ProveedorBCE(cfg)
 
 
+def _cvm(cfg: "Config") -> "Fuente":
+    from .cvm_proveedor import ProveedorCVM
+
+    return ProveedorCVM(cfg)
+
+
 def _stooq(cfg: "Config") -> "Fuente":
     from .stooq_proveedor import ProveedorStooq
 
@@ -89,3 +95,4 @@ registrar("eodhd", _eodhd)
 registrar("sec", _sec)
 registrar("bce", _bce)
 registrar("stooq", _stooq)
+registrar("cvm", _cvm)

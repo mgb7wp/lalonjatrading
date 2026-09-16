@@ -1,0 +1,65 @@
+# Enlace entre los tickers de B3 y las empresas de la CVM.
+#
+# La CVM identifica a cada emisor por su CNPJ y **no publica el ticker por
+# ningún lado**: lo he comprobado en su fichero de registro, que trae razón
+# social, sector y domicilio, pero ningún código de negociación. Así que el
+# enlace hay que construirlo, y vive aquí porque es un dato, no código.
+#
+# ── POR QUÉ ESTÁ ESCRITO A MANO ──────────────────────────────────────────────
+#
+# Lo primero que probé fue emparejar por parecido de nombre. Acierta en 22 de 28
+# y se equivoca en el resto **con aplomo**: a Eletrobras le asignó el CNPJ de
+# Petrobras con un 0,84 de similitud, por debajo de cualquier umbral de aviso
+# razonable. Un CNPJ equivocado no rompe nada: calcula las cuentas de otra
+# empresa y las sirve como si fueran las buenas.
+#
+# Por eso cada línea está resuelta a mano con dos criterios: la razón social y
+# `TP_MERC = BOLSA` en el registro de la CVM, que distingue a la sociedad
+# cotizada de sus filiales y de la sociedad tenedora.
+#
+# ── Y POR QUÉ ADEMÁS SE COMPROBARÁ SOLO ──────────────────────────────────────
+#
+# Mi criterio no basta. `scripts/verify_sources.py` contrasta los ingresos que
+# devuelve la CVM con los que devuelve yfinance para el mismo ticker: si el CNPJ
+# está mal, las cifras no se parecen y salta. Un mapeo equivocado tiene que ser
+# un error ruidoso, no una empresa analizada con las cuentas de otra.
+#
+# ── TRAMPAS ENCONTRADAS ──────────────────────────────────────────────────────
+#
+# - ELET3 figura como AXIA ENERGIA S.A.: Eletrobras se cambió el nombre. Es
+#   exactamente el riesgo RD-5 (cambios de nombre y de ticker) en vivo.
+# - SUZB3 es SUZANO S.A., no SUZANO HOLDING S.A., que es otra sociedad.
+# - RENT3 es LOCALIZA RENT A CAR, no LOCALIZA FLEET, que es una filial.
+# - EQTL3 es EQUATORIAL S.A., la tenedora, no sus distribuidoras regionales,
+#   que también cotizan.
+# - TIMS3 es TIM S.A., no TIM BRASIL SERVIÇOS, que no cotiza.
+
+empresas:
+  PETR4.SA:  {cnpj: "33.000.167/0001-01", nombre: "Petróleo Brasileiro S.A. - Petrobras"}
+  PRIO3.SA:  {cnpj: "10.629.105/0001-68", nombre: "PRIO S.A."}
+  CSAN3.SA:  {cnpj: "50.746.577/0001-15", nombre: "Cosan S.A."}
+  UGPA3.SA:  {cnpj: "33.256.439/0001-39", nombre: "Ultrapar Participações S.A."}
+  VALE3.SA:  {cnpj: "33.592.510/0001-54", nombre: "Vale S.A."}
+  SUZB3.SA:  {cnpj: "16.404.287/0001-55", nombre: "Suzano S.A."}
+  GGBR4.SA:  {cnpj: "33.611.500/0001-19", nombre: "Gerdau S.A."}
+  CSNA3.SA:  {cnpj: "33.042.730/0001-04", nombre: "Cia Siderúrgica Nacional"}
+  KLBN11.SA: {cnpj: "89.637.490/0001-45", nombre: "Klabin S.A."}
+  ABEV3.SA:  {cnpj: "07.526.557/0001-00", nombre: "Ambev S.A."}
+  BRFS3.SA:  {cnpj: "01.838.723/0001-27", nombre: "BRF S.A."}
+  JBSS3.SA:  {cnpj: "02.916.265/0001-60", nombre: "JBS S.A."}
+  RADL3.SA:  {cnpj: "61.585.865/0001-51", nombre: "Raia Drogasil S.A."}
+  WEGE3.SA:  {cnpj: "84.429.695/0001-11", nombre: "WEG S.A."}
+  EMBR3.SA:  {cnpj: "07.689.002/0001-89", nombre: "Embraer S.A."}
+  RENT3.SA:  {cnpj: "16.670.085/0001-55", nombre: "Localiza Rent a Car S.A."}
+  ELET3.SA:  {cnpj: "00.001.180/0001-26", nombre: "Axia Energia S.A. (antes Eletrobras)"}
+  EQTL3.SA:  {cnpj: "03.220.438/0001-73", nombre: "Equatorial S.A."}
+  CPLE6.SA:  {cnpj: "76.483.817/0001-20", nombre: "Companhia Paranaense de Energia - Copel"}
+  CMIG4.SA:  {cnpj: "17.155.730/0001-64", nombre: "Cia Energética de Minas Gerais - Cemig"}
+  SBSP3.SA:  {cnpj: "43.776.517/0001-80", nombre: "Cia Saneamento Básico Estado São Paulo"}
+  LREN3.SA:  {cnpj: "92.754.738/0001-62", nombre: "Lojas Renner S.A."}
+  MGLU3.SA:  {cnpj: "47.960.950/0001-21", nombre: "Magazine Luiza S.A."}
+  TOTS3.SA:  {cnpj: "53.113.791/0001-22", nombre: "Totvs S.A."}
+  HAPV3.SA:  {cnpj: "05.197.443/0001-38", nombre: "Hapvida Participações e Investimentos S.A."}
+  RDOR3.SA:  {cnpj: "06.047.087/0001-39", nombre: "Rede D'Or São Luiz S.A."}
+  VIVT3.SA:  {cnpj: "02.558.157/0001-62", nombre: "Telefônica Brasil S.A."}
+  TIMS3.SA:  {cnpj: "02.421.421/0001-11", nombre: "TIM S.A."}

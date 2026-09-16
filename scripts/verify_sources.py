@@ -332,8 +332,122 @@ def verificar_yfinance(cfg, informe: Informe) -> None:
     )
 
 
+def verificar_cvm(cfg, informe: Informe) -> None:
+    """Comprueba la CVM y, sobre todo, que el mapeo CNPJ->ticker es correcto.
+
+    Lo segundo importa mas que lo primero. La CVM identifica a las empresas por
+    CNPJ y no publica el ticker, asi que el enlace esta escrito a mano en
+    `config/cvm_empresas.yaml`. Un CNPJ equivocado no rompe nada: calcula las
+    cuentas de otra empresa y las sirve como buenas.
+
+    El contraste es con yfinance, que da unos cuatro ejercicios de los mismos
+    valores. Si los ingresos de las dos fuentes coinciden, la empresa es la que
+    creemos. Si no, o el mapeo esta mal o hay algo que entender.
+    """
+    import datetime as dt
+
+    from estrategia.datos.cvm_proveedor import ProveedorCVM
+    from estrategia.datos.yfinance_proveedor import ProveedorYFinance
+
+    fuente = ProveedorCVM(cfg)
+    tickers = cfg.universo.tickers("br")
+    fin = dt.date.today()
+
+    cvm = _probar(
+        informe,
+        "cvm",
+        "descarga fundamentales brasilenos",
+        lambda: fuente.fundamentales(tickers, dt.date(fin.year - 1, 1, 1), fin),
+    )
+    if cvm is None:
+        return
+    if cvm.empty:
+        informe.anotar("cvm", "descarga fundamentales brasilenos", "fallo", "sin filas")
+        return
+    informe.anotar(
+        "cvm",
+        "descarga fundamentales brasilenos",
+        "ok",
+        f"{len(cvm)} filas de {cvm['ticker'].nunique()}/{len(tickers)} valores",
+    )
+
+    if (cvm["origen_pit"] == "capturado").all():
+        informe.anotar("cvm", "point-in-time real", "ok", "todas las filas capturadas")
+    else:
+        informe.anotar("cvm", "point-in-time real", "fallo", "hay filas reconstruidas")
+
+    _verificar_contrato_fundamentales(informe, "cvm", cvm)
+
+    yf = _probar(
+        informe,
+        "cvm",
+        "contraste con yfinance",
+        lambda: ProveedorYFinance(cfg).fundamentales(tickers, dt.date(fin.year - 3, 1, 1), fin),
+    )
+    if yf is None or yf.empty:
+        informe.anotar("cvm", "contraste con yfinance", "omitida", "sin datos de contraste")
+        return
+
+    iguales, divisa, reexpresadas, sospechosos, sin_contraste = 0, [], [], [], 0
+    for ticker in tickers:
+        a, b = cvm[cvm.ticker == ticker], yf[yf.ticker == ticker]
+        if a.empty or b.empty:
+            sin_contraste += 1
+            continue
+        comunes = set(a.fin_periodo) & set(b.fin_periodo)
+        if not comunes:
+            sin_contraste += 1
+            continue
+        periodo = max(comunes)
+        va = float(a[a.fin_periodo == periodo].ventas.iloc[0])
+        vb = float(b[b.fin_periodo == periodo].ventas.iloc[0])
+        if not vb:
+            sin_contraste += 1
+            continue
+        razon = va / vb
+        if abs(razon - 1.0) < 0.05:
+            iguales += 1
+        elif abs(razon - 1.0) < 0.15:
+            # Una diferencia pequena no es un mapeo malo: es lo que se espera.
+            # La CVM da la cifra tal y como se publico y yfinance la reexpresada
+            # a hoy, asi que las empresas que corrigieron sus cuentas TIENEN que
+            # diferir. Es la propiedad point-in-time funcionando, no un fallo.
+            reexpresadas.append(f"{ticker} (x{razon:.2f})")
+        elif 4.0 < razon < 7.0:
+            # No es un mapeo equivocado: es que yfinance informa esa empresa en
+            # dolares y la CVM en reales. Petrobras y Vale reportan asi.
+            divisa.append(f"{ticker} (x{razon:.2f})")
+        else:
+            sospechosos.append(f"{ticker} (x{razon:.2f})")
+
+    informe.anotar(
+        "cvm",
+        "el mapeo CNPJ->ticker cuadra",
+        "ok" if not sospechosos else "fallo",
+        f"{iguales} coinciden, {len(reexpresadas)} con diferencia pequena, "
+        f"{len(divisa)} en otra divisa, {sin_contraste} sin contraste"
+        + (f"; REVISAR: {', '.join(sospechosos)}" if sospechosos else ""),
+    )
+    if reexpresadas:
+        informe.anotar(
+            "cvm",
+            "diferencias pequenas frente a yfinance",
+            "aviso",
+            f"{', '.join(reexpresadas)} - probable reexpresion: la CVM da la cifra "
+            f"original y yfinance la corregida. Es lo que se espera.",
+        )
+    if divisa:
+        informe.anotar(
+            "cvm",
+            "empresas que yfinance informa en dolares",
+            "aviso",
+            f"{', '.join(divisa)} - la cifra buena es la de la CVM, en reales",
+        )
+
+
 VERIFICADORES = {
     "sec": verificar_sec,
+    "cvm": verificar_cvm,
     "bce": verificar_bce,
     "stooq": verificar_stooq,
     "yfinance": verificar_yfinance,

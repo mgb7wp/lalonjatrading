@@ -643,3 +643,107 @@ def test_pedir_un_ticker_que_no_esta_no_revienta():
     marco.columns = pd.MultiIndex.from_tuples(marco.columns)
     with pytest.raises(KeyError):
         _por_ticker(marco, "NOEXISTE")
+
+
+# ---------------------------------------------------------------------------
+# CVM (Brasil)
+# ---------------------------------------------------------------------------
+
+_CAB_DRE = (
+    "CNPJ_CIA;DT_REFER;VERSAO;DENOM_CIA;CD_CVM;GRUPO_DFP;MOEDA;ESCALA_MOEDA;"
+    "ORDEM_EXERC;DT_INI_EXERC;DT_FIM_EXERC;CD_CONTA;DS_CONTA;VL_CONTA;ST_CONTA_FIXA"
+)
+
+
+def _dre(cuentas, cnpj="33.000.167/0001-01", orden="ÚLTIMO", escala="MIL", versao="1"):
+    filas = [_CAB_DRE]
+    for codigo, descripcion, valor in cuentas:
+        filas.append(
+            f"{cnpj};2024-12-31;{versao};X S.A.;009512;DF Consolidado;REAL;{escala};"
+            f"{orden};2024-01-01;2024-12-31;{codigo};{descripcion};{valor};S"
+        )
+    return "\n".join(filas) + "\n"
+
+
+def test_la_cvm_solo_mira_el_ejercicio_que_cierra():
+    """El `PENULTIMO` es el ano anterior repetido como comparativo.
+
+    Puede venir reexpresado, igual que en EE. UU. Usarlo destruiria la propiedad
+    point-in-time, que es la razon de ser de esta fuente.
+    """
+    from estrategia.datos.cvm_proveedor import parsear_cuentas
+
+    texto = (
+        _dre([("3.01", "Receita", "100.0")])
+        + _dre([("3.01", "Receita", "999.0")], orden="PENÚLTIMO").split("\n", 1)[1]
+    )
+    cuentas = parsear_cuentas(texto)
+    assert len(cuentas) == 1
+    assert next(iter(cuentas.values()))["3.01"] == 100_000.0
+
+
+def test_la_escala_no_se_aplica_a_las_cifras_por_accion():
+    """`MIL` vale para los importes; el grupo 3.99 ya viene en reales por accion.
+
+    Aplicarselo multiplicaba el BPA por mil, y como las acciones en circulacion
+    se derivan de el, el error se propagaba al EV y de ahi a toda la valoracion
+    sin que nada fallara por el camino. Petrobras salia con un BPA de 2.840
+    reales por accion en lugar de 2,84.
+    """
+    from estrategia.datos.cvm_proveedor import parsear_cuentas
+
+    cuentas = next(
+        iter(
+            parsear_cuentas(
+                _dre([("3.01", "Receita", "100.0"), ("3.99.01.01", "ON", "2.84")])
+            ).values()
+        )
+    )
+    assert cuentas["3.01"] == 100_000.0, "los importes si llevan escala"
+    assert cuentas["3.99.01.01"] == 2.84, "el beneficio por accion no"
+
+
+def test_la_amortizacion_no_se_confunde_con_costes_financieros():
+    """Buscar `amortiza` a secas captura la amortizacion de costes de deuda.
+
+    Es un gasto financiero, no amortizacion de activos, y sumarlo al EBIT
+    infla el EBITDA. Por eso el patron exige `deprecia`.
+    """
+    from estrategia.datos.cvm_proveedor import PATRON_AMORTIZACION
+
+    assert PATRON_AMORTIZACION.search("Depreciacao, depleção e amortização")
+    assert not PATRON_AMORTIZACION.search("Amortizacao de custos de emprestimos")
+    assert not PATRON_AMORTIZACION.search("Amortizacao Custo Emissao de Debentures")
+
+
+def test_el_capex_excluye_las_ventas_de_inmovilizado():
+    """Una venta de inmovilizado es una entrada, no una inversion."""
+    from estrategia.datos.cvm_proveedor import PATRON_CAPEX, PATRON_NO_CAPEX
+
+    compra = "Aquisicoes de ativos imobilizados e intangiveis"
+    venta = "Recebimento pela venda de ativo imobilizado"
+    assert PATRON_CAPEX.search(compra) and not PATRON_NO_CAPEX.search(compra)
+    assert PATRON_CAPEX.search(venta) and PATRON_NO_CAPEX.search(venta)
+
+
+def test_el_mapeo_de_empresas_cubre_el_universo_brasileno(cfg):
+    """Un ticker sin CNPJ no se puede analizar; dos con el mismo, peor."""
+    import yaml
+
+    ruta = cfg.dir_config / "cvm_empresas.yaml"
+    empresas = yaml.safe_load(ruta.read_text(encoding="utf-8"))["empresas"]
+    tickers = set(cfg.universo.tickers("br"))
+
+    assert tickers == set(empresas), f"descuadre: {tickers ^ set(empresas)}"
+    cnpjs = [v["cnpj"] for v in empresas.values()]
+    assert len(cnpjs) == len(set(cnpjs)), "hay un CNPJ asignado a dos tickers"
+
+
+def test_la_cvm_declara_que_sus_cifras_no_estan_reexpresadas(cfg):
+    """Es lo que la distingue, y las capacidades son de donde sale el aviso."""
+    from estrategia.datos.cvm_proveedor import ProveedorCVM
+
+    cap = ProveedorCVM(cfg).capacidades
+    assert cap.fechas_publicacion_reales
+    assert not cap.cifras_reexpresadas
+    assert cap.mercados == ("br",)
