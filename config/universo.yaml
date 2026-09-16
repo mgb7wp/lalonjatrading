@@ -148,15 +148,33 @@ mercados:
     - {ticker: "CSNA3.SA",  nombre: "CSN",                    sector_declarado: materiales}
     - {ticker: "KLBN11.SA", nombre: "Klabin",                 sector_declarado: materiales}
     - {ticker: "ABEV3.SA",  nombre: "Ambev",                  sector_declarado: consumo_basico}
-    - {ticker: "BRFS3.SA",  nombre: "BRF",                    sector_declarado: consumo_basico}
-    - {ticker: "JBSS3.SA",  nombre: "JBS",                    sector_declarado: consumo_basico}
+    # BRF se fusionó con Marfrig y ahora cotiza como MBRF3 (MBRF Global
+    # Foods). NO es un renombre: la empresa resultante es otra, así que
+    # apuntar las cuentas históricas de BRF al precio de MBRF3 mezclaría dos
+    # compañías. Se da de baja; reincorporar MBRF3 exige su propio CNPJ y su
+    # propio histórico.
+    - {ticker: "BRFS3.SA",  nombre: "BRF",                    sector_declarado: consumo_basico,
+       activo: false, motivo_baja: "fusión con Marfrig", sucesor: "MBRF3.SA"}
+    # JBS trasladó su cotización principal a Nueva York (JBS N.V.) y en B3
+    # solo quedan BDR (JBSS32). Un BDR es otro instrumento, no la acción.
+    - {ticker: "JBSS3.SA",  nombre: "JBS",                    sector_declarado: consumo_basico,
+       activo: false, motivo_baja: "traslado a NYSE; en B3 solo BDR", sucesor: "JBSS32.SA"}
     - {ticker: "RADL3.SA",  nombre: "Raia Drogasil",          sector_declarado: consumo_basico}
     - {ticker: "WEGE3.SA",  nombre: "WEG",                    sector_declarado: industrial}
+    # Embraer cotiza con normalidad y la CVM tiene sus cuentas, pero Yahoo no
+    # sirve EMBR3 (ni ERJ): comprobado dos veces el 16/09/2026. Es un hueco
+    # del proveedor de precios, no un evento corporativo, así que se queda
+    # activo y la comprobación de cobertura lo reportará hasta que se arregle
+    # o hasta que haya un segundo proveedor de precios.
     - {ticker: "EMBR3.SA",  nombre: "Embraer",                sector_declarado: industrial}
     - {ticker: "RENT3.SA",  nombre: "Localiza",               sector_declarado: industrial}
-    - {ticker: "ELET3.SA",  nombre: "Eletrobras",             sector_declarado: electricas}
+    # Eletrobras se renombró a Axia Energia. Misma empresa y mismo CNPJ en la
+    # CVM; solo cambia el ticker. Verificado el 16/09/2026.
+    - {ticker: "AXIA3.SA",  nombre: "Axia Energia (antes Eletrobras)", sector_declarado: electricas}
     - {ticker: "EQTL3.SA",  nombre: "Equatorial Energia",     sector_declarado: electricas}
-    - {ticker: "CPLE6.SA",  nombre: "Copel",                  sector_declarado: electricas}
+    # Copel migró al Novo Mercado y convirtió sus preferentes (CPLE6) en
+    # ordinarias (CPLE3). Misma empresa y mismo CNPJ, otra clase de acción.
+    - {ticker: "CPLE3.SA",  nombre: "Copel",                  sector_declarado: electricas}
     - {ticker: "CMIG4.SA",  nombre: "Cemig",                  sector_declarado: electricas}
     - {ticker: "SBSP3.SA",  nombre: "Sabesp",                 sector_declarado: electricas}
     - {ticker: "LREN3.SA",  nombre: "Lojas Renner",           sector_declarado: consumo_discrecional}

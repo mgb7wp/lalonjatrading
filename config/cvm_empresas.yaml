@@ -33,6 +33,10 @@
 # - EQTL3 es EQUATORIAL S.A., la tenedora, no sus distribuidoras regionales,
 #   que también cotizan.
 # - TIMS3 es TIM S.A., no TIM BRASIL SERVIÇOS, que no cotiza.
+#
+# Bajas del 16/09/2026: BRFS3 (fusión con Marfrig → MBRF3) y JBSS3 (traslado
+# a NYSE; en B3 solo quedan BDR). Salen de aquí porque salen del universo:
+# ver `activo: false` en universo.yaml, donde queda constancia de por qué.
 
 empresas:
   PETR4.SA:  {cnpj: "33.000.167/0001-01", nombre: "Petróleo Brasileiro S.A. - Petrobras"}
@@ -45,15 +49,13 @@ empresas:
   CSNA3.SA:  {cnpj: "33.042.730/0001-04", nombre: "Cia Siderúrgica Nacional"}
   KLBN11.SA: {cnpj: "89.637.490/0001-45", nombre: "Klabin S.A."}
   ABEV3.SA:  {cnpj: "07.526.557/0001-00", nombre: "Ambev S.A."}
-  BRFS3.SA:  {cnpj: "01.838.723/0001-27", nombre: "BRF S.A."}
-  JBSS3.SA:  {cnpj: "02.916.265/0001-60", nombre: "JBS S.A."}
   RADL3.SA:  {cnpj: "61.585.865/0001-51", nombre: "Raia Drogasil S.A."}
   WEGE3.SA:  {cnpj: "84.429.695/0001-11", nombre: "WEG S.A."}
   EMBR3.SA:  {cnpj: "07.689.002/0001-89", nombre: "Embraer S.A."}
   RENT3.SA:  {cnpj: "16.670.085/0001-55", nombre: "Localiza Rent a Car S.A."}
-  ELET3.SA:  {cnpj: "00.001.180/0001-26", nombre: "Axia Energia S.A. (antes Eletrobras)"}
+  AXIA3.SA:  {cnpj: "00.001.180/0001-26", nombre: "Axia Energia S.A. (antes Eletrobras)"}
   EQTL3.SA:  {cnpj: "03.220.438/0001-73", nombre: "Equatorial S.A."}
-  CPLE6.SA:  {cnpj: "76.483.817/0001-20", nombre: "Companhia Paranaense de Energia - Copel"}
+  CPLE3.SA:  {cnpj: "76.483.817/0001-20", nombre: "Companhia Paranaense de Energia - Copel"}
   CMIG4.SA:  {cnpj: "17.155.730/0001-64", nombre: "Cia Energética de Minas Gerais - Cemig"}
   SBSP3.SA:  {cnpj: "43.776.517/0001-80", nombre: "Cia Saneamento Básico Estado São Paulo"}
   LREN3.SA:  {cnpj: "92.754.738/0001-62", nombre: "Lojas Renner S.A."}

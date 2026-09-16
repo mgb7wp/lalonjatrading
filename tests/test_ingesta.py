@@ -884,3 +884,38 @@ def test_una_columna_vacia_solo_es_sospechosa_en_un_lote_grande():
 
     muchos = pd.DataFrame([{**base, "ticker": f"T{i}"} for i in range(MINIMO_PARA_EXIGIR_COLUMNA)])
     assert not contrato.verificar_fundamentales(muchos, "sec", magnitudes).cumple
+
+
+def test_un_valor_dado_de_baja_no_se_descarga_pero_no_se_borra(cfg):
+    """Borrar la fila deja un universo que finge que la empresa nunca existio.
+
+    Eso es sesgo de supervivencia metido a mano. Se marca la baja con su motivo
+    y su sucesor, y se excluye de las descargas —pedir a diario cinco valores
+    que ya no existen garantiza cinco errores por ejecucion que nadie mira—.
+    """
+    activos = cfg.universo.tickers("br")
+    todos = cfg.universo.tickers("br", incluir_inactivos=True)
+    bajas = {v.ticker: v for v in cfg.universo.inactivos()}
+
+    assert set(todos) - set(activos) == set(bajas)
+    assert bajas, "el universo brasileno tiene bajas verificadas"
+    for valor in bajas.values():
+        assert valor.motivo_baja, f"{valor.ticker} sin motivo de baja"
+        assert valor.sucesor, f"{valor.ticker} sin sucesor anotado"
+
+
+def test_las_bajas_verificadas_son_fusiones_y_traslados(cfg):
+    """No son renombres, y la diferencia importa.
+
+    Un renombre es la misma empresa con otro ticker: se actualiza y ya. Una
+    fusion produce otra compañia, y apuntar las cuentas historicas de BRF al
+    precio de MBRF3 mezclaria dos. Un traslado a NYSE deja en B3 un BDR, que es
+    otro instrumento, no la accion.
+    """
+    bajas = {v.ticker: v for v in cfg.universo.inactivos()}
+    assert "BRFS3.SA" in bajas and bajas["BRFS3.SA"].sucesor == "MBRF3.SA"
+    assert "JBSS3.SA" in bajas and "BDR" in bajas["JBSS3.SA"].motivo_baja
+    # Los renombres SI se aplicaron sobre el propio ticker.
+    activos = set(cfg.universo.tickers("br"))
+    assert "AXIA3.SA" in activos and "ELET3.SA" not in activos
+    assert "CPLE3.SA" in activos and "CPLE6.SA" not in activos

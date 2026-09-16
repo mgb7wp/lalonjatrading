@@ -211,7 +211,11 @@ def cargar(sesion: Session, cfg=None, referencia: dict | None = None) -> Resumen
                     # confunda con un dato verificado.
                     "sector": v.sector_declarado,
                     "is_primary_listing": True,
-                    "active": True,
+                    # Un valor dado de baja no se borra: se marca. Borrarlo
+                    # dejaria una base que finge que la empresa nunca existio,
+                    # que es sesgo de supervivencia metido a mano.
+                    "active": v.activo,
+                    "notes": v.motivo_baja,
                 }
             )
     resumen.indices = sum(1 for f in filas_valor if f["asset_type"] == AssetType.INDEX.value)

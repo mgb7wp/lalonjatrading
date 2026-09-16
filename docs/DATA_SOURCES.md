@@ -158,6 +158,34 @@ propio EDGAR (CIK ↔ ticker).
 
 ### 2.5 Acciones corporativas
 
+**Verificación del universo brasileño, 16/09/2026.** Cinco tickers no resolvían
+en yfinance. Comprobados uno a uno:
+
+| Ticker | Qué pasó | Decisión |
+|---|---|---|
+| `ELET3` | Eletrobras se **renombró a Axia Energia** | → `AXIA3.SA`, mismo CNPJ |
+| `CPLE6` | Copel migró al Novo Mercado y convirtió las preferentes en ordinarias | → `CPLE3.SA`, mismo CNPJ |
+| `BRFS3` | **Fusión** con Marfrig → MBRF Global Foods | Baja. No es un renombre |
+| `JBSS3` | JBS trasladó su cotización a NYSE; en B3 quedan **BDR** | Baja. Un BDR no es la acción |
+| `EMBR3` | Cotiza con normalidad, pero **Yahoo no lo sirve** | Se mantiene; es un hueco del proveedor |
+
+Las dos bajas **no se borran del universo**: se marcan con su motivo y su
+sucesor. Borrar la fila dejaría un universo que finge que la empresa nunca
+existió, y eso es sesgo de supervivencia metido a mano.
+
+Lo que **no** se puede anotar todavía es *cuándo* dejaron de cotizar, porque no
+hay fuente de acciones corporativas. Sin la fecha, un backtest histórico no
+puede hacerlo bien: incluirlas finge que cotizaron hasta hoy y excluirlas finge
+que no existieron. Se excluyen —para que las descargas no fallen a diario— y
+**RD-4 sigue abierto**, que es la verdad.
+
+Tras la corrección: **26/26 valores brasileños con fundamentales de la CVM** y
+25/26 con precios (falta Embraer).
+
+### 2.5.1 Lo que no hay
+
+
+
 Splits y dividendos vienen con los precios ajustados de yfinance. Fusiones,
 cambios de ticker y bajas: **sin fuente gratuita**. Es la causa del sesgo de
 supervivencia (RD-4) y hoy se publica en lugar de disimularse.

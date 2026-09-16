@@ -379,18 +379,51 @@ class Implementacion(_Base):
 
 
 class ValorUniverso(_Base):
+    """Un valor del universo, con su baja si ha dejado de cotizar.
+
+    Los tres campos de baja existen porque borrar la fila no vale. Un valor que
+    desaparece y se borra del fichero deja un universo que finge que esa empresa
+    nunca existio, y eso es sesgo de supervivencia metido a mano. Anotandolo, al
+    menos se sabe que estuvo y por que se fue.
+
+    Lo que NO se puede anotar todavia es CUANDO se fue, porque no hay fuente de
+    acciones corporativas. Sin la fecha, un backtest historico no puede hacerlo
+    bien: incluirlo finge que cotizo hasta hoy y excluirlo finge que no existio.
+    Se excluye —para que las descargas no fallen a diario— y el riesgo RD-4
+    sigue abierto, que es la verdad.
+    """
+
     ticker: str
     nombre: str
     sector_declarado: str
+    activo: bool = True
+    motivo_baja: str | None = None
+    sucesor: str | None = None
 
 
 class Universo(_Base):
     mercados: dict[str, list[ValorUniverso]]
 
-    def tickers(self, mercado_id: str | None = None) -> list[str]:
+    def tickers(
+        self, mercado_id: str | None = None, incluir_inactivos: bool = False
+    ) -> list[str]:
+        """Tickers del universo; por defecto, solo los que siguen cotizando.
+
+        Por defecto solo los activos porque es lo que se puede descargar hoy:
+        pedirle a diario a un proveedor cinco valores que ya no existen es
+        garantizar cinco errores por ejecucion que nadie mira.
+        """
         if mercado_id is not None:
-            return [v.ticker for v in self.mercados.get(mercado_id, [])]
-        return [v.ticker for valores in self.mercados.values() for v in valores]
+            valores = self.mercados.get(mercado_id, [])
+        else:
+            valores = [v for lista in self.mercados.values() for v in lista]
+        return [v.ticker for v in valores if incluir_inactivos or v.activo]
+
+    def inactivos(self) -> list[ValorUniverso]:
+        """Los que ya no cotizan, para que el informe pueda contarlos."""
+        return [
+            v for lista in self.mercados.values() for v in lista if not v.activo
+        ]
 
     @cached_property
     def mercado_de_ticker(self) -> dict[str, str]:
