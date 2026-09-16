@@ -107,6 +107,19 @@ curl -fsSL https://get.docker.com | sh          # Docker + Compose v2 al día
 apt install -y git
 git clone https://github.com/mgb7wp/lalonjatrading.git
 cd lalonjatrading
+
+# Mientras el trabajo siga en la rama de desarrollo, hay que pedirla
+# explicitamente: `main` no tiene ni el frontend desplegable ni el compose de
+# produccion, asi que un despliegue desde ahi falla sin decir por que.
+git checkout claude/saas-investment-analysis-ai-rix1km
+```
+
+En un servidor con menos de 2 GB de RAM, la construccion del frontend puede
+morir por falta de memoria (`next build` es lo que mas consume). Si pasa, un
+fichero de intercambio lo resuelve:
+
+```bash
+fallocate -l 2G /swapfile && chmod 600 /swapfile && mkswap /swapfile && swapon /swapfile
 ```
 
 ### 2. Configuración
@@ -205,6 +218,9 @@ encendida.**
 Cloudflare crea los registros DNS solo, así que aquí **no** hay que tocar nada
 de nubes grises ni naranjas: eso solo aplica al despliegue con Caddy haciendo el
 TLS.
+
+El paso 5 (primera carga de datos) se aplica igual, añadiendo
+`-f docker-compose.tunel.yml` a los comandos.
 
 ### Por qué no todo en Cloudflare
 
