@@ -1,0 +1,399 @@
+"""Fuente SEC EDGAR: fundamentales de EE. UU. con fecha de presentacion real.
+
+Es la unica fuente **gratuita, oficial y legalmente utilizable** que da
+fundamentales con la fecha en que se presentaron. Eso ataca de frente la
+limitacion mas seria del sistema en el mercado mas grande del universo.
+
+## Por que esta fuente marca `origen_pit: capturado`
+
+Es la unica que puede, y conviene entender por que, porque es la diferencia
+entre un backtest creible y uno que se enganna solo.
+
+`companyfacts` no devuelve una cifra por periodo: devuelve **todas las veces que
+esa cifra se ha publicado**, cada una con su numero de expediente (`accn`) y su
+fecha de presentacion (`filed`). Cuando una empresa reexpresa sus cuentas, o
+cuando repite las cifras del ano anterior como comparativa en el 10-K siguiente,
+aparece otra entrada para el mismo periodo con `filed` posterior.
+
+Quedarse con la entrada de `filed` **mas antiguo** de cada periodo devuelve la
+cifra **tal y como se publico entonces**, no la reexpresada a hoy. Eso es
+exactamente lo que significa point-in-time, y es lo que ninguna otra fuente del
+proyecto puede ofrecer: EODHD da la fecha real pero las cifras reexpresadas, y
+yfinance no da ni una cosa ni la otra.
+
+Por eso esta fuente declara `cifras_reexpresadas=False` y emite
+`origen_pit: capturado`. No es optimismo: es una propiedad del formato.
+
+## Alcance
+
+Solo ejercicios **anuales** (10-K). Es lo que consume hoy el filtro fundamental
+—el crecimiento de ventas a tres anos necesita cuatro ejercicios— y anadir los
+trimestrales sin necesitarlos multiplicaria por cuatro las filas y los modos de
+fallar. La estructura admite trimestrales sin cambios: es filtrar por otro
+formulario.
+
+El `ev` no sale de aqui: la SEC publica cuentas, no cotizaciones. Se deja a nulo
+y el motor lo calcula en la fecha de decision a partir de las acciones en
+circulacion, que si vienen. El contrato lo contempla (`FUNDAMENTALES_AL_MENOS_UNA`).
+
+## Estado
+
+**No se ha podido ejecutar.** El entorno de desarrollo bloquea `sec.gov` por
+politica de red, asi que esto esta escrito contra la documentacion de la API y
+probado contra respuestas grabadas. El parseo —donde de verdad se puede uno
+equivocar— esta en funciones puras con tests. La primera ejecucion de verdad es
+la que dira si los conceptos XBRL elegidos cubren a las 33 empresas del universo;
+`estrategia diagnostico` existe para que esa vez devuelva una lista y no una traza.
+
+La SEC exige identificarse en el `User-Agent` con algo que permita contactar, y
+pide no pasar de unas diez peticiones por segundo.
+"""
+
+from __future__ import annotations
+
+import json
+import os
+import time
+import urllib.error
+import urllib.request
+from datetime import date, datetime
+from typing import Any
+
+import pandas as pd
+
+from ..config import Config
+from ..errores import ErrorDatos
+from .proveedor import Capacidades, ProveedorFundamentales
+
+BASE_DATOS = "https://data.sec.gov"
+BASE_WWW = "https://www.sec.gov"
+VARIABLE_AGENTE = "SEC_USER_AGENT"
+
+#: Formularios que se consideran ejercicio anual. `10-K/A` es una correccion; se
+#: acepta porque tambien es una publicacion real con su propia fecha, y si llega
+#: antes que ninguna otra para ese periodo, es lo que se supo.
+FORMULARIOS_ANUALES = ("10-K", "10-K/A", "20-F", "40-F")
+
+#: Minimo de dias para considerar que un periodo con fechas de inicio y fin es
+#: un ejercicio completo. Un 10-K trae tambien magnitudes trimestrales, y sin
+#: este filtro se colarian como si fueran anuales.
+DIAS_MINIMOS_EJERCICIO = 300
+
+#: Conceptos XBRL de cada magnitud, por orden de preferencia. Las empresas no
+#: usan todas la misma etiqueta —la norma admite varias y cada una elige— asi
+#: que se prueban en orden y gana la primera que traiga dato.
+CONCEPTOS: dict[str, tuple[str, ...]] = {
+    "ventas": (
+        "RevenueFromContractWithCustomerExcludingAssessedTax",
+        "RevenueFromContractWithCustomerIncludingAssessedTax",
+        "Revenues",
+        "SalesRevenueNet",
+        "SalesRevenueGoodsNet",
+    ),
+    "ebit": ("OperatingIncomeLoss",),
+    "amortizaciones": (
+        "DepreciationDepletionAndAmortization",
+        "DepreciationAmortizationAndAccretionNet",
+        "DepreciationAndAmortization",
+    ),
+    "beneficio_neto": ("NetIncomeLoss", "ProfitLoss"),
+    "patrimonio_neto": (
+        "StockholdersEquity",
+        "StockholdersEquityIncludingPortionAttributableToNoncontrollingInterest",
+    ),
+    "deuda_largo": ("LongTermDebtNoncurrent", "LongTermDebt"),
+    "deuda_corto": ("LongTermDebtCurrent", "ShortTermBorrowings"),
+    "efectivo": (
+        "CashAndCashEquivalentsAtCarryingValue",
+        "CashCashEquivalentsRestrictedCashAndRestrictedCashEquivalents",
+    ),
+    "flujo_operativo": (
+        "NetCashProvidedByUsedInOperatingActivities",
+        "NetCashProvidedByUsedInOperatingActivitiesContinuingOperations",
+    ),
+    "capex": (
+        "PaymentsToAcquirePropertyPlantAndEquipment",
+        "PaymentsToAcquireProductiveAssets",
+    ),
+    "acciones": (
+        "CommonStockSharesOutstanding",
+        "WeightedAverageNumberOfDilutedSharesOutstanding",
+        "WeightedAverageNumberOfSharesOutstandingBasic",
+    ),
+}
+
+#: Magnitudes de balance: se declaran en un instante, sin fecha de inicio.
+INSTANTANEAS = {"patrimonio_neto", "deuda_largo", "deuda_corto", "efectivo", "acciones"}
+
+
+def _fecha(texto: Any) -> date | None:
+    if not texto:
+        return None
+    try:
+        return datetime.strptime(str(texto)[:10], "%Y-%m-%d").date()
+    except ValueError:
+        return None
+
+
+def _es_ejercicio_completo(entrada: dict) -> bool:
+    """Descarta las magnitudes trimestrales que vienen dentro de un 10-K."""
+    inicio, fin = _fecha(entrada.get("start")), _fecha(entrada.get("end"))
+    if inicio is None:
+        return True  # magnitud de balance: no tiene duracion
+    if fin is None:
+        return False
+    return (fin - inicio).days >= DIAS_MINIMOS_EJERCICIO
+
+
+def primera_publicacion(hechos: dict, conceptos: tuple[str, ...]) -> dict[date, dict]:
+    """Para cada cierre de ejercicio, la PRIMERA vez que se publico la cifra.
+
+    Aqui esta el valor de esta fuente. Entre varias publicaciones del mismo
+    periodo gana la de `filed` mas antiguo, que es la cifra tal y como se conocio
+    entonces, antes de cualquier reexpresion posterior.
+
+    Se recorren los conceptos en orden de preferencia y **no se mezclan**: si
+    `RevenueFromContractWithCustomer...` cubre un ejercicio, no se completa con
+    `Revenues` para otro. Mezclar etiquetas dentro de la misma serie produce
+    saltos de crecimiento que no ocurrieron.
+    """
+    for concepto in conceptos:
+        bloque = hechos.get(concepto)
+        if not bloque:
+            continue
+        por_periodo: dict[date, dict] = {}
+        for unidades in (bloque.get("units") or {}).values():
+            for entrada in unidades:
+                if entrada.get("form") not in FORMULARIOS_ANUALES:
+                    continue
+                if not _es_ejercicio_completo(entrada):
+                    continue
+                fin = _fecha(entrada.get("end"))
+                presentado = _fecha(entrada.get("filed"))
+                if fin is None or presentado is None or entrada.get("val") is None:
+                    continue
+                anterior = por_periodo.get(fin)
+                if anterior is None or presentado < anterior["presentado"]:
+                    por_periodo[fin] = {
+                        "valor": float(entrada["val"]),
+                        "presentado": presentado,
+                        "concepto": concepto,
+                        "expediente": entrada.get("accn"),
+                    }
+        if por_periodo:
+            return por_periodo
+    return {}
+
+
+def _divide(numerador: float | None, denominador: float | None) -> float | None:
+    if numerador is None or denominador in (None, 0):
+        return None
+    return numerador / denominador
+
+
+def parsear_companyfacts(payload: dict, ticker: str, descargado: date) -> list[dict]:
+    """Convierte `companyfacts` en filas del esquema del proyecto.
+
+    Funcion pura y con tests: es lo unico de esta fuente que se puede validar sin
+    red, y es donde estan los errores que importan.
+    """
+    facts = payload.get("facts") or {}
+    hechos: dict[str, Any] = {}
+    for espacio in ("us-gaap", "ifrs-full", "dei"):
+        hechos.update(facts.get(espacio) or {})
+    if not hechos:
+        return []
+
+    magnitudes = {
+        nombre: primera_publicacion(hechos, conceptos) for nombre, conceptos in CONCEPTOS.items()
+    }
+
+    # Los periodos salen del conjunto de cierres vistos en las magnitudes de
+    # resultados. Las de balance se buscan en ese mismo cierre.
+    periodos: set[date] = set()
+    for nombre in ("ventas", "ebit", "beneficio_neto"):
+        periodos |= set(magnitudes[nombre])
+
+    # La fecha de publicacion de la FILA es la mas tardia de las magnitudes que
+    # la componen. Tomar la mas temprana dejaria ver una fila completa antes de
+    # que existiera entera, que es sesgo de anticipacion por la puerta de atras.
+    filas: list[dict] = []
+    for fin_periodo in sorted(periodos):
+        valores: dict[str, float | None] = {}
+        presentaciones: list[date] = []
+        for nombre, por_periodo in magnitudes.items():
+            dato = por_periodo.get(fin_periodo)
+            valores[nombre] = dato["valor"] if dato else None
+            if dato:
+                presentaciones.append(dato["presentado"])
+        if not presentaciones:
+            continue
+
+        deuda_total = _suma(valores["deuda_largo"], valores["deuda_corto"])
+        deuda_neta = None if deuda_total is None else deuda_total - (valores["efectivo"] or 0.0)
+        ebitda = _suma(valores["ebit"], valores["amortizaciones"])
+        fcl = (
+            None
+            if valores["flujo_operativo"] is None
+            else valores["flujo_operativo"] - (valores["capex"] or 0.0)
+        )
+
+        filas.append(
+            {
+                "ticker": ticker,
+                "fin_periodo": fin_periodo,
+                "periodo": "anual",
+                "fecha_publicacion": max(presentaciones),
+                "origen_fecha_publicacion": "real_sec",
+                # La afirmacion fuerte de esta fuente, y la unica del proyecto
+                # que puede hacerla.
+                "origen_pit": "capturado",
+                "fecha_descarga": descargado,
+                "roe": _divide(valores["beneficio_neto"], valores["patrimonio_neto"]),
+                "margen_operativo": _divide(valores["ebit"], valores["ventas"]),
+                "ventas": valores["ventas"],
+                "flujo_caja_libre": fcl,
+                "deuda_neta": deuda_neta,
+                "ebitda": ebitda,
+                "ebit": valores["ebit"],
+                # La SEC publica cuentas, no cotizaciones: sin precio no hay EV.
+                # El motor lo calcula en la fecha de decision con las acciones.
+                "ev": None,
+                "patrimonio_neto": valores["patrimonio_neto"],
+                "acciones_en_circulacion": valores["acciones"],
+                "divisa_reporte": "USD",
+                "divisa_cotizacion": "USD",
+            }
+        )
+    return filas
+
+
+def _suma(a: float | None, b: float | None) -> float | None:
+    if a is None and b is None:
+        return None
+    return (a or 0.0) + (b or 0.0)
+
+
+def parsear_mapa_cik(payload: Any) -> dict[str, str]:
+    """Ticker -> CIK con diez digitos, desde `company_tickers.json`.
+
+    El fichero es un objeto con claves numericas en texto, no una lista. El CIK
+    va sin ceros a la izquierda y la API de `companyfacts` los exige, asi que se
+    rellena aqui y no en cada llamada.
+    """
+    filas = payload.values() if isinstance(payload, dict) else payload
+    mapa: dict[str, str] = {}
+    for fila in filas:
+        ticker = (fila.get("ticker") or "").strip().upper()
+        cik = fila.get("cik_str")
+        if ticker and cik is not None:
+            mapa[ticker] = str(cik).zfill(10)
+    return mapa
+
+
+class ProveedorSEC(ProveedorFundamentales):
+    """Fundamentales de EE. UU. desde EDGAR."""
+
+    nombre = "sec"
+
+    def __init__(self, cfg: Config, agente: str | None = None) -> None:
+        self._cfg = cfg
+        self._agente = agente or os.environ.get(VARIABLE_AGENTE, "")
+        self._mapa_cik: dict[str, str] | None = None
+        self._cache: dict[str, dict] = {}
+
+    @property
+    def capacidades(self) -> Capacidades:
+        return Capacidades(
+            tipos=("fundamentales",),
+            anios_fundamentales=15,
+            fechas_publicacion_reales=True,
+            # La propiedad que la distingue de todas las demas fuentes del
+            # proyecto: quedandose con la primera publicacion de cada periodo,
+            # las cifras son las de entonces y no las reexpresadas a hoy.
+            cifras_reexpresadas=False,
+            incluye_deslistadas=False,
+            mercados=("us",),
+            necesita_clave=False,
+            notas=(
+                "Solo EE. UU. y solo ejercicios anuales (10-K).",
+                "Unica fuente del proyecto que emite origen_pit: capturado.",
+                "No da EV: la SEC publica cuentas, no cotizaciones.",
+                "Exige identificarse en el User-Agent (SEC_USER_AGENT).",
+            ),
+        )
+
+    def disponible(self) -> tuple[bool, str]:
+        if not self._agente:
+            return False, (
+                f"la SEC exige identificarse. Exporta {VARIABLE_AGENTE} con algo "
+                f'como "lalonja research tu@correo.com".'
+            )
+        return True, ""
+
+    def _pedir(self, url: str) -> Any:
+        ok, motivo = self.disponible()
+        if not ok:
+            raise ErrorDatos(motivo)
+
+        peticion = urllib.request.Request(
+            url, headers={"User-Agent": self._agente, "Accept-Encoding": "gzip, deflate"}
+        )
+        try:
+            with urllib.request.urlopen(peticion, timeout=60) as respuesta:
+                return json.loads(respuesta.read().decode("utf-8"))
+        except urllib.error.HTTPError as exc:
+            if exc.code == 403:
+                raise ErrorDatos(
+                    "la SEC ha devuelto 403: revisa el User-Agent, exige un contacto real"
+                ) from exc
+            if exc.code == 404:
+                raise ErrorDatos(f"la SEC no conoce {url}") from exc
+            if exc.code == 429:
+                raise ErrorDatos(
+                    "la SEC ha devuelto 429: se ha pasado el limite de peticiones"
+                ) from exc
+            raise ErrorDatos(f"la SEC ha respondido {exc.code} a {url}") from exc
+        except urllib.error.URLError as exc:
+            raise ErrorDatos(f"no se ha podido conectar con la SEC: {exc.reason}") from exc
+
+    def cik_de(self, ticker: str) -> str | None:
+        if self._mapa_cik is None:
+            self._mapa_cik = parsear_mapa_cik(self._pedir(f"{BASE_WWW}/files/company_tickers.json"))
+        return self._mapa_cik.get(ticker.upper())
+
+    def ficha(self, ticker: str) -> dict:
+        if ticker not in self._cache:
+            cik = self.cik_de(ticker)
+            if cik is None:
+                self._cache[ticker] = {}
+            else:
+                try:
+                    self._cache[ticker] = self._pedir(
+                        f"{BASE_DATOS}/api/xbrl/companyfacts/CIK{cik}.json"
+                    )
+                except ErrorDatos:
+                    # Un valor que no resuelve se queda fuera y sale en el
+                    # diagnostico; no tumba una descarga entera.
+                    self._cache[ticker] = {}
+                # La SEC pide no pasar de unas diez peticiones por segundo.
+                time.sleep(0.11)
+        return self._cache[ticker]
+
+    def fundamentales(self, tickers: list[str], inicio: date, fin: date) -> pd.DataFrame:
+        hoy = date.today()
+        filas: list[dict] = []
+        for ticker in tickers:
+            # Solo EE. UU.: pedirle a la SEC un valor espanol es gastar una
+            # peticion para recibir un 404.
+            if self._cfg.universo.mercado_de_ticker.get(ticker) != "us":
+                continue
+            payload = self.ficha(ticker)
+            if not payload:
+                continue
+            for fila in parsear_companyfacts(payload, ticker, hoy):
+                # Se filtra por fecha de publicacion y no por cierre de periodo:
+                # lo que importa es cuando se supo, no a que ejercicio se refiere.
+                if fila["fecha_publicacion"] <= fin:
+                    filas.append(fila)
+        return pd.DataFrame(filas)

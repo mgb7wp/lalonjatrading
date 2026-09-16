@@ -65,6 +65,27 @@ def _eodhd(cfg: "Config") -> "Fuente":
     return ProveedorEODHD(cfg)
 
 
+def _sec(cfg: "Config") -> "Fuente":
+    from .sec_proveedor import ProveedorSEC
+
+    return ProveedorSEC(cfg)
+
+
+def _bce(cfg: "Config") -> "Fuente":
+    from .bce_proveedor import ProveedorBCE
+
+    return ProveedorBCE(cfg)
+
+
+def _stooq(cfg: "Config") -> "Fuente":
+    from .stooq_proveedor import ProveedorStooq
+
+    return ProveedorStooq(cfg)
+
+
 registrar("sintetico", _sintetico)
 registrar("yfinance", _yfinance)
 registrar("eodhd", _eodhd)
+registrar("sec", _sec)
+registrar("bce", _bce)
+registrar("stooq", _stooq)
