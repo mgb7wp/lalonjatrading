@@ -1,0 +1,14 @@
+[Unit]
+Description=Copia de seguridad diaria de La Lonja
+
+[Timer]
+# 03:15, cuando el pipeline diario ya ha terminado y nadie esta mirando la web.
+OnCalendar=*-*-* 03:15:00
+# Si el servidor estaba apagado a esa hora, se hace al arrancar en vez de
+# saltarse el dia. Un backup que solo funciona si la maquina no se reinicia
+# nunca no es una garantia.
+Persistent=true
+RandomizedDelaySec=10min
+
+[Install]
+WantedBy=timers.target

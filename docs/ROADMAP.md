@@ -442,9 +442,19 @@ Despliegue en VPS, backups, monitorización, `DEPLOYMENT.md`.
       mercados—; la interfaz de verdad sigue siendo la FASE 17. Lo que demuestra
       es que la tubería entera funciona de punta a punta.
 - [x] `DEPLOYMENT.md` con las dos vías (túnel y IP pública con Let's Encrypt).
-- [ ] **Backups de Postgres verificados.** Es lo más urgente que falta: hay
-      datos reales cargándose y ninguna copia. Un backup que nunca se ha
-      restaurado no es un backup.
+- [x] **Backups de Postgres verificados.** `despliegue/copia_seguridad.sh` y
+      temporizador de systemd, a diario.
+
+      La verificación va dentro: cada copia se **restaura de verdad** en una
+      base de usar y tirar y se **cuentan las filas** antes de darla por buena y
+      antes de rotar las anteriores. Un volcado de un esquema vacío se restaura
+      sin un solo error, así que comprobar el código de salida de `pg_dump` no
+      demuestra nada.
+
+      Probado en los cuatro caminos contra un Postgres real: copia correcta,
+      copia vacía (rechazada), rotación y restauración real.
+- [ ] **Sacar las copias de la máquina.** Hoy viven en el mismo disco que la
+      base: protegen de un borrado accidental, no de perder el servidor.
 - [ ] Monitorización y alertas sobre `/health` y `/health/data`.
 - [ ] Despliegue automático desde CI en lugar de `git pull` por SSH.
 

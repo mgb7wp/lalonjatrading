@@ -238,6 +238,61 @@ pero no con el motor:
 Cloudflare vende CDN y cómputo efímero; esto necesita un proceso largo con
 estado. Lo que sí aporta, y es mucho, es DNS, TLS y el túnel.
 
+### Copias de seguridad
+
+`despliegue/copia_seguridad.sh`. Se instala como temporizador de systemd y corre
+a diario:
+
+```bash
+cp despliegue/systemd/lalonja-copia.* /etc/systemd/system/
+systemctl daemon-reload
+systemctl enable --now lalonja-copia.timer
+systemctl start lalonja-copia.service   # la primera, ahora, para verla funcionar
+```
+
+Comprobar: `systemctl list-timers lalonja-copia.timer` y
+`journalctl -u lalonja-copia.service -n 50`.
+
+**La verificación va dentro del script y no es opcional.** Un volcado que nadie
+ha restaurado nunca no es una copia de seguridad: es un fichero. El caso que
+importa —`pg_dump` que termina con éxito y produce algo irrecuperable— no lo
+detecta ningún `echo $?`. Cada copia:
+
+1. Se vuelca con `pg_dump -Fc`.
+2. Se comprueba que no está vacía.
+3. **Se restaura de verdad** en una base de usar y tirar.
+4. **Se cuentan las filas** (tablas, valores, precios). Esto separa «el fichero
+   se deja leer» de «los datos están»: un volcado de un esquema vacío se
+   restaura sin un solo error.
+5. Solo entonces se rotan las antiguas. Al revés, una copia mala podría empujar
+   fuera a la última buena.
+
+Si algo de eso falla, el script sale con error, **conserva el volcado para
+diagnosticar y no rota nada**.
+
+Deja también `ultima-copia-correcta` con la fecha de la última copia verificada:
+sin esa marca, un temporizador que dejó de ejecutarse no se distingue de uno que
+funciona.
+
+Retención: 14 copias (`LALONJA_BACKUP_RETENCION`). Destino:
+`/var/backups/lalonja` (`LALONJA_BACKUP_DIR`).
+
+#### Restaurar
+
+```bash
+./despliegue/copia_seguridad.sh --restaurar /var/backups/lalonja/lalonja-FECHA.dump
+```
+
+Pide escribir el nombre de la base para confirmar antes de sobrescribir nada.
+
+#### Lo que esto todavía NO cubre
+
+Las copias viven **en el mismo disco que la base de datos**. Eso protege de un
+borrado accidental o de una migración que sale mal, que son los casos
+frecuentes, pero **no de perder el servidor**. Sacarlas de la máquina es el
+siguiente paso: Cloudflare R2 tiene 10 GB gratis y encaja bien, a cambio de
+gestionar un token.
+
 ### Qué se ve hoy
 
 Conviene no llamarse a engaño: el frontend actual es el MVP de la FASE 6 —una
