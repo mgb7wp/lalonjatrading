@@ -26,7 +26,7 @@ import logging
 from contextlib import contextmanager
 from dataclasses import dataclass, field
 
-from sqlalchemy import select, update
+from sqlalchemy import select, text, update
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.orm import Session
 
@@ -82,6 +82,55 @@ class Resultado:
             return f"  {donde}/{self.etapa}: ya estaba hecho"
         cola = f" | {'; '.join(self.avisos)}" if self.avisos else ""
         return f"  {donde}/{self.etapa}: {self.filas} filas{cola}"
+
+
+#: Fuentes cuyos datos son inventados. Mezclarlas con datos reales en la misma
+#: base es indetectable en cualquier consulta que no mire la columna `source`.
+FUENTES_SINTETICAS = {"sintetico"}
+
+
+class MezclaDeDatos(RuntimeError):
+    """Se intenta escribir datos inventados junto a datos reales, o al reves."""
+
+
+def comprobar_procedencia(
+    sesion: Session, fuente: str, tablas=("price", "fundamental_snapshot")
+) -> None:
+    """Impide mezclar datos sinteticos y reales en la misma base.
+
+    El problema que motiva esto es real y costo encontrarlo. Una ejecucion con
+    `--proveedor sintetico` dejo precios inventados para fechas que los datos
+    reales aun no cubrian; la recarga real no los piso —solo sobrescribe las
+    fechas que trae— y quedaron conviviendo. Exxon aparecia a 1.215 dolares
+    junto a sus cierres reales de 165, y el ranking se calculo con eso.
+
+    Nada fallaba. La columna `source` decia la verdad en cada fila, pero
+    ninguna consulta la miraba, y el resultado era un score contaminado que
+    parecia perfectamente normal.
+
+    La regla es simple: una base es de datos reales o es de pruebas, nunca las
+    dos cosas. Para trabajar con el proveedor sintetico, otra base de datos.
+    """
+    sinteticas = fuente in FUENTES_SINTETICAS
+    for tabla in tablas:
+        existentes = {
+            f for (f,) in sesion.execute(text(f"SELECT DISTINCT source FROM {tabla}")).all()
+        }
+        if not existentes:
+            continue
+        otras = (
+            {f for f in existentes if f not in FUENTES_SINTETICAS}
+            if sinteticas
+            else existentes & FUENTES_SINTETICAS
+        )
+        if otras:
+            clase = "inventados" if sinteticas else "reales"
+            raise MezclaDeDatos(
+                f"no se pueden escribir datos {clase} de '{fuente}' en una base que "
+                f"ya tiene datos de {sorted(otras)} en '{tabla}'. Una base es de "
+                f"datos reales o de pruebas, nunca las dos: usa otra DATABASE_URL, "
+                f"o vacia la tabla si las pruebas ya no hacen falta."
+            )
 
 
 def _ya_hecho(sesion: Session, etapa: str, dia: dt.date, mercado: str | None) -> bool:
@@ -265,6 +314,9 @@ def ejecutar(
     fin = dia
     inicio = dt.date(fin.year - anos, fin.month, fin.day)
     ids_mercado = mercados or [m.id for m in cfg.reglas.universo.mercados]
+    # Antes de descargar nada: media hora de descarga para acabar rechazando la
+    # escritura no le sirve a nadie.
+    comprobar_procedencia(sesion, enrutador.nombre_de("precios"))
     umbrales = _umbrales_rancio(cfg)
     resultados: list[Resultado] = []
 
@@ -285,6 +337,32 @@ def ejecutar(
                 df = enrutador.precios(simbolos, inicio, fin)
                 filas = precios_a_filas(df, mapa, hoy)
                 r.filas = ingest.escribir_precios(sesion, filas).filas
+
+                # Filas imposibles que el saneamiento quito antes de verificar.
+                # Se registran: cinco filas corruptas son ruido tolerable, pero
+                # si un dia son cinco mil hay que verlo como tendencia, no
+                # enterarse por un log rotado.
+                descartadas = getattr(enrutador, "precios_descartados", 0)
+                if descartadas:
+                    r.avisos.append(f"{descartadas} filas con OHLC imposible descartadas")
+                _comprobar(
+                    sesion,
+                    fuente=enrutador.nombre_de("precios"),
+                    conjunto="precios",
+                    mercado=mercado_id,
+                    nombre="ohlc_coherente",
+                    estado=(
+                        CheckStatus.PASSED.value if not descartadas else CheckStatus.WARNING.value
+                    ),
+                    severidad=(Severity.INFO.value if not descartadas else Severity.WARNING.value),
+                    detalle=(
+                        ""
+                        if not descartadas
+                        else f"{descartadas} filas con minimo por encima del cierre "
+                        f"o maximo por debajo; imposibles, se descartan"
+                    ),
+                    contexto={"descartadas": descartadas},
+                )
 
                 devueltos = set(df["ticker"].unique()) if not df.empty else set()
                 cubiertos = _cobertura(r, devueltos, tickers)

@@ -919,3 +919,46 @@ def test_las_bajas_verificadas_son_fusiones_y_traslados(cfg):
     activos = set(cfg.universo.tickers("br"))
     assert "AXIA3.SA" in activos and "ELET3.SA" not in activos
     assert "CPLE3.SA" in activos and "CPLE6.SA" not in activos
+
+
+def test_toda_magnitud_del_contrato_llega_a_la_base_de_datos():
+    """El contrato vigila al proveedor; esto vigila la escritura.
+
+    Las nueve magnitudes de §14 estuvieron en el contrato sin estar en el mapeo
+    de escritura: los adaptadores las calculaban y el ingest las tiraba. 1.394
+    filas con las nueve columnas a cero, sin que fallara nada — los ratios que
+    dependian de ellas salian simplemente vacios, que es indistinguible de "esta
+    empresa no lo publica".
+
+    Un dato que se calcula y no se guarda es peor que uno que no se calcula: da
+    la impresion de estar cubierto.
+    """
+    from estrategia.datos.proveedor import COLUMNAS_FUNDAMENTALES, MAGNITUDES_OPCIONALES
+
+    from backend.adapters.nucleo import COLUMNAS_FUNDAMENTAL, FUNDAMENTALES
+    from backend.db.models import Base
+
+    tabla = Base.metadata.tables["fundamental_snapshot"]
+    sin_camino = []
+    for magnitud in (*MAGNITUDES_OPCIONALES, *COLUMNAS_FUNDAMENTALES):
+        if magnitud in ("ticker", "periodo", "origen_pit", "fecha_descarga"):
+            continue  # se traducen aparte, no por el mapa de columnas
+        columna = FUNDAMENTALES.get(magnitud, magnitud)
+        if columna not in tabla.c:
+            continue  # el esquema no la guarda a proposito
+        if columna not in COLUMNAS_FUNDAMENTAL:
+            sin_camino.append(f"{magnitud} -> {columna}")
+
+    assert not sin_camino, "estas magnitudes se calculan y no se escriben: " + ", ".join(sin_camino)
+
+
+def test_las_magnitudes_opcionales_tienen_columna_propia():
+    """Si una se guardara solo en `extra`, no se podria filtrar por ella."""
+    from estrategia.datos.proveedor import MAGNITUDES_OPCIONALES
+
+    from backend.adapters.nucleo import FUNDAMENTALES
+    from backend.db.models import Base
+
+    tabla = Base.metadata.tables["fundamental_snapshot"]
+    faltan = [m for m in MAGNITUDES_OPCIONALES if FUNDAMENTALES.get(m, m) not in tabla.c]
+    assert not faltan, f"sin columna en la tabla: {faltan}"

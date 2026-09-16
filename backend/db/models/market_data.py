@@ -127,6 +127,10 @@ class FundamentalSnapshot(Base):
     shares_outstanding: Mapped[Decimal | None] = mapped_column(IMPORTE)
     enterprise_value: Mapped[Decimal | None] = mapped_column(IMPORTE)
 
+    current_assets: Mapped[Decimal | None] = mapped_column(IMPORTE)
+    current_liabilities: Mapped[Decimal | None] = mapped_column(IMPORTE)
+    interest_expense: Mapped[Decimal | None] = mapped_column(IMPORTE)
+
     roe: Mapped[Decimal | None] = mapped_column(RATIO)
     roa: Mapped[Decimal | None] = mapped_column(RATIO)
     gross_margin: Mapped[Decimal | None] = mapped_column(RATIO)

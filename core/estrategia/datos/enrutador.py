@@ -66,6 +66,8 @@ class Enrutador:
         self._cfg = cfg
         self._verificar = verificar
         self._instancias: dict[str, Fuente] = {}
+        #: Filas de precios imposibles descartadas en la ultima descarga.
+        self.precios_descartados = 0
         self._por_tipo: dict[str, str] = {
             tipo: cfg.reglas.proveedor_datos.fuente_de(tipo) for tipo in TIPOS_DE_DATO
         }
@@ -139,6 +141,11 @@ class Enrutador:
         fuente = self.fuente("precios")
         df = fuente.precios(tickers, inicio, fin)
         df = _estampar(df, fuente.nombre)
+        # Las filas imposibles se descartan antes de verificar: unas pocas en
+        # un lote de cientos de miles son ruido de un proveedor gratuito, no un
+        # mapeo roto, y rechazar el lote entero dejaria un mercado sin datos.
+        # `precios_descartados` queda para que el pipeline lo registre.
+        df, self.precios_descartados = contrato.sanear_precios(df)
         if self._verificar:
             contrato.verificar_precios(df, fuente.nombre).exigir()
         return df

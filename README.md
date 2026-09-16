@@ -119,10 +119,11 @@ reconstruidos.
 
 ## La plataforma
 
-En construcción. Lo que ya funciona (FASES 1 a 5 del
+En construcción. Lo que ya funciona (FASES 1 a 6 del
 [roadmap](docs/ROADMAP.md)): el esqueleto desplegable, el esquema de base de
 datos con migraciones, la ingesta de los cinco mercados, 22 indicadores técnicos
-y los cinco grupos fundamentales de §14, `/health`, `/health/data`, `/markets` y
+los cinco grupos fundamentales de §14 y el motor de scoring con sus cinco
+perfiles, `/health`, `/health/data`, `/markets` y
 el frontend mínimo.
 
 **Fundamentales point-in-time reales en EE. UU. (SEC EDGAR, 19 ejercicios) y
@@ -135,7 +136,8 @@ cp .env.example .env          # y genera un JWT_SECRET, ver docs/DEPLOYMENT.md
 docker compose up --build     # aplica migraciones y carga la referencia al arrancar
 
 # Datos, sin red (proveedor sintético) o con ella:
-python scripts/update_market_data.py --proveedor sintetico --anos 3
+python scripts/update_market_data.py --anos 12
+python scripts/calculate_scores.py --mercados us,br
 python scripts/verify_sources.py      # qué sirve de verdad cada fuente
 ```
 

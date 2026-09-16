@@ -147,12 +147,17 @@ class Score(Base):
     sentiment: Mapped[Decimal | None] = mapped_column(PUNTUACION)
     risk: Mapped[Decimal | None] = mapped_column(PUNTUACION, comment="100 = menor riesgo")
 
+    # Sub-scores del pilar fundamental: los cinco grupos de §14.
     growth: Mapped[Decimal | None] = mapped_column(PUNTUACION)
+    profitability: Mapped[Decimal | None] = mapped_column(PUNTUACION)
+    financial_health: Mapped[Decimal | None] = mapped_column(PUNTUACION)
     quality: Mapped[Decimal | None] = mapped_column(PUNTUACION)
     valuation: Mapped[Decimal | None] = mapped_column(PUNTUACION)
+    # Sub-scores del pilar tecnico.
     momentum: Mapped[Decimal | None] = mapped_column(PUNTUACION)
     trend: Mapped[Decimal | None] = mapped_column(PUNTUACION)
     volatility: Mapped[Decimal | None] = mapped_column(PUNTUACION)
+    volume: Mapped[Decimal | None] = mapped_column(PUNTUACION)
 
     cohort_used: Mapped[str] = mapped_column(String(24), nullable=False)
     n_cohort: Mapped[int] = mapped_column(Integer, nullable=False)

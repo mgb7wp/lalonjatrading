@@ -210,16 +210,40 @@ mejor, daría una peor disfrazada de más fina.
 
 ---
 
-## FASE 6 — Motor de scoring
+## FASE 6 — Motor de scoring ✅ COMPLETADA
 
-Pilares y sub-scores según D-3, percentiles por cohorte según D-4,
-renormalización de pesos cuando falta un pilar según D-8, historial de scores
-(§24), y los cinco perfiles de §18 como filas de `model_version`.
+- `core/estrategia/scoring.py`: cuatro pilares ortogonales y nueve sub-scores
+- `config/modelos.yaml`: los cinco perfiles de §18 como datos, cargados en
+  `model_version`
+- `scripts/calculate_scores.py` y la etapa `workers/pipeline/scores.py`
 
-**Aceptación:** `python scripts/calculate_scores.py` puebla `score`;
-**reejecutar sobre la misma instantánea da exactamente los mismos números**; el
-score descompone en pilares que suman; cambiar los pesos no requiere tocar
-código.
+**Aceptación cumplida:** los cinco modelos puntúan los 59 valores de EE. UU. y
+Brasil; **reejecutar da la misma huella exacta** en la tabla `score`; los pesos
+viven en configuración y hay un test que comprueba que cambiarlos cambia el
+orden. 287 tests.
+
+Los resultados cuadran con la realidad: META y NVDA con crecimiento alto y
+valoración cara, PETR4 barata y sin crecimiento, KO y PG con riesgo bajo.
+
+**Cuatro fallos, y el peor no era de código:**
+
+- **La base mezclaba datos sintéticos y reales.** Las pruebas con
+  `--proveedor sintetico` dejaron precios inventados en fechas que los datos
+  reales aún no cubrían; la recarga real no los pisó y quedaron conviviendo.
+  Exxon aparecía a 1.215 $ junto a sus cierres reales de 165, y **el ranking se
+  calculó con eso**. La columna `source` decía la verdad en cada fila, pero
+  ninguna consulta la miraba. Ahora hay una barrera que lo impide.
+- **Las nueve magnitudes de §14 se calculaban y no se escribían.** Estaban en el
+  contrato desde la FASE 5 y no en el mapeo de escritura: 1.394 filas con las
+  nueve columnas a cero. El contrato vigila la frontera del proveedor; nada
+  vigilaba la de la base de datos. Ahora sí.
+- **ExxonMobil no tenía fundamentales.** Su ticker resuelve a un CIK nuevo —se
+  reorganizó— que solo ha presentado trimestrales; sus 19 ejercicios están en el
+  CIK de siempre. Misma familia que los cambios de ticker en Brasil: un
+  identificador que cambia y rompe el enlace en silencio.
+- **Un valor dado de baja seguía puntuando.** La carga de referencia es un
+  UPSERT, así que no tocaba lo que desaparecía del YAML: Eletrobras seguía
+  activa tras renombrarse. Ahora se desactiva lo ausente, sin borrarlo.
 
 ---
 

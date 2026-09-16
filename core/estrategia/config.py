@@ -355,6 +355,7 @@ class Implementacion(_Base):
     calendarios: dict[str, str]
     codigos_eodhd: dict[str, str] = Field(default_factory=dict)
     codigos_stooq: dict[str, str] = Field(default_factory=dict)
+    cik_sec: dict[str, str] = Field(default_factory=dict)
     referencias: dict[str, ReferenciaCfg]
     divisas: dict[str, str | None]
     sectores: dict[str, str]

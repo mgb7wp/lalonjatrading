@@ -497,6 +497,16 @@ class ProveedorSEC(ProveedorFundamentales):
             raise ErrorDatos(f"no se ha podido conectar con la SEC: {exc.reason}") from exc
 
     def cik_de(self, ticker: str) -> str | None:
+        """El CIK de un ticker, con las excepciones de la configuracion.
+
+        `company_tickers.json` apunta al emisor registrado HOY. Cuando una
+        empresa se reorganiza, eso puede ser una entidad nueva sin historico:
+        el ticker XOM resuelve a un CIK que solo ha presentado trimestrales,
+        mientras los diecisiete ejercicios anuales estan en el de siempre.
+        """
+        excepcion = self._cfg.implementacion.cik_sec.get(ticker.upper())
+        if excepcion:
+            return excepcion.zfill(10)
         if self._mapa_cik is None:
             self._mapa_cik = parsear_mapa_cik(self._pedir(f"{BASE_WWW}/files/company_tickers.json"))
         return self._mapa_cik.get(ticker.upper())

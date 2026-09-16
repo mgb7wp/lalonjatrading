@@ -1,0 +1,74 @@
+# Los cinco perfiles de §18, como datos y no como código.
+#
+# Un perfil no es una variante del motor: es un juego de pesos. Por eso vive
+# aquí y por eso añadir uno nuevo es una entrada más, sin tocar nada.
+#
+# ── POR QUÉ LOS PESOS NO SON LOS DE §18 ──────────────────────────────────────
+#
+# El encargo propone: fundamental 25, technical 20, momentum 15, quality 15,
+# valuation 10, sentiment 10, risk 5. La suma cuadra, pero la descomposición no:
+# momentum está dentro de technical, y quality y valuation dentro de
+# fundamental. Sumarlos como independientes cuenta el momentum dos veces y la
+# calidad otras dos.
+#
+# La decisión D-3 separa pilares (ortogonales, suman) de sub-scores (descomponen
+# un pilar, se publican, no suman aparte). El perfil `equilibrado` traduce la
+# intención de §18 a esa estructura:
+#
+#     fundamental  25 + 15 (quality) + 10 (valuation) = 50
+#     tecnico      20 + 15 (momentum)                 = 35
+#     sentimiento  10
+#     riesgo        5
+#
+# Los pesos de `grupos` reparten dentro del pilar fundamental, y son lo que
+# distingue de verdad a un inversor de crecimiento de uno de valor: los dos
+# miran los mismos cinco grupos y les dan importancia opuesta.
+#
+# ── SENTIMIENTO ──────────────────────────────────────────────────────────────
+#
+# Todos los perfiles le dan peso, y hoy ese peso NO se aplica: no hay fuente de
+# sentimiento, así que el pilar viene vacío y los pesos se renormalizan sobre
+# los que sí tienen nota (D-8). Se deja declarado a propósito, para que el día
+# que haya fuente entre sin renegociar los pesos. Lo que no se hace es imputarle
+# un 50 neutro, que sería inventar un dato que mueve el ranking.
+
+modelos:
+
+  equilibrado:
+    nombre: "Equilibrado"
+    version: "1.0.0"
+    descripcion: "Traducción de los pesos de §18 a pilares ortogonales"
+    pilares:   {fundamental: 0.50, tecnico: 0.35, sentimiento: 0.10, riesgo: 0.05}
+    grupos:    {crecimiento: 0.20, rentabilidad: 0.20, salud_financiera: 0.20, calidad: 0.20, valoracion: 0.20}
+
+  crecimiento:
+    nombre: "Crecimiento"
+    version: "1.0.0"
+    descripcion: "Prima el crecimiento de ventas, beneficio y flujo de caja"
+    pilares:   {fundamental: 0.45, tecnico: 0.40, sentimiento: 0.10, riesgo: 0.05}
+    # La valoración pesa poco a propósito: exigirle a una empresa en crecimiento
+    # que además esté barata es el filtro que deja fuera a casi todas.
+    grupos:    {crecimiento: 0.45, rentabilidad: 0.25, salud_financiera: 0.10, calidad: 0.10, valoracion: 0.10}
+
+  valor:
+    nombre: "Valor"
+    version: "1.0.0"
+    descripcion: "Prima la valoración barata con balance sano"
+    pilares:   {fundamental: 0.65, tecnico: 0.15, sentimiento: 0.05, riesgo: 0.15}
+    # Salud financiera alta junto a valoración: lo barato sin balance sano suele
+    # estar barato por algo.
+    grupos:    {crecimiento: 0.05, rentabilidad: 0.20, salud_financiera: 0.25, calidad: 0.15, valoracion: 0.35}
+
+  momentum:
+    nombre: "Momentum"
+    version: "1.0.0"
+    descripcion: "Prima la tendencia y la fuerza relativa frente al mercado"
+    pilares:   {fundamental: 0.20, tecnico: 0.65, sentimiento: 0.10, riesgo: 0.05}
+    grupos:    {crecimiento: 0.35, rentabilidad: 0.25, salud_financiera: 0.15, calidad: 0.10, valoracion: 0.15}
+
+  bajo_riesgo:
+    nombre: "Bajo riesgo"
+    version: "1.0.0"
+    descripcion: "Prima la estabilidad: poca volatilidad, poca deuda, beneficios regulares"
+    pilares:   {fundamental: 0.35, tecnico: 0.10, sentimiento: 0.05, riesgo: 0.50}
+    grupos:    {crecimiento: 0.05, rentabilidad: 0.20, salud_financiera: 0.35, calidad: 0.30, valoracion: 0.10}

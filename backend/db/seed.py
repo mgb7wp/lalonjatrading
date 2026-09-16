@@ -17,7 +17,7 @@ from pathlib import Path
 from typing import Any
 
 import yaml
-from sqlalchemy import select
+from sqlalchemy import select, update
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.orm import Session
 
@@ -44,11 +44,13 @@ class Resumen:
     bolsas: int = 0
     valores: int = 0
     indices: int = 0
+    desactivados: int = 0
 
     def __str__(self) -> str:
         return (
             f"{self.paises} paises, {self.divisas} divisas, {self.mercados} mercados, "
             f"{self.bolsas} bolsas, {self.valores} valores, {self.indices} indices"
+            + (f", {self.desactivados} desactivados" if self.desactivados else "")
         )
 
 
@@ -75,6 +77,38 @@ def _upsert(sesion: Session, modelo, filas: list[dict[str, Any]], clave: list[st
         sentencia = sentencia.on_conflict_do_nothing(index_elements=clave)
     sesion.execute(sentencia)
     return len(filas)
+
+
+def _desactivar_ausentes(sesion: Session, filas: list[dict[str, Any]], mercados: set[str]) -> int:
+    """Marca como inactivo lo que ya no esta en la configuracion.
+
+    La carga es un UPSERT, asi que solo toca lo que aparece en el YAML: un
+    ticker que desaparece —porque se renombro, porque la empresa se fusiono—
+    se queda en la tabla como activo para siempre. Y lo que esta activo se
+    puntua, asi que Eletrobras seguia apareciendo en los rankings despues de
+    haberse renombrado a Axia Energia.
+
+    Se DESACTIVA, no se borra. Borrarlo dejaria una base que finge que la
+    empresa nunca existio, que es sesgo de supervivencia metido a mano.
+    """
+    if not mercados:
+        return 0
+    presentes = {(f["market_id"], f["ticker"]) for f in filas}
+    afectados = 0
+    actuales = sesion.execute(
+        select(Security.id, Security.market_id, Security.ticker).where(
+            Security.market_id.in_(mercados), Security.active.is_(True)
+        )
+    ).all()
+    huerfanos = [i for i, m, t in actuales if (m, t) not in presentes]
+    if huerfanos:
+        sesion.execute(
+            update(Security)
+            .where(Security.id.in_(huerfanos))
+            .values(active=False, notes="ya no figura en la configuracion del universo")
+        )
+        afectados = len(huerfanos)
+    return afectados
 
 
 def _huso(codigo_calendario: str) -> str:
@@ -221,6 +255,7 @@ def cargar(sesion: Session, cfg=None, referencia: dict | None = None) -> Resumen
     resumen.indices = sum(1 for f in filas_valor if f["asset_type"] == AssetType.INDEX.value)
     resumen.valores = len(filas_valor) - resumen.indices
     _upsert(sesion, Security, filas_valor, ["market_id", "ticker"])
+    resumen.desactivados = _desactivar_ausentes(sesion, filas_valor, ids_motor)
 
     return resumen
 

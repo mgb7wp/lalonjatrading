@@ -91,6 +91,41 @@ class Informe:
             raise ErrorDatos(f"los datos no cumplen el contrato de fuentes:\n{lineas}")
 
 
+#: Fraccion de filas corruptas por encima de la cual el problema deja de ser
+#: "un proveedor con ruido" y pasa a ser "este lote no sirve".
+FRACCION_MAXIMA_CORRUPTA = 0.001
+
+
+def filas_ohlc_incoherentes(df: pd.DataFrame) -> pd.Series:
+    """Filas donde el minimo esta por encima del cierre, o el maximo por debajo.
+
+    Es imposible por definicion, asi que cuando aparece es ruido del proveedor.
+    """
+    completas = df[["apertura", "maximo", "minimo", "cierre"]].notna().all(axis=1)
+    peor = df[["apertura", "cierre"]].min(axis=1)
+    mejor = df[["apertura", "cierre"]].max(axis=1)
+    return completas & ((df["minimo"] > peor + 1e-9) | (df["maximo"] < mejor - 1e-9))
+
+
+def sanear_precios(df: pd.DataFrame) -> tuple[pd.DataFrame, int]:
+    """Quita las filas imposibles y dice cuantas eran.
+
+    Un lote de 250.000 precios con cinco filas corruptas de hace once anos no es
+    un mapeo roto: es un proveedor gratuito con ruido. Rechazarlo entero deja un
+    mercado sin datos por un problema que afecta al 0,002 % de las filas, y eso
+    es desproporcionado.
+
+    Asi que las filas imposibles se descartan y se cuentan, y el contrato
+    verifica lo que queda. Lo que sigue siendo un incumplimiento es que sean
+    MUCHAS: ahi ya no es ruido, es que el lote no sirve.
+    """
+    if df.empty:
+        return df, 0
+    malas = filas_ohlc_incoherentes(df)
+    n = int(malas.sum())
+    return (df[~malas].reset_index(drop=True), n) if n else (df, 0)
+
+
 def _faltan_columnas(df: pd.DataFrame, esperadas: list[str]) -> list[str]:
     return [c for c in esperadas if c not in df.columns]
 
@@ -134,23 +169,24 @@ def verificar_precios(df: pd.DataFrame, fuente: str) -> Informe:
     if df[["apertura", "maximo", "minimo", "cierre"]].lt(0).any().any():
         falla("hay precios negativos")
 
-    # Coherencia OHLC. Un OHLC incoherente hace que la logica de stops produzca
-    # disparates que parecen fallos de la estrategia y no de los datos.
-    completas = df.dropna(subset=["apertura", "maximo", "minimo", "cierre"])
-    if not completas.empty:
-        peor_min = completas[["apertura", "cierre"]].min(axis=1)
-        mejor_max = completas[["apertura", "cierre"]].max(axis=1)
-        malas = completas[
-            (completas["minimo"] > peor_min + 1e-9) | (completas["maximo"] < mejor_max - 1e-9)
-        ]
-        if not malas.empty:
-            ejemplo = malas.iloc[0]
-            falla(
-                "OHLC incoherente",
-                f"{len(malas)} filas; p. ej. {ejemplo['ticker']} el "
-                f"{ejemplo['fecha']}: minimo {ejemplo['minimo']:.4f}, "
-                f"maximo {ejemplo['maximo']:.4f}",
-            )
+    # Un OHLC incoherente hace que la logica de stops produzca disparates que
+    # parecen fallos de la estrategia y no de los datos. Pero unas pocas filas
+    # corruptas en un lote grande son ruido de un proveedor gratuito, no un
+    # mapeo roto, y `sanear_precios` ya las habra quitado antes de llegar aqui.
+    # Lo que se comprueba es que no sean tantas como para invalidar el lote.
+    malas = df[filas_ohlc_incoherentes(df)]
+    if not malas.empty:
+        fraccion = len(malas) / len(df)
+        ejemplo = malas.iloc[0]
+        detalle = (
+            f"{len(malas)} de {len(df)} filas ({fraccion:.2%}); p. ej. "
+            f"{ejemplo['ticker']} el {ejemplo['fecha']}: minimo "
+            f"{ejemplo['minimo']:.4f}, maximo {ejemplo['maximo']:.4f}"
+        )
+        if fraccion > FRACCION_MAXIMA_CORRUPTA:
+            falla("demasiadas filas con OHLC incoherente", detalle)
+        else:
+            falla("OHLC incoherente", detalle)
 
     duplicadas = df.duplicated(subset=["ticker", "fecha"]).sum()
     if duplicadas:

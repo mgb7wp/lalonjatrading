@@ -49,6 +49,23 @@ FUNDAMENTALES = {
     "roe": "roe",
     "ebit": "ebit",
     "ebitda": "ebitda",
+    # Las nueve magnitudes de §14. Estaban en el contrato desde la FASE 5 y no
+    # en este mapeo, asi que los adaptadores las calculaban y el ingest las
+    # tiraba: 1.394 filas con las nueve columnas a cero. No fallaba nada; los
+    # ratios que dependian de ellas salian simplemente vacios.
+    #
+    # `test_toda_magnitud_del_contrato_llega_a_la_base_de_datos` existe para que
+    # no vuelva a pasar: el contrato vigila la frontera del proveedor, pero
+    # hasta ahora nada vigilaba la de la base de datos.
+    "beneficio_neto": "net_income",
+    "beneficio_bruto": "gross_profit",
+    "activos_totales": "total_assets",
+    "deuda_total": "total_debt",
+    "efectivo": "cash",
+    "bpa": "eps",
+    "activo_corriente": "current_assets",
+    "pasivo_corriente": "current_liabilities",
+    "gastos_financieros": "interest_expense",
 }
 
 #: Columnas de cada tabla, en el orden en que se copian. El orden importa:
@@ -85,6 +102,15 @@ COLUMNAS_FUNDAMENTAL = [
     "operating_margin",
     "reporting_currency",
     "listing_currency",
+    "net_income",
+    "gross_profit",
+    "total_assets",
+    "total_debt",
+    "cash",
+    "eps",
+    "current_assets",
+    "current_liabilities",
+    "interest_expense",
     "source",
     "downloaded_at",
 ]
@@ -168,6 +194,15 @@ def fundamentales_a_filas(
                 fila.get("operating_margin"),
                 fila.get("reporting_currency"),
                 fila.get("listing_currency"),
+                fila.get("net_income"),
+                fila.get("gross_profit"),
+                fila.get("total_assets"),
+                fila.get("total_debt"),
+                fila.get("cash"),
+                fila.get("eps"),
+                fila.get("current_assets"),
+                fila.get("current_liabilities"),
+                fila.get("interest_expense"),
                 fila.get("source") or "desconocida",
                 fila.get("downloaded_at") or descargado,
             )

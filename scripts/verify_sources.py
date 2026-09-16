@@ -139,6 +139,34 @@ def verificar_sec(cfg, informe: Informe) -> None:
                 f"{sum(cuenta.values())} ejercicios de {len(cuenta)} etiquetas: {partes}",
             )
 
+    # Cobertura de TODO el universo estadounidense, no solo de la muestra.
+    # Un ticker cuyo CIK apunta a una entidad reorganizada sin historico devuelve
+    # cero ejercicios sin que nada falle, y en un ranking eso es simplemente una
+    # empresa que no aparece: es como se perdio ExxonMobil, cuyo ticker resuelve
+    # a un CIK que solo ha presentado trimestrales.
+    universo = cfg.universo.tickers("us")
+    completo = _probar(
+        informe,
+        "sec",
+        "cubre el universo de EE. UU.",
+        lambda: fuente.fundamentales(universo, dt.date(2009, 1, 1), dt.date.today()),
+    )
+    if completo is not None:
+        cubiertos = set(completo["ticker"].unique()) if not completo.empty else set()
+        faltan = sorted(set(universo) - cubiertos)
+        informe.anotar(
+            "sec",
+            "cubre el universo de EE. UU.",
+            "ok" if not faltan else "fallo",
+            f"{len(cubiertos)}/{len(universo)} valores"
+            + (
+                f"; sin ejercicios anuales: {', '.join(faltan)}. Revisa si su CIK "
+                f"apunta a una entidad reorganizada y anotalo en `cik_sec`"
+                if faltan
+                else ""
+            ),
+        )
+
     retraso = sorted((a - b).days for a, b in zip(df["fecha_publicacion"], df["fin_periodo"]))
     mediana = retraso[len(retraso) // 2]
     informe.anotar(

@@ -36,6 +36,20 @@ referencias:
     nombre: "iShares Core MSCI EM IMI UCITS ETF (Acc)"
     divisa: EUR
 
+# Excepciones al CIK que la SEC asigna a un ticker.
+#
+# `company_tickers.json` apunta al emisor REGISTRADO HOY, y cuando una empresa
+# se reorganiza eso puede ser una entidad nueva sin histórico. ExxonMobil es el
+# caso: su ticker apunta al CIK 2115436, que solo ha presentado trimestrales, y
+# sus diecisiete ejercicios anuales están en el CIK de siempre, el 34088.
+#
+# No es un caso raro sino la misma familia que los cambios de ticker en Brasil:
+# un identificador que cambia y rompe el enlace en silencio. Aquí se anota la
+# excepción, y `verify_sources.py` comprueba que TODOS los valores de EE. UU.
+# resuelven a datos anuales, para que la próxima se vea sin buscarla.
+cik_sec:
+  XOM: "0000034088"   # Exxon Mobil Corporation, antes de la reorganización
+
 # Sufijos de Stooq. Tampoco coinciden con los de Yahoo: `ITX.MC` alli es
 # `itx.es` y `PETR4.SA` es `petr4.br`. El de EE. UU. es `us`, no vacio.
 codigos_stooq:
