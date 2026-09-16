@@ -213,3 +213,95 @@ def test_las_metricas_nuevas_llegan_al_informe(cfg, instantanea):
     assert not re.search(r"\bnan\b", texto, re.IGNORECASE), (
         "una metrica no disponible tiene que decirlo con palabras, no imprimir nan"
     )
+
+
+# --- Comparacion contra la referencia --------------------------------------
+
+
+def _ref(valores: list[float], desde: int = 0) -> pd.Series:
+    """Referencia semanal alineada con `_curva`."""
+    fechas = [dt.date(2020, 1, 6) + dt.timedelta(weeks=i + desde) for i in range(len(valores))]
+    return pd.Series(valores, index=pd.Index(fechas))
+
+
+def test_batir_a_la_referencia_da_exceso_positivo(cfg):
+    curva = _curva([100, 104, 108, 112, 116, 120, 124])
+    ref = _ref([100, 101, 102, 103, 104, 105, 106])
+
+    c = metricas_mod.comparar_con_referencia("prueba", curva, ref, cfg)
+
+    assert c is not None
+    assert c.exceso_anualizado > 0
+    assert c.anualizada_estrategia > c.anualizada_referencia
+
+
+def test_el_alfa_descuenta_el_riesgo_asumido(cfg):
+    """El test que justifica calcular alfa y no solo el exceso.
+
+    La estrategia hace exactamente el DOBLE que el mercado cada semana: sube el
+    doble y baja el doble. Su exceso es positivo porque el mercado subio, pero
+    no ha aportado nada propio: solo ha ido apalancada. La beta tiene que salir
+    2 y el alfa pegada a cero.
+
+    Con la implementacion que solo resta rentabilidades, esto pasaria por un
+    hallazgo.
+    """
+    mercado = [100.0]
+    for r in (0.02, -0.01, 0.03, 0.01, -0.02, 0.02):
+        mercado.append(mercado[-1] * (1 + r))
+
+    estrategia = [100.0]
+    for r in (0.04, -0.02, 0.06, 0.02, -0.04, 0.04):
+        estrategia.append(estrategia[-1] * (1 + r))
+
+    c = metricas_mod.comparar_con_referencia("doble", _curva(estrategia), _ref(mercado), cfg)
+
+    assert c is not None
+    assert c.exceso_anualizado > 0, "gana mas que el mercado, en bruto"
+    assert c.beta == pytest.approx(2.0, abs=0.05), "se mueve el doble"
+    assert abs(c.alfa_jensen) < 0.02, f"no aporta merito propio, y el alfa {c.alfa_jensen} lo dice"
+
+
+def test_la_comparacion_no_usa_el_relleno_anterior_al_lanzamiento(cfg):
+    """El fallo que motiva `inicio_real_referencia`.
+
+    `curva_referencia` rellena hacia atras para poder pintar la linea entera. Si
+    la comparacion midiera sobre ese relleno, el tramo anterior al ETF aparece
+    como una referencia plana al 0% y la estrategia se lleva gratis todo lo que
+    ganara ahi.
+    """
+    curva = _curva([100, 130, 140, 141, 142, 143, 144])
+    # La referencia "existe" desde la semana 3; antes es relleno plano.
+    ref = _ref([100.0, 100.0, 100.0, 100.0, 120.0, 130.0, 140.0])
+    real_desde = dt.date(2020, 1, 6) + dt.timedelta(weeks=3)
+
+    ingenua = metricas_mod.comparar_con_referencia("r", curva, ref, cfg)
+    honesta = metricas_mod.comparar_con_referencia("r", curva, ref, cfg, desde=real_desde)
+
+    assert ingenua is not None and honesta is not None
+    assert honesta.recortada is True
+    assert ingenua.recortada is False
+    assert honesta.desde == real_desde
+    assert honesta.exceso_anualizado < ingenua.exceso_anualizado, (
+        "medir contra el relleno infla el exceso; es justo el sesgo que se evita"
+    )
+
+
+def test_una_referencia_plana_no_produce_un_alfa_inventado(cfg):
+    """Sin varianza en el mercado no hay beta, y sin beta no hay alfa de Jensen.
+
+    Devolver 0.0 aqui seria afirmar algo que no se ha medido.
+    """
+    c = metricas_mod.comparar_con_referencia(
+        "plana", _curva([100, 110, 120, 130, 140]), _ref([100.0] * 5), cfg
+    )
+    assert c is not None
+    assert np.isnan(c.beta)
+    assert np.isnan(c.alfa_jensen)
+
+
+def test_sin_tramo_comun_no_hay_comparacion(cfg):
+    """Mejor nada que un numero calculado sobre tres puntos sueltos."""
+    curva = _curva([100, 101, 102, 103])
+    lejos = _ref([100.0, 101.0, 102.0], desde=500)
+    assert metricas_mod.comparar_con_referencia("lejana", curva, lejos, cfg) is None

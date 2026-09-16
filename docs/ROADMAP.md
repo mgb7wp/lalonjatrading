@@ -281,7 +281,22 @@ anti-sesgo en verde.
       `period_kind` convierte «el periodo de validación está cerrado hasta el
       final» en una consulta de un segundo en lugar de una intención.
 - [ ] Backtest desde el feature store de la base de datos, no solo desde Parquet.
-- [ ] Comparación contra benchmark en el informe.
+- [x] **Comparación contra benchmark en el informe.** Anualizada de la
+      estrategia y de la referencia, exceso, **alfa de Jensen**, beta,
+      correlación y drawdown de ambas, en los dos informes.
+
+      Se calcula alfa y no solo el exceso porque ganar un 12% con beta 1,5 en un
+      mercado que subió un 10% no es haber batido a nadie: es haber llevado más
+      riesgo. El exceso es lo que nota quien invierte; el alfa es el mérito. Hay
+      un test con una estrategia que hace exactamente el doble que el mercado:
+      su exceso es positivo, su beta sale 2 y su alfa, cero.
+
+      **Corregido de paso un sesgo real:** `curva_referencia` rellena hacia
+      atrás (`bfill`) para poder pintar la línea completa, así que el tramo
+      anterior al lanzamiento del ETF aparecía como una referencia plana al 0%.
+      Medir el alfa sobre ese relleno le regalaba a la estrategia todo ese
+      periodo. La comparación arranca ahora en la primera sesión con dato real y
+      el informe lo dice cuando recorta.
 
 ---
 
@@ -395,9 +410,27 @@ crear una cartera y añadir a watchlist, sin tocar la API a mano.
 
 ---
 
-## FASE 18 — Despliegue y comercialización
+## FASE 18 — Despliegue y comercialización 🔄 PARCIAL
 
 Despliegue en VPS, backups, monitorización, `DEPLOYMENT.md`.
+
+- [x] **Desplegado y en el aire**: `lalonja-trading.com`, en un VPS de Hetzner,
+      vía Cloudflare Tunnel. Siete contenedores (`postgres`, `redis`, `api`,
+      `worker`, `web`, `caddy`, `cloudflared`).
+
+      La máquina **no publica un solo puerto** al exterior: el túnel sale desde
+      ella hacia Cloudflare, así que ni Postgres ni la API ni Caddy escuchan en
+      la IP pública. El TLS lo termina Cloudflare.
+
+      Lo que se ve hoy es el MVP de la FASE 6 —estado del servicio y tabla de
+      mercados—; la interfaz de verdad sigue siendo la FASE 17. Lo que demuestra
+      es que la tubería entera funciona de punta a punta.
+- [x] `DEPLOYMENT.md` con las dos vías (túnel y IP pública con Let's Encrypt).
+- [ ] **Backups de Postgres verificados.** Es lo más urgente que falta: hay
+      datos reales cargándose y ninguna copia. Un backup que nunca se ha
+      restaurado no es un backup.
+- [ ] Monitorización y alertas sobre `/health` y `/health/data`.
+- [ ] Despliegue automático desde CI en lugar de `git pull` por SSH.
 
 Y las dos decisiones que no son técnicas y bloquean el cobro:
 

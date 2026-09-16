@@ -43,6 +43,7 @@ class Informe:
     uso_riesgo: metricas_mod.UsoDelRiesgo
     curva: pd.DataFrame
     referencias: dict[str, pd.Series]
+    comparaciones: list[metricas_mod.Comparacion]
     operaciones: pd.DataFrame
     eventos: pd.DataFrame
     avisos: list[Aviso]
@@ -92,10 +93,24 @@ def construir(
 
     vista_final = instantanea.vista(resultado.fin)
     referencias: dict[str, pd.Series] = {}
+    comparaciones: list[metricas_mod.Comparacion] = []
     for nombre in cfg.reglas.referencias_informe:
         serie = metricas_mod.curva_referencia(nombre, resultado.curva, vista_final, cfg)
-        if serie is not None:
-            referencias[nombre] = serie
+        if serie is None:
+            continue
+        referencias[nombre] = serie
+        # El inicio real se pasa aparte a proposito: `serie` viene rellenada
+        # hacia atras para poder pintarla entera, y medir alfa sobre ese relleno
+        # le regalaria a la estrategia todo el tramo anterior al ETF.
+        comp = metricas_mod.comparar_con_referencia(
+            nombre,
+            resultado.curva,
+            serie,
+            cfg,
+            desde=metricas_mod.inicio_real_referencia(nombre, vista_final, cfg),
+        )
+        if comp is not None:
+            comparaciones.append(comp)
 
     avisos = _avisos_permanentes()
     avisos += _avisos_de_datos(resultado, cfg, instantanea, operaciones, referencias)
@@ -121,6 +136,7 @@ def construir(
         uso_riesgo=metricas_mod.uso_del_riesgo(eventos),
         curva=resultado.curva,
         referencias=referencias,
+        comparaciones=comparaciones,
         operaciones=operaciones,
         eventos=eventos,
         avisos=avisos,
@@ -378,6 +394,29 @@ def a_markdown(informe: Informe) -> str:
         f"- Exposicion media: {r.exposicion_media:.1%}",
         "",
     ]
+
+    if informe.comparaciones:
+        lineas += ["## Contra las referencias", ""]
+        for c in informe.comparaciones:
+            lineas += [
+                f"### {c.nombre}",
+                "",
+                f"- Anualizada estrategia: {c.anualizada_estrategia:+.2%}",
+                f"- Anualizada referencia: {c.anualizada_referencia:+.2%}",
+                f"- Exceso anualizado: {c.exceso_anualizado:+.2%}",
+                f"- Alfa de Jensen (anualizada): "
+                f"{metricas_mod.como_texto(c.alfa_jensen * 100)}%",
+                f"- Beta: {metricas_mod.como_texto(c.beta)}",
+                f"- Correlacion: {metricas_mod.como_texto(c.correlacion)}",
+                f"- Drawdown maximo estrategia: {c.drawdown_estrategia:.2%}",
+                f"- Drawdown maximo referencia: {c.drawdown_referencia:.2%}",
+            ]
+            if c.recortada:
+                lineas.append(
+                    f"- **Comparacion desde {c.desde}**, no desde el inicio del "
+                    f"backtest: la referencia no tiene datos antes de esa fecha."
+                )
+            lineas.append("")
 
     u = informe.uso_riesgo
     if u.n:

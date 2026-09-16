@@ -427,6 +427,17 @@ def _f_pct(v) -> str:
     return f"{float(v):.1%}"
 
 
+def _f_pct_seguro(v) -> str:
+    """Porcentaje con signo, o "no disponible" si la metrica no esta definida.
+
+    `f"{nan:.1%}"` imprime "nan%", que en un informe parece un numero. El alfa y
+    la beta no existen cuando la referencia no se movio nada, y eso hay que
+    decirlo con palabras.
+    """
+    v = float(v)
+    return metricas_mod.NO_DISPONIBLE if not math.isfinite(v) else f"{v:+.1%}"
+
+
 def _f_pct_signo(v) -> str:
     return f"{float(v):+.1%}"
 
@@ -538,6 +549,55 @@ def a_html(informe: Informe, titulo: str = "Estrategia mixta") -> str:
         f"seria una comparacion justa.</p>"
     )
     partes.append(f'<div class="tarjeta">{curva_svg(informe)}</div>')
+
+    if informe.comparaciones:
+        partes.append("<h2>Contra las referencias</h2>")
+        partes.append(
+            '<p class="sub">El exceso es lo que nota quien invierte; el alfa de '
+            "Jensen es el merito. Ganar un 12% con beta 1,5 en un mercado que "
+            "subio un 10% no es haber batido a nadie: es haber llevado mas "
+            "riesgo, y eso lo separa el alfa y no el exceso.</p>"
+        )
+        filas = pd.DataFrame(
+            [
+                {
+                    "nombre": c.nombre,
+                    "estrategia": c.anualizada_estrategia,
+                    "referencia": c.anualizada_referencia,
+                    "exceso": c.exceso_anualizado,
+                    "alfa": c.alfa_jensen,
+                    "beta": c.beta,
+                    "correlacion": c.correlacion,
+                    "dd_ref": c.drawdown_referencia,
+                }
+                for c in informe.comparaciones
+            ]
+        )
+        partes.append(
+            _tabla(
+                filas,
+                {
+                    "nombre": ("Referencia", str),
+                    "estrategia": ("Anual. estrategia", _f_pct_seguro),
+                    "referencia": ("Anual. referencia", _f_pct_seguro),
+                    "exceso": ("Exceso", _f_pct_seguro),
+                    "alfa": ("Alfa (Jensen)", _f_pct_seguro),
+                    "beta": ("Beta", lambda v: metricas_mod.como_texto(v)),
+                    "correlacion": ("Correlacion", lambda v: metricas_mod.como_texto(v)),
+                    "dd_ref": ("DD referencia", lambda v: _pct(v, signo=False)),
+                },
+                colorear={"exceso", "alfa"},
+            )
+        )
+        recortadas = [c for c in informe.comparaciones if c.recortada]
+        if recortadas:
+            detalle = ", ".join(f"{c.nombre} desde {c.desde}" for c in recortadas)
+            partes.append(
+                f'<p class="sub">Comparacion recortada: {_e(detalle)}. La '
+                f"referencia no tiene datos antes de esa fecha, y medir contra "
+                f"el relleno le regalaria a la estrategia todo el tramo "
+                f"anterior.</p>"
+            )
 
     if not informe.por_ano.empty:
         partes.append("<h2>Por ano</h2>")

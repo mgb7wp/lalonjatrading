@@ -366,6 +366,138 @@ def uso_del_riesgo(eventos: pd.DataFrame) -> UsoDelRiesgo:
     )
 
 
+@dataclass(frozen=True, slots=True)
+class Comparacion:
+    """La estrategia medida contra una referencia, sobre el tramo comparable."""
+
+    nombre: str
+    desde: date
+    recortada: bool
+    anualizada_estrategia: float
+    anualizada_referencia: float
+    exceso_anualizado: float
+    drawdown_estrategia: float
+    drawdown_referencia: float
+    beta: float
+    alfa_jensen: float
+    correlacion: float
+
+
+def inicio_real_referencia(nombre: str, vista_final, cfg: Config) -> date | None:
+    """Primera sesion con dato REAL de la referencia.
+
+    Hace falta porque `curva_referencia` rellena hacia atras con `bfill` para
+    poder pintar la linea completa. Para un grafico eso es tolerable; para medir
+    alfa es un regalo: el tramo anterior al lanzamiento del ETF aparece como una
+    referencia plana al 0%, y todo lo que la estrategia ganara ahi se contaria
+    como si lo hubiera ganado contra el mercado. La comparacion tiene que
+    empezar donde empiezan los datos de verdad.
+    """
+    ref = cfg.implementacion.referencias.get(nombre)
+    if ref is None:
+        return None
+    serie = vista_final.serie(ref.ticker)
+    if serie is None or len(serie.fechas) == 0:
+        return None
+    return serie.fechas[0]
+
+
+def _periodica(serie: pd.Series, periodicidad: str) -> pd.Series:
+    s = pd.Series(serie.to_numpy(dtype=float), index=pd.to_datetime(serie.index))
+    return s.resample("W").last().dropna() if periodicidad == "semanal" else s
+
+
+def comparar_con_referencia(
+    nombre: str,
+    curva: pd.DataFrame,
+    referencia: pd.Series,
+    cfg: Config,
+    desde: date | None = None,
+) -> Comparacion | None:
+    """Compara la estrategia con una referencia sobre el tramo que comparten.
+
+    `beta` mide cuanto se mueve la estrategia cuando se mueve el mercado, y
+    `alfa_jensen` lo que queda despues de descontar esa exposicion: ganar un 12%
+    con beta 1.5 en un mercado que subio un 10% no es haber batido a nadie, es
+    haber llevado mas riesgo. Es la diferencia entre el exceso a secas —que
+    tambien se da, porque es lo que nota quien invierte— y el merito real.
+    """
+    if curva.empty or referencia is None or referencia.empty:
+        return None
+
+    periodicidad = cfg.reglas.metricas.periodicidad_sharpe
+    rf_anual = cfg.reglas.metricas.tasa_libre_riesgo_anual
+
+    inicio_curva = curva["fecha"].iloc[0]
+    arranque = max(inicio_curva, desde) if desde else inicio_curva
+    recortada = arranque > inicio_curva
+
+    trozo = curva[curva["fecha"] >= arranque]
+    if len(trozo) < 3:
+        return None
+    est = pd.Series(
+        trozo["valor"].to_numpy(dtype=float), index=pd.Index(list(trozo["fecha"]))
+    )
+    ref = referencia[referencia.index >= arranque]
+    if len(ref) < 3:
+        return None
+
+    e = _periodica(est, periodicidad)
+    r = _periodica(ref, periodicidad)
+    comun = e.index.intersection(r.index)
+    if len(comun) < 3:
+        return None
+    e, r = e.loc[comun], r.loc[comun]
+
+    re_, rr = e.pct_change().dropna(), r.pct_change().dropna()
+    comun = re_.index.intersection(rr.index)
+    re_, rr = re_.loc[comun], rr.loc[comun]
+    if len(re_) < 3:
+        return None
+
+    por_ano = SEMANAS_POR_ANO if periodicidad == "semanal" else _sesiones_por_ano(trozo)
+    rf_periodo = (1.0 + rf_anual) ** (1.0 / por_ano) - 1.0
+
+    dias = (trozo["fecha"].iloc[-1] - arranque).days
+    anos = max(dias / DIAS_POR_ANO, 1e-9)
+
+    def _anualizada(serie: pd.Series) -> float:
+        ini, fin = float(serie.iloc[0]), float(serie.iloc[-1])
+        return (fin / ini) ** (1.0 / anos) - 1.0 if ini > 0 else 0.0
+
+    ae, ar = _anualizada(e), _anualizada(r)
+
+    var_ref = float(rr.var())
+    if var_ref == 0.0:
+        beta = float("nan")
+        alfa = float("nan")
+    else:
+        beta = float(((re_ - rf_periodo).cov(rr - rf_periodo)) / var_ref)
+        # Jensen sobre rentabilidades del periodo, anualizado al final para que
+        # se lea en las mismas unidades que el resto del informe.
+        alfa_periodo = float(
+            (re_ - rf_periodo).mean() - beta * (rr - rf_periodo).mean()
+        )
+        alfa = (1.0 + alfa_periodo) ** por_ano - 1.0
+
+    desv = float(re_.std()) * float(rr.std())
+    correlacion = float(re_.corr(rr)) if desv > 0 else float("nan")
+
+    return Comparacion(
+        nombre=nombre,
+        desde=arranque,
+        recortada=recortada,
+        anualizada_estrategia=ae,
+        anualizada_referencia=ar,
+        exceso_anualizado=ae - ar,
+        drawdown_estrategia=drawdown_maximo(e.to_numpy(dtype=float)),
+        drawdown_referencia=drawdown_maximo(r.to_numpy(dtype=float)),
+        beta=beta,
+        alfa_jensen=alfa,
+        correlacion=correlacion,
+    )
+
+
 def curva_referencia(
     nombre: str, curva: pd.DataFrame, vista_final, cfg: Config
 ) -> pd.Series | None:
