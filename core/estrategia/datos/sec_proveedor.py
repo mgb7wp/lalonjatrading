@@ -122,10 +122,34 @@ CONCEPTOS: dict[str, tuple[str, ...]] = {
         "WeightedAverageNumberOfDilutedSharesOutstanding",
         "WeightedAverageNumberOfSharesOutstandingBasic",
     ),
+    # --- magnitudes opcionales de §14 -------------------------------------
+    "beneficio_bruto": ("GrossProfit",),
+    "activos_totales": ("Assets",),
+    "activo_corriente": ("AssetsCurrent",),
+    "pasivo_corriente": ("LiabilitiesCurrent",),
+    "bpa": ("EarningsPerShareDiluted", "EarningsPerShareBasic"),
+    # El gasto financiero tiene media docena de etiquetas y ninguna domina. Se
+    # prueban en orden y, si no hay ninguna, la cobertura de intereses queda sin
+    # calcular en lugar de inventarse.
+    "gastos_financieros": (
+        "InterestExpense",
+        "InterestExpenseDebt",
+        "InterestExpenseNonoperating",
+        "InterestAndDebtExpense",
+    ),
 }
 
 #: Magnitudes de balance: se declaran en un instante, sin fecha de inicio.
-INSTANTANEAS = {"patrimonio_neto", "deuda_largo", "deuda_corto", "efectivo", "acciones"}
+INSTANTANEAS = {
+    "patrimonio_neto",
+    "deuda_largo",
+    "deuda_corto",
+    "efectivo",
+    "acciones",
+    "activos_totales",
+    "activo_corriente",
+    "pasivo_corriente",
+}
 
 
 def _fecha(texto: Any) -> date | None:
@@ -301,6 +325,23 @@ def parsear_companyfacts(payload: dict, ticker: str, descargado: date) -> list[d
                 "acciones_en_circulacion": valores["acciones"],
                 "divisa_reporte": "USD",
                 "divisa_cotizacion": "USD",
+                # --- magnitudes opcionales de §14 ------------------------
+                "beneficio_neto": valores["beneficio_neto"],
+                "beneficio_bruto": valores["beneficio_bruto"],
+                "activos_totales": valores["activos_totales"],
+                "deuda_total": deuda_total,
+                "efectivo": valores["efectivo"],
+                "bpa": valores["bpa"],
+                "activo_corriente": valores["activo_corriente"],
+                "pasivo_corriente": valores["pasivo_corriente"],
+                # El gasto financiero se declara como numero positivo aunque en
+                # las cuentas reste: la cobertura de intereses es EBIT partido
+                # por el gasto, y un signo negativo la volveria del reves.
+                "gastos_financieros": (
+                    None
+                    if valores["gastos_financieros"] is None
+                    else abs(valores["gastos_financieros"])
+                ),
             }
         )
     return filas
@@ -374,6 +415,17 @@ class ProveedorSEC(ProveedorFundamentales):
             incluye_deslistadas=False,
             mercados=("us",),
             necesita_clave=False,
+            magnitudes=(
+                "beneficio_neto",
+                "beneficio_bruto",
+                "activos_totales",
+                "deuda_total",
+                "efectivo",
+                "bpa",
+                "activo_corriente",
+                "pasivo_corriente",
+                "gastos_financieros",
+            ),
             notas=(
                 "Solo EE. UU. y solo ejercicios anuales (10-K).",
                 "Unica fuente del proyecto que emite origen_pit: capturado.",

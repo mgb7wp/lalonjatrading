@@ -156,8 +156,17 @@ def verificar_precios(df: pd.DataFrame, fuente: str) -> Informe:
     return inf
 
 
-def verificar_fundamentales(df: pd.DataFrame, fuente: str) -> Informe:
-    """Comprueba un lote de fundamentales."""
+def verificar_fundamentales(
+    df: pd.DataFrame, fuente: str, magnitudes: tuple[str, ...] = ()
+) -> Informe:
+    """Comprueba un lote de fundamentales.
+
+    `magnitudes` son las opcionales que la fuente DICE servir. Lo declarado se
+    comprueba con el mismo rasero que lo obligatorio —una columna entera a nulo
+    es un mapeo roto, no un dato que falta— y lo no declarado se deja pasar
+    vacio. Sin esa distincion, ampliar el contrato obligaria a que todas las
+    fuentes sirvieran todo, que es la via rapida para que nadie lo amplie nunca.
+    """
     inf = Informe()
 
     def falla(problema: str, detalle: str = "") -> None:
@@ -190,6 +199,14 @@ def verificar_fundamentales(df: pd.DataFrame, fuente: str) -> Informe:
                 f"{' o '.join(grupo)} - sin ninguna de las dos no hay EV/EBIT y "
                 f"la valoracion puntua cero para todas las empresas",
             )
+
+    declaradas_vacias = _columnas_vacias(df, [m for m in magnitudes if m in df.columns])
+    if declaradas_vacias:
+        falla(
+            "columnas que la fuente dice servir y vienen enteras a nulo",
+            f"{', '.join(declaradas_vacias)} - o el mapeo esta roto, o sobran de "
+            f"`Capacidades.magnitudes`",
+        )
 
     if df["fecha_publicacion"].isna().any():
         n = int(df["fecha_publicacion"].isna().sum())

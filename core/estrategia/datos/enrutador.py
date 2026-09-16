@@ -36,7 +36,7 @@ import pandas as pd
 from ..config import Config
 from ..errores import ErrorConfiguracion
 from . import contrato, registro
-from .proveedor import TIPOS_DE_DATO, Capacidades, Fuente
+from .proveedor import MAGNITUDES_OPCIONALES, TIPOS_DE_DATO, Capacidades, Fuente
 
 
 class Enrutador:
@@ -117,8 +117,11 @@ class Enrutador:
         fuente = self.fuente("fundamentales")
         df = fuente.fundamentales(tickers, inicio, fin)
         df = _estampar(df, fuente.nombre)
+        df = _completar_opcionales(df)
         if self._verificar:
-            contrato.verificar_fundamentales(df, fuente.nombre).exigir()
+            contrato.verificar_fundamentales(
+                df, fuente.nombre, fuente.capacidades.magnitudes
+            ).exigir()
         return df
 
     def fx(self, divisas: list[str], inicio: date, fin: date) -> pd.DataFrame:
@@ -131,6 +134,26 @@ class Enrutador:
 
     def sectores(self, tickers: list[str]) -> dict[str, str | None]:
         return self.fuente("sectores").sectores(tickers)
+
+
+def _completar_opcionales(df: pd.DataFrame) -> pd.DataFrame:
+    """Anade a nulo las magnitudes opcionales que la fuente no haya traido.
+
+    Se hace aqui y no en cada adaptador por lo mismo que el contrato: es el
+    unico sitio por el que pasan todos los datos, asi que ampliar el contrato no
+    obliga a tocar las cinco fuentes ni a que sus autores se acuerden.
+
+    **Solo las opcionales.** Las obligatorias siguen teniendo que venir de la
+    fuente: si se rellenaran tambien aqui, una errata en el nombre de una
+    columna pasaria de error ruidoso a columna vacia, que es justo el fallo que
+    el contrato existe para cazar.
+    """
+    if df.empty:
+        return df
+    faltan = [c for c in MAGNITUDES_OPCIONALES if c not in df.columns]
+    if faltan:
+        df = df.assign(**dict.fromkeys(faltan, None))
+    return df
 
 
 def _estampar(df: pd.DataFrame, nombre: str) -> pd.DataFrame:

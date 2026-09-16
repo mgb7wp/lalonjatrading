@@ -73,6 +73,35 @@ COLUMNAS_FUNDAMENTALES = [
     "divisa_cotizacion",
 ]
 
+#: AMPLIACION FASE 5: lo que piden los cinco grupos de §14 —crecimiento,
+#: rentabilidad, salud financiera, calidad y valoracion— y que el contrato
+#: original no transportaba.
+#:
+#: Van aparte de `COLUMNAS_FUNDAMENTALES` a proposito: **opcional significa
+#: opcional**, asi que su ausencia no es un incumplimiento. Meterlas en el
+#: bloque obligatorio habria obligado a las cinco fuentes a servirlas todas de
+#: golpe, que es la via rapida para que el contrato no se amplie nunca.
+#:
+#: Lo que si es obligatorio es ser honesto: una fuente que dice servir una
+#: magnitud en `Capacidades.magnitudes` no puede devolverla entera a nulo, y el
+#: contrato lo comprueba con el mismo rasero que las obligatorias. Asi una
+#: fuente se enriquece poco a poco sin que un mapeo roto se confunda con un dato
+#: que no existe.
+MAGNITUDES_OPCIONALES = (
+    "beneficio_neto",
+    "beneficio_bruto",
+    "activos_totales",
+    "deuda_total",
+    "efectivo",
+    "bpa",
+    "activo_corriente",
+    "pasivo_corriente",
+    "gastos_financieros",
+)
+
+#: Todo lo que puede traer una fila de fundamentales.
+COLUMNAS_FUNDAMENTALES_TODAS = COLUMNAS_FUNDAMENTALES + list(MAGNITUDES_OPCIONALES)
+
 COLUMNAS_FX = ["fecha", "divisa", "tasa"]
 
 
@@ -92,6 +121,11 @@ class Capacidades:
     incluye_deslistadas: bool = False
     mercados: tuple[str, ...] | None = None
     necesita_clave: bool = False
+    #: Cuales de las magnitudes opcionales sirve esta fuente. No es adorno: el
+    #: contrato exige que lo declarado venga con dato, asi que apuntarse una de
+    #: mas convierte un mapeo roto en un error ruidoso en vez de en una columna
+    #: vacia que nadie mira.
+    magnitudes: tuple[str, ...] = field(default_factory=tuple)
     notas: tuple[str, ...] = field(default_factory=tuple)
 
     def sirve(self, tipo: str) -> bool:
