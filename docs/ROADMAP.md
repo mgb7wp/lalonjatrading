@@ -247,7 +247,7 @@ valoración cara, PETR4 barata y sin crecimiento, KO y PG con riesgo bajo.
 
 ---
 
-## FASE 7 — Backtesting 🔄 EN CURSO
+## FASE 7 — Backtesting ✅ COMPLETADA
 
 Conectar el motor existente al feature store y añadir las métricas que faltan
 (Sortino, profit factor, turnover, periodo medio de tenencia). Registro de
@@ -280,7 +280,23 @@ anti-sesgo en verde.
 
       `period_kind` convierte «el periodo de validación está cerrado hasta el
       final» en una consulta de un segundo en lugar de una intención.
-- [ ] Backtest desde el feature store de la base de datos, no solo desde Parquet.
+- [x] **Backtest desde la base de datos.** `backend/adapters/desde_bd.py`
+      construye la `Instantanea` del motor leyendo de Postgres, y
+      `scripts/run_backtest.py` la ejecuta.
+
+      La flecha de dependencias no se toca: el motor **sigue sin saber que
+      existe una base de datos** (§4 de ARCHITECTURE.md). La traducción vive en
+      `backend`, igual que la de escritura.
+
+      Dos decisiones deliberadas: trae **también los valores dados de baja**
+      —filtrar por `active` sería reconstruir el universo de hoy y aplicarlo al
+      pasado, sesgo de supervivencia puro (D-13)—, y se **niega a leer una base
+      que mezcle datos sintéticos y reales**, que es el guardarraíl de la FASE 6
+      aplicado al extremo de la lectura.
+
+      El script **anota el experimento solo**, en la misma ejecución: un
+      registro que hay que acordarse de rellenar a mano no se rellena, y
+      entonces no sirve para lo único que existe.
 - [x] **Comparación contra benchmark en el informe.** Anualizada de la
       estrategia y de la referencia, exceso, **alfa de Jensen**, beta,
       correlación y drawdown de ambas, en los dos informes.

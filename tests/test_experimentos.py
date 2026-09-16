@@ -181,3 +181,52 @@ def test_la_restriccion_del_periodo_tambien_esta_en_la_base_de_datos(sesion, mod
             {"mv": modelo.id},
         )
         sesion.flush()
+
+
+def test_los_pesos_del_perfil_entran_en_la_huella(sesion, modelo):
+    """El fallo que casi se cuela en `run_backtest.py`.
+
+    El script tenia un respaldo que, si la configuracion no sabia serializarse,
+    guardaba solo `{"modelo": "equilibrado"}`. Con eso, dos juegos de pesos
+    distintos comparten huella y el registro deja de contar experimentos: cuenta
+    nombres de perfil. Es un fallo silencioso —nada revienta, el numero sale
+    mas bajo— y ataca justo lo unico que esta tabla mide.
+    """
+    reglas = {"seleccion": {"minimo": 5}}
+    _registrar(
+        sesion,
+        modelo,
+        parameters={"modelo": "equilibrado", "reglas": reglas, "pesos": {"fundamental": 50}},
+    )
+    _registrar(
+        sesion,
+        modelo,
+        parameters={"modelo": "equilibrado", "reglas": reglas, "pesos": {"fundamental": 60}},
+    )
+
+    assert experimentos.experimentos_por_periodo(sesion) == {"diseno": 2}
+
+
+def test_las_reglas_del_motor_tambien_entran_en_la_huella(sesion, modelo):
+    """Mismo perfil de pesos, distinto umbral del motor: otro experimento."""
+    pesos = {"fundamental": 50}
+    _registrar(
+        sesion,
+        modelo,
+        parameters={
+            "modelo": "equilibrado",
+            "reglas": {"costes": {"comision": 0.001}},
+            "pesos": pesos,
+        },
+    )
+    _registrar(
+        sesion,
+        modelo,
+        parameters={
+            "modelo": "equilibrado",
+            "reglas": {"costes": {"comision": 0.002}},
+            "pesos": pesos,
+        },
+    )
+
+    assert experimentos.experimentos_por_periodo(sesion) == {"diseno": 2}
