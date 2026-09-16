@@ -98,7 +98,8 @@ def _fundamentales(sesion: Session, ids: list[int]) -> dict[int, pd.DataFrame]:
             text(
                 "SELECT security_id, period_end, period, revenue, ebit, ebitda, "
                 "       net_income, gross_profit, equity, total_assets, total_debt, "
-                "       free_cash_flow, eps, shares_outstanding, current_assets, current_liabilities, "
+                "       free_cash_flow, eps, shares_outstanding, current_assets, "
+                "       current_liabilities, "
                 "       interest_expense, operating_margin "
                 "FROM fundamental_snapshot WHERE security_id = ANY(:ids) "
                 "ORDER BY security_id, period_end"

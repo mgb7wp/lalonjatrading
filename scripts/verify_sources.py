@@ -167,7 +167,8 @@ def verificar_sec(cfg, informe: Informe) -> None:
             ),
         )
 
-    retraso = sorted((a - b).days for a, b in zip(df["fecha_publicacion"], df["fin_periodo"]))
+    pares = zip(df["fecha_publicacion"], df["fin_periodo"], strict=True)
+    retraso = sorted((a - b).days for a, b in pares)
     mediana = retraso[len(retraso) // 2]
     informe.anotar(
         "sec",
