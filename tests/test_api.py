@@ -67,9 +67,25 @@ def test_el_nucleo_esta_sano_en_el_entorno_de_test(cliente):
     assert deps["core"]["estado"] == "ok", deps["core"]["detalle"]
 
 
-def test_health_data_declara_que_todavia_no_existe(cliente):
-    """Mejor un 501 honesto que un verde que no significa nada."""
-    assert cliente.get("/api/v1/health/data").status_code == 501
+def test_health_data_informa_de_frescura_y_cobertura(cliente_bd):
+    """Que datos hay, de cuando, de que fuente y con que huecos (§46)."""
+    r = cliente_bd.get("/api/v1/health/data")
+    assert r.status_code == 200
+    cuerpo = r.json()
+    assert cuerpo["estado"] in {"ok", "degradado", "caido"}
+    assert "datasets" in cuerpo and "stale" in cuerpo
+
+
+def test_sin_datos_cargados_health_data_no_dice_que_todo_va_bien(cliente_bd):
+    """Una base de datos vacia no es un sistema sano.
+
+    Es uno que aun no ha ingerido nada, y devolver verde ahi es el tipo de
+    verde que hace que nadie mire. La fixture carga la referencia pero no
+    ingiere series, asi que este es exactamente ese caso.
+    """
+    cuerpo = cliente_bd.get("/api/v1/health/data").json()
+    if not cuerpo["datasets"]:
+        assert cuerpo["estado"] == "caido"
 
 
 def test_el_openapi_se_genera(cliente):
