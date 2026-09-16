@@ -170,6 +170,58 @@ cp=(docker compose -f docker-compose.yml -f docker-compose.produccion.yml)
 
 A partir de ahí el `worker` la mantiene al día.
 
+### Alternativa: Cloudflare Tunnel (sin IP pública)
+
+Sirve para desplegar en una máquina que no tiene IP pública: un portátil, un
+mini-PC, una Raspberry Pi o un VPS detrás de NAT. El túnel sale *desde* la
+máquina hacia Cloudflare, así que no hay que abrir puertos en el router ni
+tener IP fija, y el certificado deja de ser cosa nuestra: lo termina Cloudflare
+en su borde.
+
+De paso, la máquina no expone **nada** a Internet: en esta variante ni siquiera
+Caddy publica el 80 y el 443.
+
+El coste es el obvio: **el sitio solo está disponible mientras esa máquina esté
+encendida.**
+
+1. En Cloudflare, **Zero Trust → Networks → Tunnels → Create a tunnel**,
+   tipo *Cloudflared*. Copia el token que muestra y ponlo en `.env` como
+   `CLOUDFLARE_TUNNEL_TOKEN`. Es un secreto: permite publicar en tu dominio.
+2. En ese mismo túnel, **Public Hostnames**, añade dos rutas:
+
+   | Subdomain | Domain               | Service            |
+   |-----------|----------------------|--------------------|
+   | *(vacío)* | `lalonja-trading.com`| `http://caddy:80`  |
+   | `www`     | `lalonja-trading.com`| `http://caddy:80`  |
+
+   El servicio apunta a Caddy, no a `web` ni a `api`: es Caddy quien decide que
+   `/api` va a la API y el resto al frontend.
+3. Despliega:
+
+   ```bash
+   ./despliegue/desplegar.sh --tunel
+   ```
+
+Cloudflare crea los registros DNS solo, así que aquí **no** hay que tocar nada
+de nubes grises ni naranjas: eso solo aplica al despliegue con Caddy haciendo el
+TLS.
+
+### Por qué no todo en Cloudflare
+
+Es la pregunta razonable, y la respuesta es que Cloudflare puede con el frontend
+pero no con el motor:
+
+- **No hay Postgres gestionado.** D1 es SQLite, e Hyperdrive no aloja una base
+  de datos: acelera la conexión a una tuya alojada en otro sitio. El esquema usa
+  particionado declarativo, `COPY` y `UPSERT` de Postgres, más Alembic.
+- **El pipeline no cabe en un Worker.** Es pandas sobre cientos de miles de
+  filas; los Workers están pensados para milisegundos de CPU.
+- **Los Containers se duermen por inactividad** y requieren plan de pago. Para
+  Postgres, que tiene que estar siempre vivo, es el modelo equivocado.
+
+Cloudflare vende CDN y cómputo efímero; esto necesita un proceso largo con
+estado. Lo que sí aporta, y es mucho, es DNS, TLS y el túnel.
+
 ### Qué se ve hoy
 
 Conviene no llamarse a engaño: el frontend actual es el MVP de la FASE 6 —una

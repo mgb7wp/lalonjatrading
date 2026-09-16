@@ -1,0 +1,38 @@
+# Variante para Cloudflare Tunnel.
+#
+# Aqui Caddy NO hace TLS: el certificado lo termina Cloudflare en su borde y el
+# tunel entrega la peticion en texto plano dentro de la red de Docker, que no
+# sale de la maquina. Pedir tambien un certificado aqui no anadiria seguridad y
+# si un segundo sitio donde puede fallar la renovacion.
+#
+# Lo que si sigue haciendo Caddy es el enrutado: /api a la API y el resto al
+# frontend. Por eso el tunel apunta a Caddy y no a los servicios sueltos.
+
+:80 {
+    encode gzip
+
+    handle /api/* {
+        reverse_proxy api:8000
+    }
+    handle /docs* {
+        reverse_proxy api:8000
+    }
+    handle /openapi.json {
+        reverse_proxy api:8000
+    }
+    handle {
+        reverse_proxy web:3000
+    }
+
+    header {
+        X-Content-Type-Options "nosniff"
+        X-Frame-Options "DENY"
+        Referrer-Policy "strict-origin-when-cross-origin"
+        -Server
+    }
+
+    log {
+        output stdout
+        format console
+    }
+}
