@@ -6,14 +6,14 @@ de cobrar a nadie. Es el documento que pide §50 del encargo.
 > **Estado de verificación — 16/09/2026, con red abierta.**
 >
 > `python scripts/verify_sources.py` ya se ha ejecutado contra las APIs reales.
-> Resultado: **13 comprobaciones, 5 fallos**, todos de la misma fuente.
+> Resultado: **25 comprobaciones, 5 fallos**, todos de la misma fuente (Stooq).
 >
 > | Fuente | Estado | Resumen |
 > |---|---|---|
 > | **BCE** | ✅ **VERIFICADA** | Las tres divisas, sentido EUR→divisa correcto, un día de retraso |
 > | **yfinance** | ✅ **VERIFICADA** | 5/5 mercados. Destapó un fallo real del adaptador (abajo) |
 > | **Stooq** | ❌ **NO SIRVE** | Desafío anti-bot; cero datos en los cinco mercados |
-> | **SEC EDGAR** | ⏸ pendiente | Falta `SEC_USER_AGENT`; la SEC exige identificarse |
+> | **SEC EDGAR** | ✅ **VERIFICADA** | 19 ejercicios de AAPL, 0 % de huecos, **todas point-in-time real** |
 > | **EODHD / CVM** | ⏸ pendiente | Sin clave la una, sin adaptador la otra (FASE 5) |
 >
 > Las cuotas y los precios de las APIs cambian, así que esto caduca. Vuelve a
@@ -69,7 +69,7 @@ mercados dependen de una sola fuente no oficial. Ver el punto 6 del plan.
 
 | Mercado | Fuente gratuita | Fechas de publicación reales | Histórico | Estado |
 |---|---|---|---|---|
-| **EE. UU.** | **SEC EDGAR** (`data.sec.gov`, XBRL `companyfacts`) | **Sí** (`filed`) | 2009→ | Adaptador escrito; **host alcanzable**, falta `SEC_USER_AGENT` para verificarlo |
+| **EE. UU.** | **SEC EDGAR** (`data.sec.gov`, XBRL `companyfacts`) | **Sí** (`filed`) | 2007→ | ✅ **VERIFICADA 16/09/2026**: 19 ejercicios de AAPL, `pit_origin = captured` en todas |
 | **Brasil** | **CVM Dados Abertos** (DFP anuales, ITR trimestrales, CSV por año) | **Sí** (fecha de recepción) | ~2010→ | **Host alcanzable** (responde 200); adaptador pendiente — FASE 5 |
 | **España** | — | No | — | **Sin fuente gratuita fiable.** La CNMV publica los informes financieros, pero no en formato explotable de forma sistemática. BME/SIX es de pago. |
 | **India** | — | No | — | **Sin fuente gratuita fiable.** NSE y BSE exponen endpoints públicos, pero sus condiciones no permiten uso sistemático ni comercial. |
@@ -99,6 +99,49 @@ sólo cubre **ejercicios anuales** (10-K), que es lo que consume el filtro
 fundamental, y **no da EV**, porque la SEC publica cuentas y no cotizaciones —el
 motor lo calcula en la fecha de decisión a partir de las acciones en
 circulación—.
+
+### SEC EDGAR verificada — lo que dijo la primera ejecución real
+
+**19 ejercicios de Apple** (2007-2025), frente a los ~4 de yfinance. Todas las
+filas salen con `origen_pit = capturado`, cumplen el contrato de datos y no hay
+ni un hueco en ventas, EBIT ni EBITDA.
+
+La prueba de que las fechas son **reales y no estimadas**: el retraso entre el
+cierre del ejercicio y su publicación va de **31 a 772 días**, con mediana de 34.
+Si estuvieran estimadas por un retraso fijo serían todas idénticas.
+
+Dos fallos que sólo aparecieron al ejecutarla, y que ninguna prueba con
+respuestas grabadas habría encontrado:
+
+**1. Todo llegaba comprimido.** El adaptador pedía `Accept-Encoding: gzip` —la
+SEC lo agradece, `companyfacts` de una empresa grande son varios megabytes— pero
+`urllib` **no descomprime**: eso lo hacen `requests` y `httpx`, no la biblioteca
+estándar. El síntoma era un `UnicodeDecodeError` quejándose del byte `0x8b`, que
+es la firma de gzip y no se parece en nada a «se me olvidó descomprimir».
+
+**2. Se perdían diez años de ventas.** El adaptador se negaba a mezclar etiquetas
+XBRL dentro de una serie, para no fabricar saltos de crecimiento inexistentes. La
+intención era buena y el efecto, malo: Apple declara sus ventas como
+`SalesRevenueNet` hasta 2017 y como `RevenueFromContractWithCustomerExcludingAssessedTax`
+desde entonces, porque la norma **ASC 606** cambió la etiqueta. Con aquella regla
+salían **9 de 19 ejercicios** y una década desaparecía en silencio — el
+crecimiento de ventas a tres años simplemente no se podía calcular.
+
+Ahora los huecos se rellenan en orden de preferencia y **un ejercicio ya cubierto
+nunca se sobrescribe**, así que cada periodo sale de una sola etiqueta y donde
+dos coexisten gana la preferida. Queda un riesgo real, y por eso se publica en
+vez de esconderse: en el ejercicio donde una norma sustituye a otra puede haber
+un escalón que no es un cambio del negocio. `verify_sources.py` lista qué series
+están cosidas y de cuántas etiquetas:
+
+```
+serie de ventas cosida          19 ejercicios de 3 etiquetas
+serie de amortizaciones cosida  19 ejercicios de 2 etiquetas
+serie de capex cosida           19 ejercicios de 2 etiquetas
+```
+
+Esto no es exclusivo de Apple: es la forma normal de media Norteamérica, y hay
+que contar con ello al añadir cada magnitud nueva de §14.
 
 **Qué se hace con España e India mientras tanto.** No se inventa el hueco. Esos
 mercados arrancan con la **pata técnica solamente** (`fundamental.activo: false`
@@ -233,8 +276,8 @@ mercados dependen de una única fuente no oficial y sin SLA. Ver el plan de acci
 | 2 | Adaptador **BCE** para FX | ✅ **verificado** | FX oficial y estable |
 | 3 | Adaptador **yfinance** | ✅ **verificado** (y corregido) | Precios y fundamentales básicos de los 5 mercados |
 | 4 | Adaptador **Stooq** | ❌ **descartado** | Desafío anti-bot: no sirve |
-| 5 | **Exportar `SEC_USER_AGENT`** y verificar SEC EDGAR | ⏳ **pendiente, es lo siguiente** | PIT real en EE. UU. |
-| 6 | **Buscar un respaldo de precios** que sustituya a Stooq | ⏳ **nuevo, por RD-1** | Que caiga yfinance y no caiga todo |
+| 5 | Adaptador **SEC EDGAR** | ✅ **verificado** (y corregido dos veces) | PIT real en EE. UU.: 19 ejercicios con cifras de su momento |
+| 6 | **Buscar un respaldo de precios** que sustituya a Stooq | ⏳ **pendiente, es lo siguiente** | Que caiga yfinance y no caiga todo |
 | 7 | Adaptador **CVM** | FASE 5 | PIT real en Brasil |
 | 8 | Evaluar **EODHD** con clave real | FASE 5 / 8 | España, India, histórico y licencia |
 | 9 | Deslistadas y composición histórica de índices | post-MVP | Sesgo de supervivencia (RD-4) |
