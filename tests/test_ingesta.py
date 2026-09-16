@@ -962,3 +962,98 @@ def test_las_magnitudes_opcionales_tienen_columna_propia():
     tabla = Base.metadata.tables["fundamental_snapshot"]
     faltan = [m for m in MAGNITUDES_OPCIONALES if FUNDAMENTALES.get(m, m) not in tabla.c]
     assert not faltan, f"sin columna en la tabla: {faltan}"
+
+
+def test_un_tiempo_agotado_del_bce_sale_como_error_del_contrato(cfg):
+    """El fallo que tumbo la etapa de divisas en produccion.
+
+    `TimeoutError` NO es subclase de `URLError`, asi que el `except` del
+    proveedor no lo capturaba: un tiempo agotado al LEER se escapaba crudo y el
+    pipeline anotaba "TimeoutError" en lugar del error del contrato. Quien lea
+    ese log no tiene forma de saber que fuente fallo ni por que.
+    """
+    import urllib.request
+
+    from estrategia.datos.bce_proveedor import ProveedorBCE
+    from estrategia.errores import ErrorDatos
+
+    def falla(*_args, **_kwargs):
+        raise TimeoutError("The read operation timed out")
+
+    original = urllib.request.urlopen
+    urllib.request.urlopen = falla
+    try:
+        with pytest.raises(ErrorDatos, match="no ha respondido"):
+            ProveedorBCE(cfg)._pedir("USD", dt.date(2024, 1, 1), dt.date(2024, 2, 1))
+    finally:
+        urllib.request.urlopen = original
+
+
+def test_el_bce_reintenta_antes_de_rendirse(cfg):
+    """Una API publica y gratuita tiene malos ratos.
+
+    Rendirse al primer intento convierte un tropiezo de treinta segundos en un
+    dia entero sin tipos de cambio, y sin tipos de cambio no se puede valorar
+    una cartera que mezcle dolares y reales.
+    """
+    import urllib.request
+
+    from estrategia.datos import bce_proveedor
+    from estrategia.datos.bce_proveedor import ProveedorBCE
+
+    intentos = {"n": 0}
+
+    class _Respuesta:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *_):
+            return False
+
+        def read(self):
+            return b"CSV"
+
+    def falla_dos_veces(*_args, **_kwargs):
+        intentos["n"] += 1
+        if intentos["n"] < 3:
+            raise TimeoutError("lento")
+        return _Respuesta()
+
+    original_open = urllib.request.urlopen
+    original_sleep = bce_proveedor.time.sleep
+    urllib.request.urlopen = falla_dos_veces
+    bce_proveedor.time.sleep = lambda _s: None  # sin esperas reales en el test
+    try:
+        assert ProveedorBCE(cfg)._pedir("USD", dt.date(2024, 1, 1), dt.date(2024, 2, 1)) == "CSV"
+        assert intentos["n"] == 3, "tiene que haber reintentado dos veces"
+    finally:
+        urllib.request.urlopen = original_open
+        bce_proveedor.time.sleep = original_sleep
+
+
+def test_un_404_del_bce_no_se_reintenta(cfg):
+    """Una serie que no existe no empieza a existir por insistir.
+
+    Tres esperas de 180 segundos por una divisa mal escrita son nueve minutos
+    tirados y un mensaje de error peor.
+    """
+    import urllib.error
+    import urllib.request
+
+    from estrategia.datos.bce_proveedor import ProveedorBCE
+    from estrategia.errores import ErrorDatos
+
+    intentos = {"n": 0}
+
+    def cuatrocientos_cuatro(*_args, **_kwargs):
+        intentos["n"] += 1
+        raise urllib.error.HTTPError("url", 404, "Not Found", {}, None)
+
+    original = urllib.request.urlopen
+    urllib.request.urlopen = cuatrocientos_cuatro
+    try:
+        with pytest.raises(ErrorDatos, match="no publica la serie"):
+            ProveedorBCE(cfg)._pedir("XXX", dt.date(2024, 1, 1), dt.date(2024, 2, 1))
+        assert intentos["n"] == 1, "un 404 no se reintenta"
+    finally:
+        urllib.request.urlopen = original

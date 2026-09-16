@@ -21,18 +21,21 @@ El BCE no publica fines de semana ni festivos de TARGET. No se rellenan: el
 motor busca el ultimo tipo conocido en o antes de la fecha, asi que un hueco se
 resuelve solo y sin inventar una cotizacion que no existio.
 
-## Estado
+## Lentitud, que no es un detalle
 
-**No se ha podido ejecutar**: el entorno de desarrollo bloquea
-`data-api.ecb.europa.eu` por politica de red. Escrito contra la documentacion del
-Data Portal y probado con respuestas grabadas. El parseo esta en una funcion pura
-con tests.
+La API es oficial y gratuita, y se nota: ocho anios de una divisa son ~2.200
+filas y tardan entre quince segundos y varios minutos segun el dia y desde
+donde se pida. Con un solo intento y poco margen, la descarga falla en un
+servidor con peor ruta hacia Frankfurt aunque funcione desde un portatil. Por
+eso hay reintentos y una espera generosa, configurable con `BCE_TIMEOUT`.
 """
 
 from __future__ import annotations
 
 import csv
 import io
+import os
+import time
 import urllib.error
 import urllib.request
 from datetime import date, datetime
@@ -44,6 +47,19 @@ from ..errores import ErrorDatos
 from .proveedor import Capacidades, Fuente
 
 BASE = "https://data-api.ecb.europa.eu/service/data/EXR"
+
+#: Segundos de espera por peticion. Generoso a proposito: 60 alcanzaba desde una
+#: maquina con buena ruta y no desde el servidor, y el sintoma era una etapa
+#: entera caida por un limite que nadie habia medido. Es configuracion de
+#: despliegue —depende de la red, no de la estrategia— asi que va en el entorno.
+VARIABLE_ESPERA = "BCE_TIMEOUT"
+ESPERA_POR_DEFECTO = 180
+
+#: Tres intentos con espera creciente. Una API publica y gratuita tiene malos
+#: ratos, y rendirse al primero convierte un tropiezo de treinta segundos en un
+#: dia sin tipos de cambio.
+INTENTOS = 3
+ESPERA_ENTRE_INTENTOS = (5, 20)
 
 #: Clave de la serie: frecuencia diaria, divisa, contra EUR, tipo de referencia,
 #: media. `D.USD.EUR.SP00.A` es "cuantos dolares vale un euro", que es justo el
@@ -112,17 +128,34 @@ class ProveedorBCE(Fuente):
             f"{BASE}/{serie}?format=csvdata"
             f"&startPeriod={inicio.isoformat()}&endPeriod={fin.isoformat()}"
         )
-        try:
-            with urllib.request.urlopen(url, timeout=60) as respuesta:
-                return respuesta.read().decode("utf-8")
-        except urllib.error.HTTPError as exc:
-            if exc.code == 404:
-                raise ErrorDatos(
-                    f"el BCE no publica la serie {serie}; revisa el codigo de divisa"
-                ) from exc
-            raise ErrorDatos(f"el BCE ha respondido {exc.code} a {serie}") from exc
-        except urllib.error.URLError as exc:
-            raise ErrorDatos(f"no se ha podido conectar con el BCE: {exc.reason}") from exc
+        espera = int(os.environ.get(VARIABLE_ESPERA, ESPERA_POR_DEFECTO))
+        ultimo: Exception | None = None
+
+        for intento in range(INTENTOS):
+            try:
+                with urllib.request.urlopen(url, timeout=espera) as respuesta:
+                    return respuesta.read().decode("utf-8")
+            except urllib.error.HTTPError as exc:
+                # Un 404 no mejora reintentando: la serie no existe.
+                if exc.code == 404:
+                    raise ErrorDatos(
+                        f"el BCE no publica la serie {serie}; revisa el codigo de divisa"
+                    ) from exc
+                raise ErrorDatos(f"el BCE ha respondido {exc.code} a {serie}") from exc
+            # `TimeoutError` NO es subclase de `URLError`, asi que el `except` de
+            # abajo no lo captura: un tiempo agotado al LEER se escapaba crudo y
+            # el pipeline registraba "TimeoutError" en lugar del error del
+            # contrato. Va primero y explicito para que no vuelva a colarse.
+            except (TimeoutError, urllib.error.URLError) as exc:
+                ultimo = exc
+                if intento < INTENTOS - 1:
+                    time.sleep(ESPERA_ENTRE_INTENTOS[intento])
+
+        motivo = getattr(ultimo, "reason", ultimo)
+        raise ErrorDatos(
+            f"el BCE no ha respondido a {serie} en {INTENTOS} intentos de {espera}s "
+            f"({motivo}). Si se repite, sube {VARIABLE_ESPERA}."
+        ) from ultimo
 
     def fx(self, divisas: list[str], inicio: date, fin: date) -> pd.DataFrame:
         filas: list[dict] = []
