@@ -44,7 +44,13 @@ backend = [
 ]
 workers = ["apscheduler>=3.10,<4"]
 panel = ["streamlit>=1.30", "plotly>=5.18"]
-dev = ["pytest>=8", "pytest-cov>=4", "ruff>=0.4"]
+# ruff va fijado a una version exacta, no a un rango. Un formateador
+# cambia su salida entre versiones: con `>=0.4`, el CI instalaba la
+# ultima y una version nueva empezo a formatear los bloques de codigo
+# dentro de los .md. Resultado: CI rojo de un dia para otro sin que
+# nadie tocara nada, y un `ruff format` local que no reproducia el
+# fallo. Subirla es una decision, no un efecto secundario de la fecha.
+dev = ["pytest>=8", "pytest-cov>=4", "ruff==0.15.8"]
 
 [project.scripts]
 estrategia = "estrategia.cli:main"
