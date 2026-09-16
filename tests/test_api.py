@@ -107,6 +107,9 @@ def test_los_mercados_salen_de_la_base_de_datos(cliente_bd):
     assert mercados["in"]["trading_calendar"] == "XBOM"
     assert mercados["in"]["timezone"] == "Asia/Kolkata"
     assert all(m["securities"] > 0 for m in mercados.values())
+    # El indice de referencia esta en `security` porque hacen falta sus precios,
+    # pero no es un valor analizable y no cuenta aqui.
+    assert mercados["es"]["securities"] == 24, "las 24 del universo, sin el IBEX"
 
 
 def test_el_endpoint_declara_si_el_benchmark_lleva_dividendos(cliente_bd):

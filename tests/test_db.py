@@ -127,14 +127,18 @@ def test_la_carga_de_referencia_es_idempotente(sesion):
 
     primera = cargar(sesion)
     sesion.flush()
-    valores_tras_primera = sesion.scalar(sa.select(sa.func.count()).select_from(Security))
+    tras_primera = sesion.scalar(sa.select(sa.func.count()).select_from(Security))
 
     segunda = cargar(sesion)
     sesion.flush()
-    valores_tras_segunda = sesion.scalar(sa.select(sa.func.count()).select_from(Security))
+    tras_segunda = sesion.scalar(sa.select(sa.func.count()).select_from(Security))
 
     assert primera.mercados == segunda.mercados == 5
-    assert valores_tras_primera == valores_tras_segunda == primera.valores
+    assert tras_primera == tras_segunda, "recargar no puede duplicar"
+    # La tabla guarda el universo y ademas los indices de referencia, que son
+    # valores de tipo `index`: se cuentan aparte porque no compiten en rankings.
+    assert tras_primera == primera.valores + primera.indices
+    assert primera.indices == 5, "un indice por mercado"
     sesion.commit()
 
 

@@ -425,3 +425,120 @@ def test_los_fundamentales_no_se_marcan_rancios_con_la_vara_de_los_precios(bd_in
             text("SELECT count(*) FROM data_freshness WHERE dataset='fundamentales' AND is_stale")
         ).scalar()
     assert rancios == 0
+
+
+# ---------------------------------------------------------------------------
+# Indicadores (FASE 4)
+# ---------------------------------------------------------------------------
+
+
+def test_alinear_referencia_toma_el_ultimo_cierre_conocido():
+    """Nunca el mas cercano: el del dia siguiente seria mirar hacia delante.
+
+    Dos series no comparten calendario, y ni dentro del mismo mercado coinciden
+    siempre. Si un valor no cotiza un martes en que el indice si, el valor del
+    lunes es lo unico que se sabia.
+    """
+    import numpy as np
+
+    from workers.pipeline.indicadores import alinear_referencia
+
+    fechas_valor = np.array([dt.date(2024, 1, 2), dt.date(2024, 1, 4)])
+    fechas_indice = np.array([dt.date(2024, 1, 2), dt.date(2024, 1, 3), dt.date(2024, 1, 5)])
+    cierres = np.array([100.0, 101.0, 999.0])
+
+    alineado = alinear_referencia(fechas_valor, fechas_indice, cierres)
+    assert alineado[0] == 100.0
+    assert alineado[1] == 101.0, "el del dia 3, no el del 5"
+
+
+def test_una_fecha_anterior_al_indice_no_inventa_referencia():
+    import numpy as np
+
+    from workers.pipeline.indicadores import alinear_referencia
+
+    alineado = alinear_referencia(
+        np.array([dt.date(2023, 1, 1)]), np.array([dt.date(2024, 1, 2)]), np.array([100.0])
+    )
+    assert np.isnan(alineado[0])
+
+
+def test_los_indices_de_referencia_se_dan_de_alta_como_valores(sesion):
+    """Sin esto sus precios se descargan y se tiran, y no hay beta ni fuerza."""
+    import sqlalchemy as sa
+
+    from backend.db.models import Security
+    from backend.db.models.enums import AssetType
+    from backend.db.seed import cargar
+
+    cargar(sesion)
+    sesion.flush()
+
+    indices = sesion.scalars(
+        sa.select(Security).where(Security.asset_type == AssetType.INDEX.value)
+    ).all()
+    tickers = {i.ticker for i in indices}
+    assert {"^IBEX", "^GSPC", "^NSEI", "^BVSP"} <= tickers
+    assert all(not i.is_primary_listing for i in indices), "no compiten en rankings"
+
+
+def test_los_indicadores_se_calculan_y_se_guardan(bd_ingesta, cfg):
+    import sqlalchemy as sa
+
+    from workers.pipeline import indicadores
+
+    _ejecutar(bd_ingesta, cfg)
+    with sa.orm.Session(bd_ingesta) as s:
+        calculados = indicadores.ejecutar(s, cfg, mercados=["es"])
+
+    assert calculados["es"] > 0
+    with sa.orm.Session(bd_ingesta) as s:
+        fila = s.execute(
+            text(
+                "SELECT rsi_14, sma_200, beta, relative_strength, extra "
+                "FROM technical_indicator "
+                "WHERE rsi_14 IS NOT NULL AND beta IS NOT NULL LIMIT 1"
+            )
+        ).first()
+    assert fila is not None, "deberia haber filas con RSI y beta"
+    assert 0 <= float(fila[0]) <= 100
+    assert fila[4] is not None, "los indicadores sin columna propia van a extra"
+
+
+def test_recalcular_los_indicadores_no_cambia_los_numeros(bd_ingesta, cfg):
+    """Idempotencia de la etapa derivada, no solo de la ingesta."""
+    import sqlalchemy as sa
+
+    from backend.db.ingest import huella
+    from workers.pipeline import indicadores
+
+    _ejecutar(bd_ingesta, cfg)
+    with sa.orm.Session(bd_ingesta) as s:
+        indicadores.ejecutar(s, cfg, mercados=["es"])
+    with sa.orm.Session(bd_ingesta) as s:
+        antes = huella(s, "technical_indicator")
+
+    with sa.orm.Session(bd_ingesta) as s:
+        indicadores.ejecutar(s, cfg, mercados=["es"])
+    with sa.orm.Session(bd_ingesta) as s:
+        assert huella(s, "technical_indicator") == antes
+    assert antes, "la huella vacia haria pasar el test sin datos"
+
+
+def test_la_huella_ignora_cuando_se_calculo_pero_no_de_donde_salio(bd_ingesta, cfg):
+    """`computed_at` es auditoria; `downloaded_at` es la instantanea de origen.
+
+    Yahoo revisa el pasado hacia atras, asi que dos descargas distintas pueden
+    traer numeros distintos para el mismo dia. Esa columna SI tiene que salir en
+    la huella; el reloj del proceso, no.
+    """
+    import sqlalchemy as sa
+
+    from backend.db.ingest import COLUMNAS_DE_AUDITORIA, columnas_de
+
+    _ejecutar(bd_ingesta, cfg)
+    with sa.orm.Session(bd_ingesta) as s:
+        assert "computed_at" in columnas_de(s, "technical_indicator")
+        assert "downloaded_at" in columnas_de(s, "price")
+    assert "computed_at" in COLUMNAS_DE_AUDITORIA
+    assert "downloaded_at" not in COLUMNAS_DE_AUDITORIA
