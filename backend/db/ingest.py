@@ -22,7 +22,12 @@ from dataclasses import dataclass
 from sqlalchemy import select, text
 from sqlalchemy.orm import Session
 
-from ..adapters.nucleo import COLUMNAS_FUNDAMENTAL, COLUMNAS_FX, COLUMNAS_PRECIO
+from ..adapters.nucleo import (
+    COLUMNAS_FUNDAMENTAL,
+    COLUMNAS_FX,
+    COLUMNAS_INDICADOR,
+    COLUMNAS_PRECIO,
+)
 from .models import Security
 
 
@@ -138,15 +143,54 @@ def escribir_fx(sesion: Session, filas: list[tuple]) -> Escritura:
     return Escritura("fx_rate", n)
 
 
-def huella(sesion: Session, tabla: str) -> str:
+#: Columnas que registran CUANDO se hizo algo, no QUE se guardo. Se dejan fuera
+#: de la huella por defecto: `computed_at` lleva microsegundos, asi que incluirla
+#: haria que dos ejecuciones con datos identicos parecieran distintas y la
+#: comprobacion de idempotencia no podria distinguir "los numeros han cambiado"
+#: de "el reloj ha avanzado", que es lo unico que se quiere saber.
+COLUMNAS_DE_AUDITORIA = ("computed_at", "created_at", "updated_at")
+
+
+def columnas_de(sesion: Session, tabla: str) -> list[str]:
+    return list(
+        sesion.scalars(
+            text(
+                "SELECT column_name FROM information_schema.columns "
+                "WHERE table_schema = 'public' AND table_name = :tabla "
+                "ORDER BY ordinal_position"
+            ),
+            {"tabla": tabla},
+        )
+    )
+
+
+def huella(sesion: Session, tabla: str, excluir: tuple[str, ...] | None = None) -> str:
     """Resumen del contenido de una tabla, para comprobar que no cambio nada.
 
-    Es lo que convierte "el pipeline es idempotente" en algo que se comprueba.
-    Se ordena por la fila entera en texto porque no todas las tablas tienen un
-    orden natural util, y lo que interesa es el conjunto, no la secuencia.
+    Es lo que convierte "el pipeline es idempotente" en algo que se comprueba en
+    lugar de en algo que se promete. Se ordena por la fila entera en texto
+    porque no todas las tablas tienen un orden natural util, y lo que interesa
+    es el conjunto, no la secuencia.
+
+    `downloaded_at` NO esta entre las excluidas por defecto, y es deliberado: no
+    es auditoria, es la instantanea de la que salio el dato. Yahoo revisa el
+    pasado hacia atras, asi que dos descargas distintas del mismo dia bursatil
+    pueden traer numeros distintos, y eso SI tiene que salir en la huella.
     """
+    excluidas = set(COLUMNAS_DE_AUDITORIA if excluir is None else excluir)
+    columnas = [c for c in columnas_de(sesion, tabla) if c not in excluidas]
+    if not columnas:
+        raise ValueError(f"no quedan columnas que resumir en {tabla}")
+    lista = ", ".join(f'"{c}"' for c in columnas)
     consulta = text(
         f"SELECT md5(string_agg(fila, '|' ORDER BY fila)) "  # noqa: S608 - tabla interna
-        f"FROM (SELECT t::text AS fila FROM {tabla} t) s"
+        f"FROM (SELECT ROW({lista})::text AS fila FROM {tabla}) s"
     )
     return sesion.execute(consulta).scalar() or ""
+
+
+def escribir_indicadores(sesion: Session, filas: list[tuple]) -> Escritura:
+    n = _copiar_y_fusionar(
+        sesion, "technical_indicator", COLUMNAS_INDICADOR, filas, ["security_id", "date"]
+    )
+    return Escritura("technical_indicator", n)

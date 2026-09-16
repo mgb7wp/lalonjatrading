@@ -39,6 +39,11 @@ def main(argv: list[str] | None = None) -> int:
         action="store_true",
         help="repite etapas ya terminadas hoy en lugar de saltarlas",
     )
+    parser.add_argument(
+        "--sin-indicadores",
+        action="store_true",
+        help="no recalcula los indicadores tecnicos tras la descarga",
+    )
     args = parser.parse_args(argv)
 
     logging.basicConfig(
@@ -51,7 +56,7 @@ def main(argv: list[str] | None = None) -> int:
     from estrategia.datos.enrutador import Enrutador
 
     from backend.db.session import _fabrica
-    from workers.pipeline import ingesta
+    from workers.pipeline import indicadores, ingesta
 
     cfg = core_config.cargar()
     if args.proveedor:
@@ -74,8 +79,18 @@ def main(argv: list[str] | None = None) -> int:
         )
         rancios = ingesta.marcar_rancios(sesion, ingesta._umbrales_rancio(cfg))
 
+        # Siempre despues de la descarga y en la misma ejecucion. Un indicador
+        # es una derivacion determinista de los precios: si estos se actualizan
+        # y aquellos no, lo que sirve la API deja de corresponderse con la base
+        # de datos y nada avisa, porque los numeros siguen pareciendo normales.
+        calculados = {}
+        if not args.sin_indicadores:
+            calculados = indicadores.ejecutar(sesion, cfg, mercados=mercados)
+
     for r in resultados:
         print(r)
+    for mercado_id, n in calculados.items():
+        print(f"  {mercado_id}/indicadores: {n} filas")
     if rancios:
         print(f"{rancios} conjuntos marcados como rancios")
 

@@ -190,3 +190,94 @@ def fx_a_filas(df: pd.DataFrame, base: str = "EUR") -> list[tuple]:
         (base, fila["divisa"], fila["fecha"], fila["tasa"], fila.get("fuente") or "desconocida")
         for _, fila in d.iterrows()
     ]
+
+
+#: Del nombre del catalogo a la columna de `technical_indicator`.
+#:
+#: Los que no aparecen aqui no se pierden: van a la columna `extra` en JSONB.
+#: Esa valvula es lo que permite registrar un indicador nuevo sin una migracion,
+#: que es lo que pide §13. Cuando uno de `extra` se empieza a consultar de
+#: verdad, se le da columna propia y un indice; hasta entonces, guardarlo
+#: cuesta menos que decidir si merece una.
+INDICADORES = {
+    "sma_20": "sma_20",
+    "sma_50": "sma_50",
+    "sma_100": "sma_100",
+    "sma_200": "sma_200",
+    "ema_20": "ema_20",
+    "rsi_14": "rsi_14",
+    "macd": "macd",
+    "macd_signal": "macd_signal",
+    "atr_14": "atr_14",
+    "adx_14": "adx_14",
+    "estocastico_k": "stochastic_k",
+    "bollinger_posicion": "bollinger_position",
+    "volatilidad_60": "volatility_annualized",
+    "beta_252": "beta",
+    "drawdown_maximo_1a": "max_drawdown_1y",
+    "momentum_12_1": "momentum_12_1",
+    "fuerza_relativa_126": "relative_strength",
+    "distancia_maximo_52s": "distance_from_52w_high",
+    "distancia_minimo_52s": "distance_from_52w_low",
+    "ratio_volumen_20": "volume_ratio_20",
+}
+
+COLUMNAS_INDICADOR = [
+    "security_id",
+    "date",
+    *INDICADORES.values(),
+    "extra",
+    "computed_at",
+]
+
+
+def indicadores_a_filas(
+    security_id: int,
+    fechas,
+    valores: dict,
+    calculado_en,
+) -> list[tuple]:
+    """Vectores del catalogo -> filas de `technical_indicator`.
+
+    Las sesiones sin ni un solo indicador calculable se descartan. Al principio
+    de cada serie hay doscientas y pico asi —ningun indicador de ventana larga
+    tiene aun historico— y guardarlas seria guardar filas enteras de nulos que
+    solo sirven para engordar la tabla y ensuciar cualquier consulta.
+    """
+    import json
+    import math
+
+    extras = {n: v for n, v in valores.items() if n not in INDICADORES}
+    filas: list[tuple] = []
+
+    for i, fecha in enumerate(fechas):
+        columnas = []
+        hay_dato = False
+        for nombre in INDICADORES:
+            vector = valores.get(nombre)
+            crudo = None if vector is None else float(vector[i])
+            if crudo is None or math.isnan(crudo) or math.isinf(crudo):
+                columnas.append(None)
+            else:
+                columnas.append(crudo)
+                hay_dato = True
+
+        sobrantes = {}
+        for nombre, vector in extras.items():
+            crudo = float(vector[i])
+            if not math.isnan(crudo) and not math.isinf(crudo):
+                sobrantes[nombre] = crudo
+                hay_dato = True
+
+        if not hay_dato:
+            continue
+        filas.append(
+            (
+                security_id,
+                fecha,
+                *columnas,
+                json.dumps(sobrantes) if sobrantes else None,
+                calculado_en,
+            )
+        )
+    return filas
