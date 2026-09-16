@@ -48,6 +48,12 @@ FUNDAMENTALES_NO_VACIAS = [
 #: paso desapercibido.
 FUNDAMENTALES_AL_MENOS_UNA = [("ev", "acciones_en_circulacion")]
 
+#: Valores distintos que debe traer un lote para que "columna entera a nulo"
+#: signifique algo. Por debajo, una columna vacia es indistinguible de una
+#: empresa que no publica esa magnitud, y exigirla convierte la consulta de un
+#: valor suelto en un error que no lo es.
+MINIMO_PARA_EXIGIR_COLUMNA = 5
+
 
 @dataclass
 class Incumplimiento:
@@ -82,9 +88,7 @@ class Informe:
         """
         if self.incumplimientos:
             lineas = "\n".join(f"  - {i}" for i in self.incumplimientos)
-            raise ErrorDatos(
-                f"los datos no cumplen el contrato de fuentes:\n{lineas}"
-            )
+            raise ErrorDatos(f"los datos no cumplen el contrato de fuentes:\n{lineas}")
 
 
 def _faltan_columnas(df: pd.DataFrame, esperadas: list[str]) -> list[str]:
@@ -137,8 +141,7 @@ def verificar_precios(df: pd.DataFrame, fuente: str) -> Informe:
         peor_min = completas[["apertura", "cierre"]].min(axis=1)
         mejor_max = completas[["apertura", "cierre"]].max(axis=1)
         malas = completas[
-            (completas["minimo"] > peor_min + 1e-9)
-            | (completas["maximo"] < mejor_max - 1e-9)
+            (completas["minimo"] > peor_min + 1e-9) | (completas["maximo"] < mejor_max - 1e-9)
         ]
         if not malas.empty:
             ejemplo = malas.iloc[0]
@@ -170,9 +173,7 @@ def verificar_fundamentales(
     inf = Informe()
 
     def falla(problema: str, detalle: str = "") -> None:
-        inf.incumplimientos.append(
-            Incumplimiento(fuente, "fundamentales", problema, detalle)
-        )
+        inf.incumplimientos.append(Incumplimiento(fuente, "fundamentales", problema, detalle))
 
     if df.empty:
         falla("no ha devuelto ni una fila de fundamentales")
@@ -183,15 +184,27 @@ def verificar_fundamentales(
         falla("faltan columnas", ", ".join(faltan))
         return inf
 
-    vacias = _columnas_vacias(df, FUNDAMENTALES_NO_VACIAS)
-    if vacias:
-        falla(
-            "columnas obligatorias enteras a nulo",
-            f"{', '.join(vacias)} - suele ser un mapeo roto, no datos que falten",
-        )
+    # La comprobacion de "columna entera a nulo" solo significa algo sobre un
+    # lote grande. Con una empresa o dos, una columna vacia no distingue un
+    # mapeo roto de una empresa que legitimamente no publica esa magnitud:
+    # McDonald's, por ejemplo, no declara GrossProfit en su XBRL.
+    #
+    # Sin este limite, la ficha de un valor —que pide un solo ticker— fallaria
+    # por una razon que no es un error. El fallo que motivo esta comprobacion
+    # era el de una descarga completa, y ahi se sigue aplicando entera.
+    valores_distintos = df["ticker"].nunique()
+    if valores_distintos >= MINIMO_PARA_EXIGIR_COLUMNA:
+        vacias = _columnas_vacias(df, FUNDAMENTALES_NO_VACIAS)
+        if vacias:
+            falla(
+                "columnas obligatorias enteras a nulo",
+                f"{', '.join(vacias)} - suele ser un mapeo roto, no datos que falten",
+            )
 
     # La comprobacion que habria cazado el fallo del EV.
-    for grupo in FUNDAMENTALES_AL_MENOS_UNA:
+    for grupo in (
+        FUNDAMENTALES_AL_MENOS_UNA if valores_distintos >= MINIMO_PARA_EXIGIR_COLUMNA else []
+    ):
         presentes = [c for c in grupo if c in df.columns]
         if presentes and all(df[c].isna().all() for c in presentes):
             falla(
@@ -200,7 +213,11 @@ def verificar_fundamentales(
                 f"la valoracion puntua cero para todas las empresas",
             )
 
-    declaradas_vacias = _columnas_vacias(df, [m for m in magnitudes if m in df.columns])
+    declaradas_vacias = (
+        _columnas_vacias(df, [m for m in magnitudes if m in df.columns])
+        if valores_distintos >= MINIMO_PARA_EXIGIR_COLUMNA
+        else []
+    )
     if declaradas_vacias:
         falla(
             "columnas que la fuente dice servir y vienen enteras a nulo",

@@ -170,14 +170,43 @@ porque no son analizables.
 
 ---
 
-## FASE 5 — Análisis fundamental
+## FASE 5 — Análisis fundamental ✅ COMPLETADA
 
-Ampliar `core/fundamental.py` a los grupos de §14 (crecimiento, rentabilidad,
-salud financiera, calidad, valoración), normalizados por sector, mercado y
-tamaño. **Adaptador CVM** (Brasil).
+Alcance revisado con el usuario: **cero presupuesto en datos**, así que el
+esfuerzo se concentra en los mercados con datos reales —EE. UU. y Brasil— y el
+resto queda con pata técnica hasta que haya fuente.
 
-**Aceptación:** cohortes con su `n_cohort` registrado; ningún ratio comparado
-entre sectores incompatibles; Brasil con `pit_origin = captured`.
+- **Adaptador CVM**: Brasil pasa de 4 ejercicios reexpresados a 16 con las
+  cifras de su momento. 28/28 valores, `pit_origin = captured`
+- `core/estrategia/grupos.py`: **20 métricas en los cinco grupos de §14**,
+  percentiladas por cohorte (mercado × sector) con repliegue y `n_cohorte`
+- El contrato transporta las **nueve magnitudes** que §14 necesitaba
+- **Fundamentales por mercado** en el enrutador, y la calidad se deduce del
+  reparto en lugar de configurarse aparte
+
+**Aceptación cumplida:** `n_cohorte` y `cohorte_usada` en cada nota; ningún
+ratio se compara fuera de su cohorte; Brasil y EE. UU. con `capturado`. 268
+tests.
+
+**Sobre el tamaño.** §14 pide normalizar también por tamaño y la maquinaria lo
+admite, pero **no se activa**: con 61 valores, partir cada sector por tamaño deja
+cohortes de dos o tres empresas, y el propio proyecto fija en 8 el mínimo para
+que un percentil signifique algo. Añadirlo ahora no daría una normalización
+mejor, daría una peor disfrazada de más fina.
+
+**Cuatro fallos que sólo aparecen con datos reales:**
+
+- **El BPA de la CVM salía ×1000.** La escala `MIL` vale para importes, no para
+  cifras por acción. Se propagaba a las acciones, al EV y a toda la valoración.
+- **TIM salía con ingresos de cero.** Presenta una consolidada vacía y las
+  cifras en la individual; ahora la base se elige por empresa.
+- **Las acciones de McDonald's salían 716, no 716 millones.** Etiqueta XBRL con
+  unidad `shares` y valor en millones. Daba un PER de 0,0 — la empresa aparecía
+  como la más barata del mercado sin que fallara nada. Se derivan del beneficio
+  y el BPA, que es inmune a la escala.
+- **El contrato rompía la consulta de un valor suelto.** «Columna entera a nulo»
+  no significa nada con una empresa: McDonald's no declara `GrossProfit`. La
+  comprobación se aplica desde 5 valores.
 
 ---
 

@@ -322,7 +322,9 @@ def parsear_companyfacts(payload: dict, ticker: str, descargado: date) -> list[d
                 # El motor lo calcula en la fecha de decision con las acciones.
                 "ev": None,
                 "patrimonio_neto": valores["patrimonio_neto"],
-                "acciones_en_circulacion": valores["acciones"],
+                "acciones_en_circulacion": _acciones(
+                    valores["acciones"], valores["beneficio_neto"], valores["bpa"]
+                ),
                 "divisa_reporte": "USD",
                 "divisa_cotizacion": "USD",
                 # --- magnitudes opcionales de §14 ------------------------
@@ -345,6 +347,32 @@ def parsear_companyfacts(payload: dict, ticker: str, descargado: date) -> list[d
             }
         )
     return filas
+
+
+def _acciones(declaradas: float | None, beneficio: float | None, bpa: float | None) -> float | None:
+    """Acciones en circulacion, deducidas del beneficio y el BPA.
+
+    El concepto declarado no es de fiar, y el motivo merece contarse: McDonald's
+    etiqueta `WeightedAverageNumberOfDilutedSharesOutstanding` con unidad
+    `shares` y valor **716,4**, porque presenta sus cuentas en millones. XBRL no
+    lo impide, asi que la misma etiqueta viene en unidades en unas empresas y en
+    millones en otras.
+
+    Tomarlo tal cual daba una capitalizacion un millon de veces menor y un PER
+    de 0,0. No fallaba nada: la empresa aparecia sencillamente como la mas
+    barata del mercado, que es el peor desenlace posible para un ranking.
+
+    Beneficio partido por BPA es inmune a eso: el BPA esta por accion y el
+    beneficio en moneda, asi que su cociente son acciones cualquiera que sea la
+    escala con que se presenten las cuentas. Es la misma derivacion que se usa
+    en la CVM, y da acciones medias ponderadas, no de cierre.
+
+    El valor declarado queda de respaldo para cuando no hay BPA, y entonces se
+    cree lo que dice la etiqueta porque no hay con que contrastarlo.
+    """
+    if beneficio not in (None, 0) and bpa not in (None, 0):
+        return abs(beneficio) / abs(bpa)
+    return declaradas
 
 
 def _suma(a: float | None, b: float | None) -> float | None:

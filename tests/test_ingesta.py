@@ -822,3 +822,65 @@ def test_una_fuente_que_no_cubre_un_mercado_lo_declara(cfg):
     q = Enrutador(cfg_cambiada, verificar=False).calidad_fundamental("es")
     assert q.nivel == "no_disponible"
     assert "no cubre" in q.motivo
+
+
+def test_las_acciones_no_se_creen_una_etiqueta_mal_escalada():
+    """McDonald's declara sus acciones con unidad `shares` y valor en MILLONES.
+
+    XBRL no lo impide, asi que la misma etiqueta viene en unidades en unas
+    empresas y en millones en otras. Creersela daba una capitalizacion un millon
+    de veces menor y un PER de 0,0 — y no fallaba nada: la empresa aparecia
+    sencillamente como la mas barata del mercado.
+
+    Beneficio partido por BPA es inmune a la escala, porque el BPA esta por
+    accion y el beneficio en moneda.
+    """
+    from estrategia.datos.sec_proveedor import _acciones
+
+    # 8.200 M$ de beneficio y 11,45 $/accion -> ~716 M acciones, no 716.
+    assert _acciones(716.4, 8_200_000_000.0, 11.45) == pytest.approx(716_157_205, rel=1e-3)
+    # Sin BPA no hay con que contrastar y se cree lo declarado.
+    assert _acciones(716_000_000.0, 8_200_000_000.0, None) == 716_000_000.0
+    # Perdidas: el cociente sigue dando un numero de acciones positivo.
+    assert _acciones(None, -100.0, -0.5) == pytest.approx(200.0)
+
+
+def test_una_columna_vacia_solo_es_sospechosa_en_un_lote_grande():
+    """Con una empresa no distingue un mapeo roto de una que no lo publica.
+
+    McDonald's no declara `GrossProfit` en su XBRL. Exigirlo en un lote de un
+    ticker convertiria la ficha de un valor en un error que no lo es; el fallo
+    que motivo la comprobacion era el de una descarga completa, y ahi se sigue
+    aplicando entera.
+    """
+    from estrategia.datos.contrato import MINIMO_PARA_EXIGIR_COLUMNA
+
+    base = {
+        "ticker": "X",
+        "fin_periodo": dt.date(2024, 12, 31),
+        "periodo": "anual",
+        "fecha_publicacion": dt.date(2025, 2, 1),
+        "origen_fecha_publicacion": "real",
+        "origen_pit": "capturado",
+        "fecha_descarga": dt.date(2025, 3, 1),
+        "roe": 0.2,
+        "margen_operativo": 0.1,
+        "ventas": 100.0,
+        "flujo_caja_libre": 10.0,
+        "deuda_neta": 5.0,
+        "ebitda": 20.0,
+        "ebit": 15.0,
+        "ev": 200.0,
+        "patrimonio_neto": 50.0,
+        "acciones_en_circulacion": 10.0,
+        "divisa_reporte": "USD",
+        "divisa_cotizacion": "USD",
+        "beneficio_bruto": None,
+    }
+    magnitudes = ("beneficio_bruto",)
+
+    uno = contrato.verificar_fundamentales(pd.DataFrame([base]), "sec", magnitudes)
+    assert uno.cumple, [str(i) for i in uno.incumplimientos]
+
+    muchos = pd.DataFrame([{**base, "ticker": f"T{i}"} for i in range(MINIMO_PARA_EXIGIR_COLUMNA)])
+    assert not contrato.verificar_fundamentales(muchos, "sec", magnitudes).cumple

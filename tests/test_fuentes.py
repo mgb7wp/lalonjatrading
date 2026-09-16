@@ -34,11 +34,19 @@ from ayudas import serie_precios
 # --------------------------------------------------------------------------
 
 
-def _fundamentales_validos(n: int = 4) -> pd.DataFrame:
+def _fundamentales_validos(n: int = 5) -> pd.DataFrame:
+    """Lote valido de n valores distintos.
+
+    Un ticker por fila, y n>=5 por defecto, porque la comprobacion de "columna
+    entera a nulo" solo se aplica a lotes con varios valores: con uno solo, una
+    columna vacia no distingue un mapeo roto de una empresa que legitimamente no
+    publica esa magnitud. Los tests de abajo son los que codifican el fallo del
+    `ev`, asi que tienen que ejercitar el camino en el que la comprobacion actua.
+    """
     return pd.DataFrame(
         [
             {
-                "ticker": "X",
+                "ticker": f"X{i}",
                 "fin_periodo": dt.date(2020 + i, 12, 31),
                 "periodo": "anual",
                 "fecha_publicacion": dt.date(2021 + i, 4, 30),

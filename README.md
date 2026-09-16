@@ -119,10 +119,16 @@ reconstruidos.
 
 ## La plataforma
 
-En construcción. Lo que ya funciona (FASES 1 a 4 del
+En construcción. Lo que ya funciona (FASES 1 a 5 del
 [roadmap](docs/ROADMAP.md)): el esqueleto desplegable, el esquema de base de
 datos con migraciones, la ingesta de los cinco mercados, 22 indicadores técnicos
-con registro, `/health`, `/health/data`, `/markets` y el frontend mínimo.
+y los cinco grupos fundamentales de §14, `/health`, `/health/data`, `/markets` y
+el frontend mínimo.
+
+**Fundamentales point-in-time reales en EE. UU. (SEC EDGAR, 19 ejercicios) y
+Brasil (CVM, 16).** España, Alemania e India funcionan con pata técnica: sus
+fundamentales gratuitos son cuatro ejercicios reexpresados, y sobre eso no se
+construye un backtest creíble.
 
 ```bash
 cp .env.example .env          # y genera un JWT_SECRET, ver docs/DEPLOYMENT.md
