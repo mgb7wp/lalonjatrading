@@ -27,8 +27,11 @@ jobs:
           POSTGRES_PASSWORD: lalonja
           POSTGRES_DB: lalonja_test
         ports: ["5432:5432"]
+        # `-d lalonja_test` no es opcional: sin el, pg_isready intenta conectar
+        # a una base llamada como el usuario, que aqui no existe. El servicio
+        # nunca llega a sano y el job muere antes de ejecutar un solo test.
         options: >-
-          --health-cmd "pg_isready -U lalonja"
+          --health-cmd "pg_isready -U lalonja -d lalonja_test"
           --health-interval 5s
           --health-timeout 3s
           --health-retries 10
