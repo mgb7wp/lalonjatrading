@@ -20,6 +20,7 @@ from sqlalchemy.orm import Session
 
 from ...db.models import Market as MarketRow
 from ...db.models import Security
+from ...db.models.enums import AssetType
 from ...db.session import sesion
 
 router = APIRouter(prefix="/markets", tags=["markets"])
@@ -48,7 +49,12 @@ class Market(BaseModel):
 
 
 def _consulta():
-    """Mercados con el numero de valores activos de cada uno.
+    """Mercados con el numero de valores analizables de cada uno.
+
+    Analizables, no filas de la tabla: los indices de referencia estan en
+    `security` —hacen falta sus precios para la beta y la fuerza relativa— pero
+    no son algo que se pueda analizar ni comprar, asi que no cuentan. Lo
+    distingue `asset_type` y no una lista aparte que habria que mantener.
 
     LEFT JOIN y no una subconsulta por fila: son cinco mercados hoy, pero el
     patron de N+1 consultas se hereda a los sitios que se copian de aqui.
@@ -56,7 +62,12 @@ def _consulta():
     return (
         select(
             MarketRow,
-            func.count(Security.id).filter(Security.active.is_(True)).label("securities"),
+            func.count(Security.id)
+            .filter(
+                Security.active.is_(True),
+                Security.asset_type != AssetType.INDEX.value,
+            )
+            .label("securities"),
         )
         .outerjoin(Security, Security.market_id == MarketRow.id)
         .group_by(MarketRow.id)

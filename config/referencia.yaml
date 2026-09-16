@@ -30,6 +30,7 @@ divisas:
 
 mercados:
   es:
+    benchmark_nombre: IBEX 35
     nombre: España
     pais: ES
     # `benchmark_total_return` dice si el indice de referencia incluye
@@ -41,10 +42,12 @@ mercados:
     # precio. Es un hecho incomodo anotado, no un problema resuelto.
     benchmark_total_return: false
   us:
+    benchmark_nombre: S&P 500
     nombre: Estados Unidos
     pais: US
     benchmark_total_return: false
   de:
+    benchmark_nombre: DAX
     nombre: Alemania
     pais: DE
     # El DAX es, de los cinco, el unico que historicamente se publica como
@@ -54,10 +57,12 @@ mercados:
     # tenerla.
     benchmark_total_return: false
   in:
+    benchmark_nombre: NIFTY 50
     nombre: India
     pais: IN
     benchmark_total_return: false
   br:
+    benchmark_nombre: Ibovespa
     nombre: Brasil
     pais: BR
     benchmark_total_return: false

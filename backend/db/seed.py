@@ -43,11 +43,12 @@ class Resumen:
     mercados: int = 0
     bolsas: int = 0
     valores: int = 0
+    indices: int = 0
 
     def __str__(self) -> str:
         return (
             f"{self.paises} paises, {self.divisas} divisas, {self.mercados} mercados, "
-            f"{self.bolsas} bolsas, {self.valores} valores"
+            f"{self.bolsas} bolsas, {self.valores} valores, {self.indices} indices"
         )
 
 
@@ -170,7 +171,31 @@ def cargar(sesion: Session, cfg=None, referencia: dict | None = None) -> Resumen
     }
     divisa_por_mercado = {m.id: m.divisa for m in cfg.reglas.universo.mercados}
 
+    # Los indices de referencia se dan de alta como valores de tipo `index`.
+    # Sin esto sus precios se descargan y se descartan en la ingesta —el mapa de
+    # tickers solo conoce el universo—, y sin sus precios no hay beta ni fuerza
+    # relativa frente al mercado. No entran en rankings ni en carteras: los
+    # distingue `asset_type`, no una lista aparte que habria que mantener.
     filas_valor = []
+    indices_regimen = cfg.reglas.tecnico.indices_regimen
+    for mercado_id, simbolo in indices_regimen.items():
+        if mercado_id not in ids_motor:
+            continue
+        meta = referencia["mercados"][mercado_id]
+        filas_valor.append(
+            {
+                "ticker": simbolo,
+                "name": meta.get("benchmark_nombre") or simbolo,
+                "market_id": mercado_id,
+                "exchange_id": bolsa_por_mercado.get(mercado_id),
+                "currency_code": divisa_por_mercado[mercado_id],
+                "asset_type": AssetType.INDEX.value,
+                "sector": None,
+                "is_primary_listing": False,
+                "active": True,
+            }
+        )
+
     for mercado_id, valores in cfg.universo.mercados.items():
         for v in valores:
             filas_valor.append(
@@ -189,7 +214,9 @@ def cargar(sesion: Session, cfg=None, referencia: dict | None = None) -> Resumen
                     "active": True,
                 }
             )
-    resumen.valores = _upsert(sesion, Security, filas_valor, ["market_id", "ticker"])
+    resumen.indices = sum(1 for f in filas_valor if f["asset_type"] == AssetType.INDEX.value)
+    resumen.valores = len(filas_valor) - resumen.indices
+    _upsert(sesion, Security, filas_valor, ["market_id", "ticker"])
 
     return resumen
 
