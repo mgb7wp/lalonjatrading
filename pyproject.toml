@@ -19,7 +19,11 @@ dependencies = [
     "pydantic>=2.6,<3",
     "pyarrow>=14",
     "exchange-calendars>=4.5,<5",
-    "yfinance>=0.2.40",
+    # Tope superior a proposito: el salto de 0.2.x a 1.x cambio la forma de lo
+    # que devuelve `download` para un solo ticker, y el adaptador se rompio en
+    # silencio en ese camino. Un rango abierto deja que la proxima ruptura entre
+    # sin avisar.
+    "yfinance>=0.2.40,<2",
     "tabulate>=0.9",
 ]
 

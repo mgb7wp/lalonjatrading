@@ -104,6 +104,28 @@ def _primera_fila(df: pd.DataFrame | None, *nombres: str) -> pd.Series | None:
     return None
 
 
+def _por_ticker(crudo: pd.DataFrame, ticker: str) -> pd.DataFrame:
+    """Extrae las columnas de un ticker del marco que devuelve yfinance.
+
+    Con `group_by="ticker"`, yfinance devuelve un indice de columnas de dos
+    niveles `(ticker, campo)`. Las versiones antiguas lo aplanaban cuando se
+    pedia un solo ticker, y el adaptador se escribio contra eso: preguntaba
+    `len(tickers) > 1` para decidir si desenvolver.
+
+    Desde yfinance 1.x el indice es de dos niveles **siempre**, tambien con un
+    ticker, asi que aquella pregunta empezo a dar la respuesta equivocada y
+    cualquier descarga de un valor suelto fallaba con "faltan columnas". Las
+    descargas por mercado, que piden veinte o treinta a la vez, seguian
+    funcionando, y por eso el fallo no se veia: solo aparece en el camino que
+    pide un valor.
+
+    La forma del dato la decide ahora el dato y no el numero de tickers pedidos.
+    """
+    if isinstance(crudo.columns, pd.MultiIndex):
+        return crudo[ticker]
+    return crudo
+
+
 class ProveedorYFinance(Proveedor):
     """Precios, divisas y fundamentales desde Yahoo Finance."""
 
@@ -180,7 +202,7 @@ class ProveedorYFinance(Proveedor):
         marco: list[pd.DataFrame] = []
         for ticker in tickers:
             try:
-                bruto = crudo[ticker] if len(tickers) > 1 else crudo
+                bruto = _por_ticker(crudo, ticker)
             except KeyError:
                 continue
             bruto = bruto.dropna(how="all")
@@ -221,7 +243,7 @@ class ProveedorYFinance(Proveedor):
         filas: list[pd.DataFrame] = []
         for divisa, par in pares.items():
             try:
-                serie = crudo[par]["Close"] if len(pares) > 1 else crudo["Close"]
+                serie = _por_ticker(crudo, par)["Close"]
             except KeyError:
                 continue
             serie = serie.dropna()

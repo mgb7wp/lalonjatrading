@@ -542,3 +542,52 @@ def test_la_huella_ignora_cuando_se_calculo_pero_no_de_donde_salio(bd_ingesta, c
         assert "downloaded_at" in columnas_de(s, "price")
     assert "computed_at" in COLUMNAS_DE_AUDITORIA
     assert "downloaded_at" not in COLUMNAS_DE_AUDITORIA
+
+
+# ---------------------------------------------------------------------------
+# yfinance: la forma de lo que devuelve
+# ---------------------------------------------------------------------------
+
+
+def test_un_solo_ticker_se_desenvuelve_igual_que_varios():
+    """Regresion: yfinance 1.x devuelve MultiIndex tambien con un ticker.
+
+    El adaptador preguntaba `len(tickers) > 1` para decidir si desenvolver, y
+    con las versiones antiguas acertaba porque un ticker suelto llegaba con las
+    columnas planas. Desde la 1.x llegan siempre en dos niveles, asi que esa
+    pregunta empezo a dar la respuesta contraria y **cualquier descarga de un
+    valor suelto fallaba con "faltan columnas"**.
+
+    No se vio antes porque el pipeline descarga un mercado entero de una vez, y
+    con veinte tickers el camino que se toma es el bueno. Solo rompia al pedir
+    uno, que es justo lo que hace una ficha de valor.
+
+    La forma la decide ahora el dato, no el numero de tickers pedidos.
+    """
+    from estrategia.datos.yfinance_proveedor import _por_ticker
+
+    campos = ["Open", "High", "Low", "Close", "Adj Close", "Volume"]
+    datos = {c: [1.0, 2.0] for c in campos}
+
+    dos_niveles = pd.DataFrame({(t, c): v for t in ("KO", "AAPL") for c, v in datos.items()})
+    dos_niveles.columns = pd.MultiIndex.from_tuples(dos_niveles.columns)
+    assert list(_por_ticker(dos_niveles, "KO").columns) == campos
+
+    # Un solo ticker, pero igualmente en dos niveles: el caso que rompia.
+    uno = pd.DataFrame({("KO", c): v for c, v in datos.items()})
+    uno.columns = pd.MultiIndex.from_tuples(uno.columns)
+    assert list(_por_ticker(uno, "KO").columns) == campos
+
+    # Y la forma antigua, plana, sigue funcionando.
+    plano = pd.DataFrame(datos)
+    assert list(_por_ticker(plano, "KO").columns) == campos
+
+
+def test_pedir_un_ticker_que_no_esta_no_revienta():
+    """Un valor que el proveedor no reconoce se salta; no tumba la descarga."""
+    from estrategia.datos.yfinance_proveedor import _por_ticker
+
+    marco = pd.DataFrame({("KO", "Close"): [1.0]})
+    marco.columns = pd.MultiIndex.from_tuples(marco.columns)
+    with pytest.raises(KeyError):
+        _por_ticker(marco, "NOEXISTE")
