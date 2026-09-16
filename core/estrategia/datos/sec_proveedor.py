@@ -51,11 +51,13 @@ pide no pasar de unas diez peticiones por segundo.
 
 from __future__ import annotations
 
+import gzip
 import json
 import os
 import time
 import urllib.error
 import urllib.request
+import zlib
 from datetime import date, datetime
 from typing import Any
 
@@ -152,16 +154,32 @@ def primera_publicacion(hechos: dict, conceptos: tuple[str, ...]) -> dict[date, 
     periodo gana la de `filed` mas antiguo, que es la cifra tal y como se conocio
     entonces, antes de cualquier reexpresion posterior.
 
-    Se recorren los conceptos en orden de preferencia y **no se mezclan**: si
-    `RevenueFromContractWithCustomer...` cubre un ejercicio, no se completa con
-    `Revenues` para otro. Mezclar etiquetas dentro de la misma serie produce
-    saltos de crecimiento que no ocurrieron.
+    Los conceptos se recorren en orden de preferencia **rellenando huecos**, y un
+    ejercicio que ya tiene valor no se sobrescribe nunca. Esa segunda parte es
+    la salvaguarda: garantiza que cada periodo sale de un solo concepto y que en
+    los ejercicios donde dos etiquetas coexisten gana siempre la preferida, asi
+    que no hay dos versiones de la misma cifra compitiendo.
+
+    La primera version no rellenaba: se quedaba con el primer concepto que
+    tuviera algo y descartaba el resto, para no mezclar etiquetas dentro de una
+    serie. La intencion era buena y el efecto, malo. Apple declara sus ventas
+    como `SalesRevenueNet` hasta 2017 y como
+    `RevenueFromContractWithCustomerExcludingAssessedTax` desde entonces, porque
+    la norma ASC 606 cambio la etiqueta. Con aquella regla salian **9 de 19
+    ejercicios** y diez anos de historico desaparecian en silencio, que es peor
+    que el problema que evitaba: el crecimiento de ventas a tres anos
+    simplemente no se podia calcular y nadie sabia por que.
+
+    Queda un riesgo real y conviene decirlo: en el ejercicio donde una norma
+    sustituye a otra puede haber un escalon, porque las dos etiquetas no miden
+    exactamente lo mismo. Es inherente al cambio contable, no al codigo, y
+    `conceptos_por_magnitud()` permite verlo en lugar de suponerlo.
     """
+    por_periodo: dict[date, dict] = {}
     for concepto in conceptos:
         bloque = hechos.get(concepto)
         if not bloque:
             continue
-        por_periodo: dict[date, dict] = {}
         for unidades in (bloque.get("units") or {}).values():
             for entrada in unidades:
                 if entrada.get("form") not in FORMULARIOS_ANUALES:
@@ -173,6 +191,11 @@ def primera_publicacion(hechos: dict, conceptos: tuple[str, ...]) -> dict[date, 
                 if fin is None or presentado is None or entrada.get("val") is None:
                     continue
                 anterior = por_periodo.get(fin)
+                # Un ejercicio que ya cubre un concepto mas preferido no se
+                # toca. Dentro del mismo concepto, gana la publicacion mas
+                # antigua, que es la cifra tal y como se conocio entonces.
+                if anterior is not None and anterior["concepto"] != concepto:
+                    continue
                 if anterior is None or presentado < anterior["presentado"]:
                     por_periodo[fin] = {
                         "valor": float(entrada["val"]),
@@ -180,9 +203,24 @@ def primera_publicacion(hechos: dict, conceptos: tuple[str, ...]) -> dict[date, 
                         "concepto": concepto,
                         "expediente": entrada.get("accn"),
                     }
-        if por_periodo:
-            return por_periodo
-    return {}
+    return por_periodo
+
+
+def conceptos_por_magnitud(hechos: dict) -> dict[str, dict[str, int]]:
+    """Que etiqueta XBRL cubre cuantos ejercicios de cada magnitud.
+
+    Sirve para ver de un vistazo si una serie esta cosida a partir de varias
+    etiquetas —lo normal cuando hay un cambio de norma contable— y si el corte
+    cae donde deberia. Lo usa `scripts/verify_sources.py`.
+    """
+    resumen: dict[str, dict[str, int]] = {}
+    for magnitud, conceptos in CONCEPTOS.items():
+        cuenta: dict[str, int] = {}
+        for periodo in primera_publicacion(hechos, conceptos).values():
+            cuenta[periodo["concepto"]] = cuenta.get(periodo["concepto"], 0) + 1
+        if cuenta:
+            resumen[magnitud] = cuenta
+    return resumen
 
 
 def _divide(numerador: float | None, denominador: float | None) -> float | None:
@@ -291,6 +329,27 @@ def parsear_mapa_cik(payload: Any) -> dict[str, str]:
     return mapa
 
 
+def _descomprimir(respuesta) -> str:
+    """Devuelve el cuerpo de la respuesta como texto, descomprimiendo si toca.
+
+    `urllib` anuncia que acepta gzip si se lo pones en la cabecera, pero **no
+    descomprime la respuesta**: eso lo hacen `requests` y `httpx`, no la
+    biblioteca estandar. El sintoma es un UnicodeDecodeError quejandose del byte
+    0x8b en la posicion 1, que es la firma de gzip, y que no se parece en nada a
+    "se me ha olvidado descomprimir".
+
+    Se mantiene la cabecera en lugar de quitarla porque la SEC pide
+    expresamente que se use compresion para no cargar sus servidores, y
+    `companyfacts` de una empresa grande son varios megabytes.
+    """
+    crudo = respuesta.read()
+    if respuesta.headers.get("Content-Encoding") == "gzip":
+        crudo = gzip.decompress(crudo)
+    elif respuesta.headers.get("Content-Encoding") == "deflate":
+        crudo = zlib.decompress(crudo)
+    return crudo.decode("utf-8")
+
+
 class ProveedorSEC(ProveedorFundamentales):
     """Fundamentales de EE. UU. desde EDGAR."""
 
@@ -341,7 +400,7 @@ class ProveedorSEC(ProveedorFundamentales):
         )
         try:
             with urllib.request.urlopen(peticion, timeout=60) as respuesta:
-                return json.loads(respuesta.read().decode("utf-8"))
+                return json.loads(_descomprimir(respuesta))
         except urllib.error.HTTPError as exc:
             if exc.code == 403:
                 raise ErrorDatos(
