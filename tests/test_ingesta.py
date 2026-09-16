@@ -747,3 +747,78 @@ def test_la_cvm_declara_que_sus_cifras_no_estan_reexpresadas(cfg):
     assert cap.fechas_publicacion_reales
     assert not cap.cifras_reexpresadas
     assert cap.mercados == ("br",)
+
+
+# ---------------------------------------------------------------------------
+# Reparto de fundamentales por mercado
+# ---------------------------------------------------------------------------
+
+
+def test_cada_mercado_pide_los_fundamentales_a_su_fuente(cfg):
+    """Las fuentes con fecha de publicacion real son nacionales.
+
+    La SEC solo cubre EE. UU. y la CVM solo Brasil, asi que elegir una sola
+    fuente para todo el universo seria elegir que mercado se queda sin
+    point-in-time.
+    """
+    reparto = cfg.reglas.proveedor_datos
+    assert reparto.fuente_de("fundamentales", "us") == "sec"
+    assert reparto.fuente_de("fundamentales", "br") == "cvm"
+    # Lo que no esta en el reparto cae en la fuente general.
+    assert reparto.fuente_de("fundamentales", "es") == "yfinance"
+    assert reparto.fuente_de("fundamentales", None) == "yfinance"
+
+
+def test_la_calidad_fundamental_no_es_un_si_o_no(cfg):
+    """yfinance devuelve fundamentales de los cinco mercados.
+
+    Un "disponible: si/no" diria que si en todos y seria inutil. Lo que cambia
+    es que en EE. UU. y Brasil son las cifras de su momento con la fecha en que
+    se publicaron, y en el resto son cuatro ejercicios reexpresados con la fecha
+    estimada. Sobre lo segundo no se construye un backtest creible.
+    """
+    from estrategia.datos.enrutador import Enrutador
+
+    e = Enrutador(cfg, verificar=False)
+    for mercado in ("us", "br"):
+        q = e.calidad_fundamental(mercado)
+        assert q.nivel == "completa", f"{mercado}: {q.motivo}"
+        assert q.sirve_para_puntuar
+        assert q.anios and q.anios >= 10
+
+    for mercado in ("es", "de", "in"):
+        q = e.calidad_fundamental(mercado)
+        assert q.nivel == "degradada", f"{mercado}: {q.motivo}"
+        assert not q.sirve_para_puntuar
+        assert "reexpresadas" in q.motivo
+
+
+def test_la_calidad_se_deduce_de_las_capacidades_no_de_una_lista(cfg):
+    """Una lista escrita a mano acabaria contradiciendo al reparto.
+
+    Si se cambia la fuente de un mercado, la calidad tiene que cambiar sola. Una
+    lista aparte de "mercados sin fundamentales" se quedaria desfasada y nadie
+    lo notaria.
+    """
+    from estrategia.datos.enrutador import Enrutador
+
+    cfg_cambiada = cfg.model_copy(deep=True)
+    object.__setattr__(
+        cfg_cambiada.reglas.proveedor_datos,
+        "fundamentales_por_mercado",
+        {"us": "yfinance"},
+    )
+    q = Enrutador(cfg_cambiada, verificar=False).calidad_fundamental("us")
+    assert q.nivel == "degradada", "al cambiar la fuente, la calidad la sigue"
+
+
+def test_una_fuente_que_no_cubre_un_mercado_lo_declara(cfg):
+    from estrategia.datos.enrutador import Enrutador
+
+    cfg_cambiada = cfg.model_copy(deep=True)
+    object.__setattr__(
+        cfg_cambiada.reglas.proveedor_datos, "fundamentales_por_mercado", {"es": "sec"}
+    )
+    q = Enrutador(cfg_cambiada, verificar=False).calidad_fundamental("es")
+    assert q.nivel == "no_disponible"
+    assert "no cubre" in q.motivo

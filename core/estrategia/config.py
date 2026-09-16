@@ -61,8 +61,23 @@ class ProveedorDatosCfg(_Base):
     fundamentales_anos_disponibles: int
     ampliacion_futura: str | None = None
 
-    def fuente_de(self, tipo: str) -> str:
-        """Que fuente sirve ese tipo de dato."""
+    #: Fuente de fundamentales POR MERCADO. Existe porque las unicas fuentes
+    #: gratuitas con fechas de publicacion reales son nacionales: la SEC solo
+    #: cubre EE. UU. y la CVM solo Brasil. Sin esto habria que elegir una de las
+    #: dos para todo el universo, que es elegir que mercado se queda sin
+    #: point-in-time.
+    #:
+    #: Lo que no aparece aqui cae en `fundamentales` o en `nombre`. Un mercado
+    #: cuya fuente no lo cubre se queda sin pata fundamental, y eso NO es un
+    #: error: es informacion que la API declara.
+    fundamentales_por_mercado: dict[str, str] = Field(default_factory=dict)
+
+    def fuente_de(self, tipo: str, mercado: str | None = None) -> str:
+        """Que fuente sirve ese tipo de dato, opcionalmente en un mercado."""
+        if tipo == "fundamentales" and mercado:
+            por_mercado = self.fundamentales_por_mercado.get(mercado)
+            if por_mercado:
+                return por_mercado
         especifica = getattr(self, tipo, None)
         if especifica:
             return especifica

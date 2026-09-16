@@ -29,6 +29,7 @@ hace aqui dos cosas que no se pueden dejar a la buena voluntad de cada adaptador
 
 from __future__ import annotations
 
+from dataclasses import dataclass
 from datetime import date
 
 import pandas as pd
@@ -37,6 +38,25 @@ from ..config import Config
 from ..errores import ErrorConfiguracion
 from . import contrato, registro
 from .proveedor import MAGNITUDES_OPCIONALES, TIPOS_DE_DATO, Capacidades, Fuente
+
+
+@dataclass(frozen=True, slots=True)
+class CalidadFundamental:
+    """Con que calidad cubre una fuente los fundamentales de un mercado.
+
+    `completa` significa point-in-time de verdad: fechas de publicacion reales y
+    cifras sin reexpresar. Es lo unico sobre lo que se puede construir un
+    backtest fundamental creible, y hoy solo lo dan la SEC y la CVM.
+    """
+
+    nivel: str  # completa | degradada | no_disponible
+    fuente: str
+    motivo: str
+    anios: int | None = None
+
+    @property
+    def sirve_para_puntuar(self) -> bool:
+        return self.nivel == "completa"
 
 
 class Enrutador:
@@ -63,14 +83,24 @@ class Enrutador:
     def fuentes_usadas(self) -> list[str]:
         return sorted(set(self._por_tipo.values()))
 
+    def _instancia(self, nombre: str) -> Fuente:
+        """La fuente por su nombre, construida una sola vez.
+
+        Cachear importa: algunas fuentes guardan en memoria lo que descargan
+        —la ficha de la SEC sirve para fundamentales y para sectores, el fichero
+        anual de la CVM sirve para las veintiocho empresas—, y reconstruirlas
+        tira esa cache y multiplica las descargas.
+        """
+        if nombre not in self._instancias:
+            self._instancias[nombre] = registro.crear(nombre, self._cfg)
+        return self._instancias[nombre]
+
     def fuente(self, tipo: str) -> Fuente:
         """La fuente dueña de un tipo de dato, ya construida."""
         if tipo not in TIPOS_DE_DATO:
             raise ErrorConfiguracion(f"tipo de dato desconocido: {tipo!r}")
-        nombre = self._por_tipo[tipo]
-        if nombre not in self._instancias:
-            self._instancias[nombre] = registro.crear(nombre, self._cfg)
-        fuente = self._instancias[nombre]
+        fuente = self._instancia(self._por_tipo[tipo])
+        nombre = fuente.nombre
 
         if not fuente.capacidades.sirve(tipo):
             raise ErrorConfiguracion(
@@ -114,15 +144,84 @@ class Enrutador:
         return df
 
     def fundamentales(self, tickers: list[str], inicio: date, fin: date) -> pd.DataFrame:
-        fuente = self.fuente("fundamentales")
-        df = fuente.fundamentales(tickers, inicio, fin)
-        df = _estampar(df, fuente.nombre)
-        df = _completar_opcionales(df)
-        if self._verificar:
-            contrato.verificar_fundamentales(
-                df, fuente.nombre, fuente.capacidades.magnitudes
-            ).exigir()
-        return df
+        """Fundamentales, pidiendo a cada mercado su fuente.
+
+        Es el unico tipo de dato que se reparte por mercado, y con motivo: las
+        unicas fuentes gratuitas con fechas de publicacion reales son
+        nacionales. La SEC solo cubre EE. UU. y la CVM solo Brasil, asi que
+        elegir una sola para todo el universo seria elegir que mercado se queda
+        sin point-in-time.
+
+        Cada lote se verifica por separado, con las capacidades de SU fuente: lo
+        que la SEC promete no dice nada de lo que promete la CVM.
+        """
+        por_fuente: dict[str, list[str]] = {}
+        for ticker in tickers:
+            mercado = self._cfg.universo.mercado_de_ticker.get(ticker)
+            nombre = self._cfg.reglas.proveedor_datos.fuente_de("fundamentales", mercado)
+            por_fuente.setdefault(nombre, []).append(ticker)
+
+        lotes: list[pd.DataFrame] = []
+        for nombre, del_lote in por_fuente.items():
+            fuente = self._instancia(nombre)
+            df = fuente.fundamentales(del_lote, inicio, fin)
+            df = _estampar(df, fuente.nombre)
+            df = _completar_opcionales(df)
+            if self._verificar and not df.empty:
+                contrato.verificar_fundamentales(
+                    df, fuente.nombre, fuente.capacidades.magnitudes
+                ).exigir()
+            if not df.empty:
+                lotes.append(df)
+
+        if not lotes:
+            return pd.DataFrame()
+        return pd.concat(lotes, ignore_index=True)
+
+    def calidad_fundamental(self, mercado: str) -> CalidadFundamental:
+        """Con que calidad tiene fundamentales un mercado.
+
+        No es una pregunta de si o no, y tratarla como tal es el error que
+        importa. yfinance devuelve fundamentales de los cinco mercados, asi que
+        "disponible" diria que si en todos; lo que cambia es que en EE. UU. y
+        Brasil son las cifras de su momento con la fecha en que se publicaron, y
+        en el resto son cuatro ejercicios reexpresados a hoy con la fecha
+        estimada por un retraso fijo. Sobre lo segundo no se puede construir un
+        backtest creible.
+
+        Se DEDUCE del reparto y de lo que cada fuente declara, en lugar de
+        configurarse aparte. Una lista de "mercados sin fundamentales" escrita a
+        mano acabaria contradiciendo al reparto en cuanto uno de los dos
+        cambiara, y esa contradiccion no la notaria nadie.
+        """
+        try:
+            nombre = self._cfg.reglas.proveedor_datos.fuente_de("fundamentales", mercado)
+        except ValueError as exc:
+            return CalidadFundamental("no_disponible", "", str(exc))
+
+        fuente = self._instancia(nombre)
+        cap = fuente.capacidades
+        if cap.mercados is not None and mercado not in cap.mercados:
+            return CalidadFundamental(
+                "no_disponible", nombre, f"'{nombre}' no cubre el mercado '{mercado}'"
+            )
+
+        if cap.fechas_publicacion_reales and not cap.cifras_reexpresadas:
+            return CalidadFundamental(
+                "completa",
+                nombre,
+                "fechas de publicacion reales y cifras de su momento",
+                anios=cap.anios_fundamentales,
+            )
+
+        motivos = []
+        if not cap.fechas_publicacion_reales:
+            motivos.append("fechas estimadas por retraso fijo")
+        if cap.cifras_reexpresadas:
+            motivos.append("cifras reexpresadas a hoy")
+        return CalidadFundamental(
+            "degradada", nombre, "; ".join(motivos), anios=cap.anios_fundamentales
+        )
 
     def fx(self, divisas: list[str], inicio: date, fin: date) -> pd.DataFrame:
         fuente = self.fuente("divisas")

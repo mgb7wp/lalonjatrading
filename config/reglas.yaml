@@ -2,8 +2,23 @@
 
 proveedor_datos:
   nombre: yfinance          # gratuito, sin clave; cubre precios de la mayoría de bolsas globales
+  divisas: bce              # oficial: tipos de referencia del euro, verificado 16/09/2026
   fundamentales_anos_disponibles: 4   # limitación conocida del proveedor gratuito
   ampliacion_futura: eodhd  # a evaluar solo si el histórico fundamental se queda corto
+
+  # Fundamentales POR MERCADO. Las únicas fuentes gratuitas con fecha de
+  # publicación real son nacionales —la SEC solo cubre EE. UU. y la CVM solo
+  # Brasil—, así que elegir una sola para todo el universo sería elegir qué
+  # mercado se queda sin point-in-time.
+  #
+  # España, Alemania e India no aparecen: caen en `nombre` (yfinance), que da
+  # cuatro ejercicios con fechas estimadas y cifras reexpresadas. Con eso el
+  # filtro fundamental no es fiable, así que esos mercados funcionan solo con la
+  # pata técnica hasta que haya fuente. La API lo declara por mercado; no es un
+  # error, es un hecho que se publica.
+  fundamentales_por_mercado:
+    us: sec
+    br: cvm
 
 cartera:
   divisa_base: EUR
