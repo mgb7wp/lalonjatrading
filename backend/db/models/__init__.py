@@ -7,6 +7,7 @@ esquema en el proximo autogenerate.
 """
 
 from .analysis import (
+    BacktestRun,
     Explanation,
     FeatureSnapshot,
     ModelPrediction,
@@ -39,6 +40,7 @@ from .users import (
 __all__ = [
     "Alert",
     "AlertEvent",
+    "BacktestRun",
     "Base",
     "CorporateAction",
     "Country",

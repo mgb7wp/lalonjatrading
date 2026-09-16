@@ -38,7 +38,7 @@ from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from .base import Base, Marcas
-from .enums import Cohort, ModelKind, SignalType
+from .enums import BacktestPeriod, Cohort, ModelKind, SignalType
 from .reference import _check
 
 #: Un score es un percentil: 0-100 con dos decimales sobra.
@@ -318,4 +318,77 @@ class Explanation(Base):
             "language",
             name="uq_explanation_security_id_date_score_hash_language",
         ),
+    )
+
+
+class BacktestRun(Base, Marcas):
+    """Registro de experimentos (§23). El antidoto contra el sobreajuste.
+
+    RT-1 del plan dice que el riesgo no es equivocarse: es buscar parametros
+    hasta que el backtest salga bonito y no acordarse de cuantas veces se ha
+    buscado. Cien combinaciones probadas sobre el mismo historico producen una
+    ganadora espectacular por pura casualidad, y sin registro nadie puede
+    distinguirla de un hallazgo real.
+
+    Dos decisiones sostienen esa defensa:
+
+    1. **`fingerprint` es UNICO.** Es el hash de todo lo que define el
+       experimento: parametros, periodo, universo y origen de los datos. Repetir
+       exactamente el mismo backtest no crea una fila nueva —incrementa
+       `run_count`—, asi que contar filas cuenta experimentos DISTINTOS, que es
+       la cifra que importa. Cambiar un solo peso cambia la huella y aparece una
+       fila: el coste de buscar queda anotado, se quiera o no.
+    2. **`period_kind` es obligatorio.** El periodo de validacion esta cerrado
+       hasta el final; solo se puede comprobar si cada ejecucion deja escrito
+       sobre cual corrio. Un `SELECT count(*) WHERE period_kind = 'validacion'`
+       responde en un segundo a "cuantas veces hemos mirado lo que no deberiamos
+       estar mirando todavia".
+
+    `metrics` y `parameters` son JSONB por el mismo motivo que en
+    `ModelVersion`: anadir una metrica no puede exigir una migracion, y estas
+    filas se escriben para leerlas dentro de un ano, no para consultarlas por
+    columna.
+    """
+
+    __tablename__ = "backtest_run"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+
+    # NOT NULL a proposito: un backtest sin la version de modelo que lo produjo
+    # es un numero sin procedencia, igual que un score huerfano.
+    model_version_id: Mapped[int] = mapped_column(
+        ForeignKey("model_version.id", ondelete="RESTRICT"), nullable=False
+    )
+
+    period_kind: Mapped[str] = mapped_column(String(16), nullable=False)
+    period_start: Mapped[dt.date] = mapped_column(Date, nullable=False)
+    period_end: Mapped[dt.date] = mapped_column(Date, nullable=False)
+
+    # De donde salieron los precios. Un backtest sintetico y uno real no son
+    # comparables, y confundirlos es el fallo de la FASE 6 otra vez.
+    data_source: Mapped[str] = mapped_column(String(32), nullable=False)
+
+    universe_hash: Mapped[str] = mapped_column(String(64), nullable=False, comment="sha256")
+    universe_size: Mapped[int] = mapped_column(Integer, nullable=False)
+
+    parameters: Mapped[dict] = mapped_column(JSONB, nullable=False)
+    metrics: Mapped[dict] = mapped_column(JSONB, nullable=False)
+
+    fingerprint: Mapped[str] = mapped_column(String(64), nullable=False, comment="sha256")
+    run_count: Mapped[int] = mapped_column(Integer, nullable=False, default=1)
+    last_run_at: Mapped[dt.datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=func.now()
+    )
+
+    notes: Mapped[str | None] = mapped_column(Text)
+
+    model_version = relationship("ModelVersion")
+
+    __table_args__ = (
+        UniqueConstraint("fingerprint", name="uq_backtest_run_fingerprint"),
+        _check("period_kind", BacktestPeriod, "period_kind_valido"),
+        CheckConstraint("period_end > period_start", name="periodo_no_vacio"),
+        CheckConstraint("universe_size > 0", name="universo_no_vacio"),
+        CheckConstraint("run_count > 0", name="run_count_positivo"),
+        Index("ix_backtest_run_period_kind_created_at", "period_kind", "created_at"),
     )

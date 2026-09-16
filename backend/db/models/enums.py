@@ -157,3 +157,16 @@ class Severity(enum.StrEnum):
     INFO = "info"
     WARNING = "warning"
     CRITICAL = "critical"
+
+
+class BacktestPeriod(enum.StrEnum):
+    """Sobre que tramo del historico se ha corrido un backtest.
+
+    La distincion no es informativa: es el guardarrail de RT-1. El periodo de
+    validacion esta cerrado hasta el final, y solo se puede comprobar que se ha
+    respetado si cada ejecucion deja escrito sobre cual de los dos corrio.
+    """
+
+    DISENO = "diseno"
+    VALIDACION = "validacion"
+    COMPLETO = "completo"

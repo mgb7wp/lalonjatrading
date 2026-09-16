@@ -270,7 +270,16 @@ anti-sesgo en verde.
       no 2, y **solo cuenta operaciones cerradas**: lo que sigue abierto al
       final del backtest no aparece, así que en periodos cortos el número se
       queda bajo.
-- [ ] Registro de experimentos (§23).
+- [x] **Registro de experimentos (§23).** Tabla `backtest_run` y
+      `backend/db/experimentos.py`.
+
+      La propiedad que lo hace útil: `fingerprint` es `UNIQUE`, así que repetir
+      el mismo backtest incrementa `run_count` en vez de crear fila, y contar
+      filas cuenta experimentos **distintos**. Cambiar un peso deja una fila
+      nueva: el coste de buscar queda anotado, se quiera o no.
+
+      `period_kind` convierte «el periodo de validación está cerrado hasta el
+      final» en una consulta de un segundo en lugar de una intención.
 - [ ] Backtest desde el feature store de la base de datos, no solo desde Parquet.
 - [ ] Comparación contra benchmark en el informe.
 

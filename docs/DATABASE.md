@@ -32,7 +32,7 @@ alembic upgrade head
 |---|---|
 | Referencia | `country`, `currency`, `market`, `exchange`, `security`, `index_composition` |
 | Series | `price`, `fundamental_snapshot`, `technical_indicator`, `fx_rate`, `corporate_action` |
-| Análisis | `model_version`, `feature_snapshot`, `score`, `model_prediction`, `signal`, `explanation` |
+| Análisis | `model_version`, `feature_snapshot`, `score`, `model_prediction`, `signal`, `explanation`, `backtest_run` |
 | Usuario | `user_account`, `portfolio`, `portfolio_position`, `portfolio_transaction`, `watchlist`, `watchlist_item`, `alert`, `alert_event`, `saved_screener` |
 | Operación | `pipeline_run`, `data_quality_check`, `data_freshness` |
 
@@ -105,6 +105,34 @@ el sesgo de supervivencia, el más grande que arrastra hoy el sistema.
 para que el ranking no la cuente dos veces. `isin` **no** es único a propósito:
 una misma empresa cotiza en varias plazas con el mismo ISIN, y ése es justo el
 caso que hay que poder representar.
+
+### Contar filas de `backtest_run` cuenta experimentos, no ejecuciones
+
+El riesgo de RT-1 no es equivocarse en un backtest: es probar cien
+combinaciones de parámetros sobre el mismo histórico, quedarse con la mejor y
+no recordar que se probaron cien. Con suficientes intentos siempre sale una
+curva preciosa, y sin registro no hay forma de distinguirla de un hallazgo real.
+
+La defensa es aritmética, no moral, y descansa en dos detalles del esquema:
+
+- **`fingerprint` es `UNIQUE`.** Es el hash de parámetros, periodo, universo y
+  origen de los datos. Repetir el mismo backtest no crea fila: incrementa
+  `run_count`. Así `SELECT count(*)` da el número de experimentos **distintos**,
+  que es la cifra con significado. Cambiar un solo peso cambia la huella y deja
+  una fila nueva: el coste de buscar queda anotado, se quiera o no.
+- **`period_kind` es obligatorio** (`diseno`, `validacion`, `completo`). El
+  periodo de validación está cerrado hasta el final, y esa regla solo es
+  comprobable si cada ejecución deja escrito sobre cuál corrió. Entonces
+  `SELECT count(*) WHERE period_kind = 'validacion'` responde a «cuántas veces
+  hemos mirado lo que todavía no deberíamos estar mirando».
+
+`data_source` separa los backtests sintéticos de los reales, porque no son
+comparables y confundirlos ya pasó una vez (FASE 6).
+
+Las restricciones viven en la base de datos, no solo en
+`backend/db/experimentos.py`: cualquiera puede escribir en esta tabla con un
+`INSERT` a mano, y una regla que solo existe en la función de conveniencia es
+una regla que se salta sin enterarse.
 
 ### `price` está particionada por año
 
