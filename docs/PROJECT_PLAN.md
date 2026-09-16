@@ -258,6 +258,7 @@ deliberada y documentada, no un descuido.
 | RT-3 | Coste de LLM por petición. | Las explicaciones se cachean por `(security_id, fecha, hash_score)`. Un score que no cambia no se reexplica. |
 | RT-4 | Volumen de precios (decenas de millones de filas) con ORM fila a fila. | Carga por `COPY`/`execute_values`, tabla particionada por año. SQLAlchemy para entidades, SQL directo para series. |
 | RT-5 | El LLM inventa datos (§29). | El prompt recibe **sólo** JSON estructurado, con instrucción de responder «Información no disponible» ante un hueco, y un validador que rechaza la respuesta si menciona cifras que no estaban en la entrada. |
+| RT-6 | **Abierto.** `--proveedor sintetico` anuncia `fundamentales=sintetico` y a continuacion intenta descargarlos de la SEC, porque el enrutado por mercado de la FASE 5 tiene prioridad sobre el proveedor global. Efecto: no se puede correr un backtest sintetico sin red ni credenciales, que es justo para lo que existe ese proveedor, y la linea "Fuentes:" miente. | Pendiente de decidir cual manda. Recomendacion: que `--proveedor sintetico` anule el enrutado, para que el proveedor sintetico sea autonomo y determinista. |
 
 ### Riesgos de producto y legales
 

@@ -37,6 +37,17 @@ class Resumen:
     exposicion_media: float
     anos: float
     periodicidad_sharpe: str = "semanal"
+    # Las cuatro de la FASE 7. Con valor por defecto porque `Resumen` se
+    # construye posicionalmente en el camino de curva vacia.
+    #
+    # `nan` no es un descuido: sortino y profit_factor no estan definidos
+    # cuando no hay perdidas, y devolver 0.0 ahi seria el peor valor posible
+    # para la mejor situacion posible. Es preferible "no disponible" a un
+    # numero que dice lo contrario de lo que pasa.
+    sortino: float = float("nan")
+    profit_factor: float = float("nan")
+    rotacion_anual: float = 0.0
+    dias_medios_en_cartera: float = 0.0
 
     def como_dict(self) -> dict:
         return {
@@ -48,7 +59,26 @@ class Resumen:
             "n_operaciones": self.n_operaciones,
             "exposicion_media": self.exposicion_media,
             "anos": self.anos,
+            "sortino": self.sortino,
+            "profit_factor": self.profit_factor,
+            "rotacion_anual": self.rotacion_anual,
+            "dias_medios_en_cartera": self.dias_medios_en_cartera,
         }
+
+
+NO_DISPONIBLE = "no disponible"
+
+
+def como_texto(valor: float, decimales: int = 2) -> str:
+    """Formatea una metrica que puede no estar definida.
+
+    Existe para que "no disponible" se escriba igual en los dos informes y,
+    sobre todo, para que un `nan` no acabe impreso como "nan" en un informe que
+    alguien va a leer para decidir donde pone su dinero.
+    """
+    if valor is None or not np.isfinite(valor):
+        return NO_DISPONIBLE
+    return f"{valor:.{decimales}f}"
 
 
 def drawdown_maximo(valores: np.ndarray) -> float:
@@ -88,6 +118,109 @@ def sharpe(
     return float(exceso.mean() / exceso.std() * np.sqrt(por_ano))
 
 
+def sortino(
+    curva: pd.DataFrame, tasa_libre_riesgo_anual: float, periodicidad: str
+) -> float:
+    """Sortino: como el Sharpe, pero castigando solo la volatilidad a la baja.
+
+    La diferencia con el Sharpe no es cosmetica. El Sharpe divide por la
+    desviacion de TODAS las rentabilidades, asi que penaliza igual una semana de
+    +8% que una de -8%. Para una estrategia direccional eso es justo al reves de
+    lo que interesa medir: la sorpresa que duele es la de abajo.
+
+    El denominador es la desviacion de los retornos POR DEBAJO del objetivo, con
+    los que estan por encima puestos a cero en lugar de excluidos. Excluirlos
+    seria dividir por la desviacion de una muestra distinta —la de los meses
+    malos solos— y daria un numero que sube cuando la estrategia pierde menos
+    veces, aunque pierda mas.
+    """
+    serie = serie_periodica(curva, periodicidad)
+    if len(serie) < 3:
+        return float("nan")
+    retornos = serie.pct_change().dropna()
+    if retornos.empty:
+        return float("nan")
+
+    por_ano = SEMANAS_POR_ANO if periodicidad == "semanal" else _sesiones_por_ano(curva)
+    rf_periodo = (1.0 + tasa_libre_riesgo_anual) ** (1.0 / por_ano) - 1.0
+    exceso = retornos - rf_periodo
+
+    bajistas = np.minimum(exceso.to_numpy(dtype=float), 0.0)
+    desviacion = float(np.sqrt(np.mean(bajistas**2)))
+    if desviacion == 0.0:
+        # Ni una sola semana por debajo del activo sin riesgo. Es un resultado
+        # real, no un error, pero el ratio no esta definido: dividir por cero
+        # daria infinito y devolver 0.0 diria "pesimo". Que el informe lo
+        # presente como no disponible.
+        return float("nan")
+    return float(exceso.mean() / desviacion * np.sqrt(por_ano))
+
+
+def profit_factor(operaciones: pd.DataFrame) -> float:
+    """Ganancia bruta dividida entre perdida bruta, ambas en positivo.
+
+    Por encima de 1 la estrategia gana. Complementa al porcentaje de ganadoras,
+    que por si solo engana: una estrategia puede acertar el 80% de las veces y
+    arruinarse si el 20% restante pierde el triple de lo que ganan las otras.
+    """
+    if operaciones.empty or "resultado_base" not in operaciones:
+        return float("nan")
+    resultados = operaciones["resultado_base"].to_numpy(dtype=float)
+    ganancia = float(resultados[resultados > 0].sum())
+    perdida = float(-resultados[resultados < 0].sum())
+    if perdida == 0.0:
+        # Sin una sola operacion perdedora. Igual que en sortino: no definido.
+        return float("nan")
+    return ganancia / perdida
+
+
+def rotacion_anual(curva: pd.DataFrame, operaciones: pd.DataFrame) -> float:
+    """Rotacion de la cartera al ano, en veces sobre el patrimonio medio.
+
+    Se mide en una direccion: se suma lo comprado y lo vendido y se divide entre
+    dos. Sin esa division, una cartera que compra y vende una vez cada posicion
+    saldria con rotacion 2 en lugar de 1, que es lo que uno entiende al decir
+    "rota la cartera entera una vez al ano".
+
+    Importa porque los costes son proporcionales a ella: una rotacion de 6
+    multiplica por seis el peaje de comisiones y deslizamiento sobre el mismo
+    capital.
+
+    **Limitacion, y no es menor:** solo cuenta operaciones CERRADAS. Lo que
+    sigue abierto al final del backtest se compro y no aparece aqui, asi que en
+    un periodo corto, o con posiciones muy largas, este numero se queda bajo.
+    """
+    if curva.empty or operaciones.empty:
+        return 0.0
+    faltan = {"acciones", "precio_entrada_base", "precio_salida_base"} - set(operaciones)
+    if faltan:
+        return 0.0
+
+    acciones = operaciones["acciones"].to_numpy(dtype=float)
+    comprado = float((acciones * operaciones["precio_entrada_base"]).sum())
+    vendido = float((acciones * operaciones["precio_salida_base"]).sum())
+
+    patrimonio_medio = float(curva["valor"].mean())
+    dias = (curva["fecha"].iloc[-1] - curva["fecha"].iloc[0]).days
+    anos = max(dias / DIAS_POR_ANO, 1e-9)
+    if patrimonio_medio <= 0:
+        return 0.0
+    return (comprado + vendido) / 2.0 / patrimonio_medio / anos
+
+
+def dias_medios_en_cartera(operaciones: pd.DataFrame) -> float:
+    """Dias NATURALES medios que dura una posicion abierta.
+
+    Naturales y no sesiones: son los que cuenta `Operacion.dias`, y con cinco
+    calendarios distintos convertirlos a sesiones obligaria a saber de que
+    mercado es cada una. Para lo que sirve el dato —saber si la estrategia opera
+    en semanas o en meses— la diferencia no cambia ninguna decision.
+    """
+    if operaciones.empty or "dias" not in operaciones:
+        return 0.0
+    return float(operaciones["dias"].mean())
+
+
 def _sesiones_por_ano(curva: pd.DataFrame) -> float:
     """Sesiones por ano medidas sobre el propio historico, no supuestas."""
     if len(curva) < 2:
@@ -123,6 +256,12 @@ def resumir(curva: pd.DataFrame, operaciones: pd.DataFrame, cfg: Config) -> Resu
         exposicion_media=float(curva["exposicion"].mean()),
         anos=anos,
         periodicidad_sharpe=periodicidad,
+        sortino=sortino(
+            curva, cfg.reglas.metricas.tasa_libre_riesgo_anual, periodicidad
+        ),
+        profit_factor=profit_factor(operaciones),
+        rotacion_anual=rotacion_anual(curva, operaciones),
+        dias_medios_en_cartera=dias_medios_en_cartera(operaciones),
     )
 
 

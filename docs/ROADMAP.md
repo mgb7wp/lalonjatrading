@@ -247,7 +247,7 @@ valoración cara, PETR4 barata y sin crecimiento, KO y PG con riesgo bajo.
 
 ---
 
-## FASE 7 — Backtesting
+## FASE 7 — Backtesting 🔄 EN CURSO
 
 Conectar el motor existente al feature store y añadir las métricas que faltan
 (Sortino, profit factor, turnover, periodo medio de tenencia). Registro de
@@ -256,6 +256,23 @@ experimentos (§23).
 **Aceptación:** backtest reproducible desde una instantánea sellada; costes,
 deslizamiento y lotes aplicados; comparación contra benchmark; los tests
 anti-sesgo en verde.
+
+- [x] **Métricas que faltaban.** Sortino, profit factor, rotación anual y días
+      medios en cartera, en `metricas.py`, en el `Resumen` y en los dos
+      informes.
+
+      Sortino y profit factor devuelven `no disponible`, no `0.0`, cuando no
+      están definidos —una estrategia sin una sola pérdida— porque el cero es el
+      peor valor posible para la mejor situación posible, y en un ranking la
+      pondría la última.
+
+      La rotación se divide entre dos para que "rotar la cartera una vez" dé 1 y
+      no 2, y **solo cuenta operaciones cerradas**: lo que sigue abierto al
+      final del backtest no aparece, así que en periodos cortos el número se
+      queda bajo.
+- [ ] Registro de experimentos (§23).
+- [ ] Backtest desde el feature store de la base de datos, no solo desde Parquet.
+- [ ] Comparación contra benchmark en el informe.
 
 ---
 

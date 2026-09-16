@@ -369,8 +369,12 @@ def a_markdown(informe: Informe) -> str:
         f"- Rentabilidad anualizada: {r.rentabilidad_anualizada:+.2%}",
         f"- Drawdown maximo: {r.drawdown_maximo:.2%}",
         f"- Ratio de Sharpe ({r.periodicidad_sharpe}): {r.sharpe:.2f}",
+        f"- Ratio de Sortino ({r.periodicidad_sharpe}): {metricas_mod.como_texto(r.sortino)}",
+        f"- Profit factor: {metricas_mod.como_texto(r.profit_factor)}",
         f"- Operaciones ganadoras: {r.pct_ganadoras:.1%}",
         f"- Numero de operaciones: {r.n_operaciones}",
+        f"- Dias medios en cartera: {r.dias_medios_en_cartera:.0f}",
+        f"- Rotacion anual: {r.rotacion_anual:.2f}x",
         f"- Exposicion media: {r.exposicion_media:.1%}",
         "",
     ]

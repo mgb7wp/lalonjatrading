@@ -27,6 +27,7 @@ from datetime import date
 
 import pandas as pd
 
+from . import metricas as metricas_mod
 from .informe import Informe
 
 # --------------------------------------------------------------------------
@@ -511,8 +512,12 @@ def a_html(informe: Informe, titulo: str = "Estrategia mixta") -> str:
         ("Rentabilidad total", _pct(r.rentabilidad_total)),
         ("Drawdown maximo", _pct(r.drawdown_maximo, signo=False)),
         (f"Sharpe ({r.periodicidad_sharpe})", f"{r.sharpe:.2f}"),
+        (f"Sortino ({r.periodicidad_sharpe})", metricas_mod.como_texto(r.sortino)),
+        ("Profit factor", metricas_mod.como_texto(r.profit_factor)),
         ("Ganadoras", _pct(r.pct_ganadoras, signo=False)),
         ("Operaciones", f"{r.n_operaciones}"),
+        ("Dias medios en cartera", f"{r.dias_medios_en_cartera:.0f}"),
+        ("Rotacion anual", f"{r.rotacion_anual:.2f}x"),
         ("Exposicion media", _pct(r.exposicion_media, signo=False)),
     ]
     partes.append(
