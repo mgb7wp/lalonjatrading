@@ -118,19 +118,55 @@ futura, que ahora se cuentan y se avisan en lugar de pasar por «último dato».
 
 ---
 
-## FASE 4 — Indicadores
+## FASE 4 — Indicadores ✅ COMPLETADA
 
-Ampliar `core/indicadores.py` desde los actuales (SMA, ATR de Wilder, momentum
-12-1) al catálogo de §13: RSI, MACD, ADX, estocástico, Bollinger, ROC,
-volatilidad, beta, drawdown, distancia a máximos/mínimos de 52 semanas, ratios
-de volumen, aceleración, fuerza relativa vs. benchmark.
+`core/estrategia/catalogo.py`: **22 indicadores con registro**. Añadir uno es
+escribir una función y decorarla — no hay que tocar el motor, ni la tabla, ni el
+pipeline, ni acordarse de añadirlo a tres listas.
 
-Registro de indicadores para que añadir uno sea declarar una función, no tocar
-el motor.
+El catálogo cubre lo que enumera §13: las cuatro SMA, EMA, RSI, MACD y su señal,
+ATR, ADX, estocástico, Bollinger, ROC, momentum 12-1, aceleración, volatilidad
+anualizada, beta, drawdown máximo, distancia a máximos y mínimos de 52 semanas,
+ratio de volumen y fuerza relativa frente al índice.
 
-**Aceptación:** cada indicador con test de valor conocido; todos vectorizados y
-ventana hacia atrás; test que verifica que **ningún indicador mira hacia
-adelante** (recortar la serie no cambia el valor en la fecha de corte).
+`workers/pipeline/indicadores.py` los calcula y los persiste en
+`technical_indicator`, **siempre dentro de la misma ejecución que la descarga**:
+un indicador es una derivación determinista de los precios, así que si éstos se
+actualizan y aquéllos no, lo que sirve la API deja de corresponderse con la base
+de datos y nada avisa.
+
+**Aceptación cumplida:** 85 tests del catálogo. Tres de ellos recorren **todo el
+registro**, que es la razón de fondo para tenerlo: un indicador nuevo queda
+cubierto el día que se escribe, sin que su autor haga nada.
+
+- **Ninguno mira hacia adelante**: recortar la serie por el final no cambia
+  ningún valor anterior al corte. Se compara el prefijo completo, no sólo el
+  último punto, porque un recursivo mal escrito puede acertar en el corte y
+  fallar antes.
+- **Ninguno declara menos histórico del que usa**: quedarse corto haría servir un
+  número calculado sobre cuatro sesiones como si valiera lo mismo que uno
+  calculado sobre doscientas.
+- Todos devuelven un vector alineado con la serie.
+
+Y valores conocidos uno a uno, incluidos dos invariantes fuertes: la beta de una
+serie contra sí misma vale exactamente 1, y su fuerza relativa exactamente 0.
+
+103.575 filas de indicadores para los cinco mercados en 13 segundos. Recalcular
+no cambia un solo número.
+
+**Dos cosas que aparecieron por el camino:**
+
+El RSI de un precio quieto salía **100**. La fórmula de Wilder trata la ausencia
+de bajadas como fuerza infinita, así que un valor cuya cotización se ha
+congelado —deslistado, suspendido, o al que el proveedor dejó de dar datos—
+aparecía como el de mayor momento de todo el mercado. Ahora es `NaN`: sin
+movimiento no hay fuerza relativa que medir.
+
+**Los índices de referencia se descargaban y se tiraban.** `^IBEX` y compañía no
+estaban en `security`, así que el mapa de tickers de la ingesta los descartaba en
+silencio — y sin sus precios no hay beta ni fuerza relativa. Ahora se dan de alta
+como valores de tipo `index`, y se excluyen de los recuentos de `/markets`
+porque no son analizables.
 
 ---
 

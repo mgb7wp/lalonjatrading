@@ -90,7 +90,8 @@ flecha de vuelta desde el LLM hacia los scores.
 core/estrategia/       Motor cuantitativo. Sin Postgres, sin HTTP, sin red salvo proveedores.
   datos/               proveedor.py (interfaz) · contrato.py · enrutador.py · almacen.py
                        registro.py · yfinance_proveedor.py · eodhd_proveedor.py · sintetico.py
-  indicadores.py       series vectorizadas, ventanas hacia atrás
+  indicadores.py       series vectorizadas del motor, en el camino crítico
+  catalogo.py          22 indicadores con registro, para servir y explicar
   fundamental.py       ratios, mínimos, percentiles por cohorte
   tecnico.py           lectura técnica por valor y fecha
   scoring/             pilares, sub-scores, agregación, versiones de modelo

@@ -119,10 +119,10 @@ reconstruidos.
 
 ## La plataforma
 
-En construcción. Lo que ya funciona (FASES 1 a 3 del
+En construcción. Lo que ya funciona (FASES 1 a 4 del
 [roadmap](docs/ROADMAP.md)): el esqueleto desplegable, el esquema de base de
-datos con migraciones, la ingesta de los cinco mercados, `/health`,
-`/health/data`, `/markets` y el frontend mínimo.
+datos con migraciones, la ingesta de los cinco mercados, 22 indicadores técnicos
+con registro, `/health`, `/health/data`, `/markets` y el frontend mínimo.
 
 ```bash
 cp .env.example .env          # y genera un JWT_SECRET, ver docs/DEPLOYMENT.md
