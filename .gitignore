@@ -32,13 +32,21 @@ sitio/informes/sintetico_*.html
 # repositorio no se borra del historial con un commit de arrepentimiento.
 .env
 .env.*
+# Las plantillas si: son ficheros vacios de valores, y sin ellas nadie sabe que
+# variables hacen falta. La negacion tiene que ser explicita por cada una, que
+# `.env.*` las captura todas.
 !.env.example
+!.env.produccion.example
 
 # Frontend
 node_modules/
 .next/
 out/
 frontend/.env*.local
+# Generados por `next build` / `tsc`. El lockfile SI se versiona: sin el,
+# `npm ci` no puede reproducir el arbol de dependencias en el servidor.
+frontend/next-env.d.ts
+frontend/tsconfig.tsbuildinfo
 
 # Herramientas
 .ruff_cache/
