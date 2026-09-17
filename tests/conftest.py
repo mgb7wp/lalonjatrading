@@ -21,6 +21,26 @@ from estrategia import config as config_mod
 from estrategia.datos.almacen import Instantanea
 from estrategia.datos.sintetico import ProveedorSintetico
 
+#: Secreto de firma SOLO para los tests. Se pone antes de que nada lea la
+#: configuracion: `settings()` esta cacheada, asi que si un import la lee primero
+#: el valor se congela vacio y los tests de autenticacion revientan.
+#:
+#: Va aqui y no en el fichero de CI porque una suite que solo pasa si alguien se
+#: acordo de exportar una variable de entorno no es una suite: es una trampa. Es
+#: exactamente lo que dejo el CI en rojo desde la FASE 12 sin que se notara en
+#: local, donde ese entorno si estaba puesto.
+SECRETO_DE_PRUEBAS = "secreto-solo-para-los-tests-no-sirve-en-ningun-despliegue"
+
+
+def pytest_configure(config):  # noqa: ARG001 - firma de pytest
+    os.environ.setdefault("JWT_SECRET", SECRETO_DE_PRUEBAS)
+    os.environ.setdefault("ENTORNO", "pruebas")
+
+    import backend.config
+
+    backend.config.settings.cache_clear()
+
+
 INICIO = dt.date(2019, 1, 1)
 FIN = dt.date(2024, 12, 31)
 
