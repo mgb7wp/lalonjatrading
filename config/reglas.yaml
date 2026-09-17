@@ -177,3 +177,58 @@ validacion:
   sensibilidad_pct: 0.25
   min_operaciones: 100
   min_operaciones_por_mercado: 15
+
+# ---------------------------------------------------------------------------
+# Señales (§25) y régimen de mercado (§26)
+# ---------------------------------------------------------------------------
+# Ningún umbral de estos vive en el código, y no es una preferencia de estilo:
+# una señal es una recomendación publicada. Para reproducirla dentro de un año
+# hay que saber con qué umbrales se produjo, y eso exige que estén versionados
+# junto al modelo.
+#
+# Los `tope_*` son la PEOR señal que se permite cuando ese limitador se activa.
+# Van escritos con el vocabulario del esquema (`strong_buy`, `buy`, `hold`...)
+# para que la traducción de D-14 sea una sola tabla y no dos convenios.
+senales:
+  # Señal base, solo con el score (percentil dentro de la cohorte).
+  umbral_compra_fuerte: 85
+  umbral_compra: 70
+  umbral_venta: 30
+  umbral_venta_fuerte: 15
+
+  # Un mercado en caída no convierte un buen valor en una mala compra, pero sí
+  # desaconseja concentrar. En régimen adverso no se emiten compras fuertes.
+  tope_regimen_adverso: hold
+  tope_regimen_lateral: buy
+
+  # `riesgo` y `valoracion` son percentiles: más alto es mejor. Un riesgo de 10
+  # significa estar entre los peores de la cohorte, no tener poco riesgo.
+  riesgo_minimo: 20
+  tope_riesgo_alto: hold
+
+  # Momentum 12-1 en tanto por uno. Un valor que cae no se compra por barato.
+  momentum_minimo: 0.0
+  tope_momentum_negativo: hold
+
+  valoracion_minima: 10
+  tope_valoracion: buy
+
+  # Caída del score en 30 días, en puntos de percentil. Negativo a propósito.
+  caida_score_maxima: -15
+
+  # Mientras no haya modelo (D-7), la probabilidad llega vacía y este umbral no
+  # se aplica. Queda escrito para que activarlo no exija tocar código.
+  probabilidad_minima: 0.45
+  tope_probabilidad_baja: hold
+
+  # Régimen de mercado.
+  indice_antiguedad_maxima_dias: 10
+  ventana_drawdown: 252
+  ventana_volatilidad: 60
+  sesiones_por_ano: 252
+  drawdown_bajista: 0.20
+  drawdown_lateral: 0.10
+  volatilidad_lateral: 0.25
+
+  penalizacion_confianza_regimen: 0.5
+  horizonte_dias: 90

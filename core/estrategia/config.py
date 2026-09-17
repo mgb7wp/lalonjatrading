@@ -292,6 +292,59 @@ class ValidacionCfg(_Base):
     min_operaciones_por_mercado: int = Field(ge=0)
 
 
+class SenalesCfg(_Base):
+    """Umbrales del motor de senales (§25) y del regimen (§26).
+
+    Todos aqui y ninguno en el codigo: una senal es una recomendacion publicada,
+    y tiene que poder reproducirse sabiendo que version de la configuracion la
+    produjo. Los `tope_*` son la peor senal que se permite cuando ese limitador
+    se activa, escritos con el vocabulario del esquema (`buy`, `hold`...).
+    """
+
+    # Senal base a partir del score (percentil 0-100 dentro de la cohorte).
+    umbral_compra_fuerte: float = Field(gt=0, le=100)
+    umbral_compra: float = Field(gt=0, le=100)
+    umbral_venta: float = Field(ge=0, lt=100)
+    umbral_venta_fuerte: float = Field(ge=0, lt=100)
+
+    # Limitadores.
+    tope_regimen_adverso: str
+    tope_regimen_lateral: str
+    riesgo_minimo: float = Field(ge=0, le=100)
+    tope_riesgo_alto: str
+    momentum_minimo: float
+    tope_momentum_negativo: str
+    valoracion_minima: float = Field(ge=0, le=100)
+    tope_valoracion: str
+    caida_score_maxima: float = Field(le=0)
+    probabilidad_minima: float = Field(ge=0, le=1)
+    tope_probabilidad_baja: str
+
+    # Regimen de mercado.
+    indice_antiguedad_maxima_dias: int = Field(gt=0)
+    ventana_drawdown: int = Field(gt=0)
+    ventana_volatilidad: int = Field(gt=0)
+    sesiones_por_ano: int = Field(gt=0)
+    drawdown_bajista: float = Field(gt=0, lt=1)
+    drawdown_lateral: float = Field(gt=0, lt=1)
+    volatilidad_lateral: float = Field(gt=0)
+
+    penalizacion_confianza_regimen: float = Field(gt=0, le=1)
+    horizonte_dias: int = Field(gt=0)
+
+    @model_validator(mode="after")
+    def _coherentes(self) -> "SenalesCfg":
+        if not (self.umbral_compra_fuerte > self.umbral_compra):
+            raise ValueError("umbral_compra_fuerte tiene que ser mayor que umbral_compra")
+        if not (self.umbral_venta > self.umbral_venta_fuerte):
+            raise ValueError("umbral_venta tiene que ser mayor que umbral_venta_fuerte")
+        if not (self.umbral_compra > self.umbral_venta):
+            raise ValueError("los umbrales de compra y venta se solapan")
+        if not (self.drawdown_bajista > self.drawdown_lateral):
+            raise ValueError("drawdown_bajista tiene que ser mayor que drawdown_lateral")
+        return self
+
+
 class Reglas(_Base):
     """El bloque de configuracion del documento, ya validado."""
 
@@ -309,6 +362,7 @@ class Reglas(_Base):
     panel: PanelCfg = Field(default_factory=PanelCfg)
     metricas: MetricasCfg
     validacion: ValidacionCfg
+    senales: SenalesCfg
 
     @cached_property
     def mercados_por_id(self) -> dict[str, MercadoCfg]:

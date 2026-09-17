@@ -333,7 +333,7 @@ muestra y después de costes**. Un resultado negativo se publica.
 
 ---
 
-## FASE 9 — Señales
+## FASE 9 — Señales ✅ COMPLETADA
 
 Motor de §25: score + variación + probabilidad + momentum + riesgo + valoración +
 régimen. Umbrales configurables. Detección de régimen de mercado (§26).
@@ -341,6 +341,36 @@ Metadatos MAR (autor, metodología, fecha, versión) desde el primer día.
 
 **Aceptación:** ningún umbral en el código; motivo estructurado en cada señal;
 la señal cambia al cambiar el régimen.
+
+`core/estrategia/senales.py`, `workers/pipeline/senales.py` y
+`scripts/calculate_signals.py`.
+
+**Cómo se decide.** El score fija una señal *base*; después se aplican
+**limitadores**, cada uno capaz de rebajarla pero nunca de subirla, y la señal
+se queda con el motivo del que de verdad mordió.
+
+La alternativa —sumar o promediar los siete componentes— produce compensaciones
+absurdas: un riesgo pésimo queda tapado por un fundamental excelente y la señal
+sale igual de buena. Un limitador no se compensa con nada, y además deja
+explicado el porqué.
+
+**El régimen mira tres cosas, no una**: tendencia, drawdown y volatilidad. Un
+índice puede estar sobre su media viniendo de caer un 25% con la volatilidad al
+triple, y eso no es un mercado alcista por mucho que el precio supere una línea.
+`DESCONOCIDO` se trata como adverso: si un índice deja de actualizarse —un fallo
+de datos— no puede empezar a producir compras fuertes en silencio.
+
+**El vocabulario de motivos es cerrado** porque el informe se construye
+contando. La pregunta a responder es «por qué no hubo ni una compra esta
+semana», y con texto libre no se agrupa.
+
+Dos fallos que encontraron los tests, no la lectura: la etapa elegía la última
+versión de modelo con ese nombre en vez de la que tenía los scores de esa fecha
+—habría emitido señales contra una versión sin puntuar, devolviendo cero sin
+explicar por qué—; y el test del motivo no distinguía esta implementación de la
+ingenua hasta que se añadió el caso de un limitador que se evalúa y no muerde.
+Ese caso se comprobó mutando el código: con la versión ingenua falla, y los
+otros catorce pasan.
 
 ---
 
