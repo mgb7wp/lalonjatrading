@@ -442,7 +442,7 @@ un segundo sobre el universo completo; deduplicación por empresa (D-12).
 
 ---
 
-## FASE 12 — Usuarios
+## FASE 12 — Usuarios ✅ COMPLETADA
 
 Registro, login, recuperación de contraseña, sesiones, perfil. Planes
 FREE/PRO/PREMIUM modelados y aplicados por dependencia, aunque todos empiecen en
@@ -450,6 +450,33 @@ FREE. Sin pagos todavía.
 
 **Aceptación:** `SECURITY.md` escrito; rate limiting activo; ningún secreto en el
 repositorio; los límites de plan se comprueban en un único sitio.
+
+`backend/seguridad.py`, `backend/limites.py`, `backend/api/deps.py`,
+`backend/api/v1/auth.py` y [SECURITY.md](SECURITY.md).
+
+**Argon2id** con el perfil de OWASP, y recifrado automático al entrar cuando los
+parámetros suben: así se encarece el hash sin pedirle a nadie que cambie de
+contraseña.
+
+**Cada token declara su propósito** (`acceso`, `refresco`, `reinicio`) y se
+verifica al leerlo. Sin eso, el token de vida larga valdría para llamar a
+cualquier endpoint y el que viaja por correo serviría para todo. El refresco
+**rota**: si alguien roba uno y lo usa, el legítimo deja de funcionar y el robo
+se nota.
+
+**No se puede averiguar quién tiene cuenta.** Misma respuesta para «no existe» y
+«contraseña incorrecta», y **mismo tiempo**: cuando el correo no existe se
+verifica igualmente contra un hash señuelo, porque si uno inexistente responde en
+2 ms y uno real en los 90 ms que cuesta Argon2, el reloj delata cuáles existen.
+
+**El limitador falla cerrado.** Si Redis no responde se rechaza con 503 en vez de
+dejar pasar: un limitador que se apaga cuando su dependencia cae da barra libre
+para probar contraseñas justo el día que alguien tumba Redis a propósito.
+
+Pendiente y escrito como tal en `SECURITY.md`: verificación de correo, segundo
+factor, auditoría de accesos y rotación de `JWT_SECRET`. El envío del enlace de
+reinicio depende de la FASE 15; en producción **no se emite**, porque existir a
+medias sería peor que no existir.
 
 ---
 

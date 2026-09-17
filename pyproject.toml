@@ -38,6 +38,10 @@ backend = [
     "alembic>=1.13,<2",
     "psycopg[binary]>=3.1,<4",
     "argon2-cffi>=23.1",
+    # Valida sintaxis y dominio del correo. Se declara en lugar de improvisar
+    # una expresion regular: las de correo escritas a mano rechazan direcciones
+    # validas y aceptan basura, y eso deja gente fuera sin saber por que.
+    "email-validator>=2.1",
     "pyjwt>=2.8,<3",
     "redis>=5,<6",
     "httpx>=0.27",
