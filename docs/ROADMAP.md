@@ -492,13 +492,45 @@ cifras que no estaban en la entrada.
 
 ---
 
-## FASE 17 — Frontend MVP
+## FASE 17 — Frontend MVP 🔄 LA MITAD QUE NO NECESITA LOGIN
 
 Las nueve páginas de §39, funcionales y sin diseño elaborado. Dashboard (§40) y
 página de valor (§41). Disclaimers visibles (§44).
 
 **Aceptación:** un usuario puede registrarse, buscar un valor, ver su análisis,
 crear una cartera y añadir a watchlist, sin tocar la API a mano.
+
+- [x] **Panel (§40)**: estado, mercados, mejor puntuados, los que más han
+      mejorado y los que más han caído.
+- [x] **Página de valor (§41)**: score por pilares y sub-scores, qué sostiene y
+      qué lastra, cambio a 30 días, señal con sus metadatos MAR, fundamentales
+      y técnico. Cada bloque dice si falta y por qué.
+- [x] **Rankings** (las diez vistas, filtrables por mercado) y **screener**.
+- [x] **Aviso legal (§44)** en todas las páginas, no escondido en un enlace.
+- [ ] Registro, cartera y watchlist: **dependen de la FASE 12**. Sin usuarios no
+      hay nada que guardar, así que la aceptación de esta fase no se puede
+      cumplir hasta entonces.
+
+**Decisiones visuales que no son de gusto:**
+
+El score va en un medidor de **un solo tono**, claro a oscuro, y no en un
+semáforo. Pintar de rojo un 20 y de verde un 80 convertiría un percentil —«está
+por debajo de sus comparables»— en un juicio de valor que el número no hace. Ese
+juicio lo emite el motor de señales, llega aparte y va etiquetado.
+
+Las señales y el régimen usan **colores de estado reservados, siempre con glifo
+y texto**. Dos de los cuatro estados no llegan a 3:1 de contraste sobre la
+superficie clara, y además una recomendación de inversión tiene que poder leerse
+sin interpretar un color.
+
+El modo oscuro se **elige**: sus valores son pasos propios sobre la superficie
+oscura, no un negativo del claro.
+
+**Tres fallos que solo aparecieron al renderizar y mirar**, no al compilar: el
+relleno del medidor era un `<span>` en línea, así que `height: 100%` no le
+aplicaba y las barras salían vacías; el screener pintaba la columna de score dos
+veces al filtrar por `overall`; y `select`, `input` y `button` calculan su altura
+distinto y salían escalonados en la fila de filtros.
 
 ---
 

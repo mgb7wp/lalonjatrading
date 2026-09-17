@@ -1,0 +1,240 @@
+/* Tokens del sistema visual.
+ *
+ * El modo oscuro se ELIGE, no se invierte: sus valores son pasos propios sobre
+ * la superficie oscura, no un negativo del claro. Se declara en dos ambitos
+ * —la preferencia del sistema y el interruptor explicito— y el interruptor
+ * tiene que ganar en los dos sentidos.
+ */
+:root {
+  color-scheme: light;
+
+  --superficie: #fcfcfb;
+  --superficie-2: #f4f4f1;
+  --borde: #e2e2dd;
+  --tinta: #0b0b0b;
+  --tinta-2: #52514e;
+  --tinta-3: #78776f;
+
+  /* Magnitud (el score es 0-100): un solo tono, claro -> oscuro. Nunca arcoiris. */
+  --escala-100: #cde2fb;
+  --escala-300: #6da7ec;
+  --escala-450: #2a78d6;
+  --escala-600: #184f95;
+
+  /* Estado. Reservados: no se reutilizan para "una serie mas". */
+  --bueno: #0ca30c;
+  --aviso: #fab219;
+  --serio: #ec835a;
+  --critico: #d03b3b;
+
+  --radio: 8px;
+  --sombra: 0 1px 2px rgba(0, 0, 0, 0.04), 0 2px 8px rgba(0, 0, 0, 0.04);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:where(:not([data-theme="light"])) {
+    color-scheme: dark;
+    --superficie: #1a1a19;
+    --superficie-2: #232322;
+    --borde: #35352f;
+    --tinta: #ffffff;
+    --tinta-2: #c3c2b7;
+    --tinta-3: #97968c;
+    --escala-100: #104281;
+    --escala-300: #2a78d6;
+    --escala-450: #3987e5;
+    --escala-600: #86b6ef;
+    --sombra: none;
+  }
+}
+
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --superficie: #1a1a19;
+  --superficie-2: #232322;
+  --borde: #35352f;
+  --tinta: #ffffff;
+  --tinta-2: #c3c2b7;
+  --tinta-3: #97968c;
+  --escala-100: #104281;
+  --escala-300: #2a78d6;
+  --escala-450: #3987e5;
+  --escala-600: #86b6ef;
+  --sombra: none;
+}
+
+* { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  background: var(--superficie);
+  color: var(--tinta);
+  font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+  font-size: 15px;
+  line-height: 1.55;
+  -webkit-font-smoothing: antialiased;
+}
+
+a { color: inherit; }
+
+h1, h2, h3 { line-height: 1.25; margin: 0 0 0.4em; font-weight: 650; }
+h1 { font-size: 1.6rem; letter-spacing: -0.015em; }
+h2 { font-size: 1.15rem; margin-top: 2rem; }
+h3 { font-size: 0.95rem; }
+
+.envoltorio { max-width: 1120px; margin: 0 auto; padding: 0 16px; }
+
+/* Cabecera y navegacion */
+.cabecera {
+  border-bottom: 1px solid var(--borde);
+  background: var(--superficie);
+  position: sticky;
+  top: 0;
+  z-index: 10;
+}
+.cabecera-fila {
+  display: flex;
+  align-items: center;
+  gap: 24px;
+  height: 56px;
+  flex-wrap: wrap;
+}
+.marca { font-weight: 700; letter-spacing: -0.02em; text-decoration: none; }
+.marca span { color: var(--tinta-3); font-weight: 400; }
+.nav { display: flex; gap: 18px; font-size: 0.92rem; }
+.nav a { color: var(--tinta-2); text-decoration: none; padding: 4px 0; }
+.nav a:hover { color: var(--tinta); }
+
+main { padding: 28px 0 56px; }
+
+/* Tarjetas */
+.rejilla {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(230px, 1fr));
+  gap: 12px;
+}
+.tarjeta {
+  background: var(--superficie);
+  border: 1px solid var(--borde);
+  border-radius: var(--radio);
+  padding: 14px 16px;
+  box-shadow: var(--sombra);
+}
+.etiqueta {
+  font-size: 0.74rem;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--tinta-3);
+  font-weight: 600;
+}
+/* Numero protagonista: tabular para que no baile al actualizarse. */
+.cifra {
+  font-size: 1.85rem;
+  font-weight: 680;
+  letter-spacing: -0.02em;
+  font-variant-numeric: tabular-nums;
+  margin-top: 2px;
+}
+.apunte { color: var(--tinta-2); font-size: 0.85rem; }
+
+/* Tablas */
+.desliza { overflow-x: auto; }
+table { border-collapse: collapse; width: 100%; font-size: 0.9rem; }
+th, td { padding: 9px 12px; text-align: left; white-space: nowrap; }
+th {
+  font-size: 0.74rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--tinta-3);
+  border-bottom: 1px solid var(--borde);
+  font-weight: 600;
+}
+td { border-bottom: 1px solid var(--borde); }
+tbody tr:hover { background: var(--superficie-2); }
+.num { text-align: right; font-variant-numeric: tabular-nums; }
+
+/* Medidor de score: magnitud, un solo tono. El extremo del dato se redondea
+ * 4px y se ancla en la linea base; el canal va recesivo. */
+.medidor {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 132px;
+}
+.medidor-canal {
+  flex: 1;
+  height: 7px;
+  background: var(--superficie-2);
+  border-radius: 4px;
+  overflow: hidden;
+}
+/* `display: block` no es opcional: un <span> es en linea y `height` no le
+ * aplica, asi que el relleno salia invisible y el medidor parecia vacio.
+ * Se veia al renderizar, no al compilar. */
+.medidor-relleno { display: block; height: 100%; border-radius: 0 4px 4px 0; }
+.medidor-valor { font-variant-numeric: tabular-nums; font-weight: 640; min-width: 34px; }
+
+/* Insignias de estado: SIEMPRE con glifo y texto. El color no carga solo con
+ * el significado, entre otras cosas porque dos de los cuatro estados no llegan
+ * a 3:1 sobre la superficie clara. */
+.insignia {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 2px 9px;
+  border-radius: 999px;
+  font-size: 0.78rem;
+  font-weight: 650;
+  border: 1px solid;
+  white-space: nowrap;
+}
+.insignia-glifo { font-size: 0.85em; }
+
+.bloque-falta {
+  border: 1px dashed var(--borde);
+  border-radius: var(--radio);
+  padding: 14px 16px;
+  color: var(--tinta-2);
+  font-size: 0.9rem;
+  background: var(--superficie-2);
+}
+
+.frescura { color: var(--tinta-3); font-size: 0.78rem; font-weight: 400; }
+
+.aviso-legal {
+  border-top: 1px solid var(--borde);
+  margin-top: 48px;
+  padding: 16px 0 40px;
+  font-size: 0.82rem;
+  color: var(--tinta-2);
+}
+
+.formulario { display: flex; gap: 10px; flex-wrap: wrap; align-items: flex-end; }
+label { display: block; font-size: 0.78rem; color: var(--tinta-2); margin-bottom: 3px; }
+select, input, button {
+  font: inherit;
+  font-size: 0.9rem;
+  /* Altura fija: `select`, `input` y `button` la calculan distinto y los tres
+   * en una fila salen escalonados. Se ve enseguida y no se deduce del codigo. */
+  height: 34px;
+  padding: 0 10px;
+  border-radius: 6px;
+  border: 1px solid var(--borde);
+  background: var(--superficie);
+  color: var(--tinta);
+}
+button { cursor: pointer; font-weight: 600; }
+button:hover { background: var(--superficie-2); }
+
+.vacio { color: var(--tinta-2); font-style: italic; }
+.error {
+  border: 1px solid var(--critico);
+  border-radius: var(--radio);
+  padding: 14px 16px;
+  color: var(--tinta);
+}
+
+@media (max-width: 620px) {
+  .cabecera-fila { height: auto; padding: 10px 0; }
+  h1 { font-size: 1.35rem; }
+}

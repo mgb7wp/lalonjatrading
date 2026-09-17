@@ -309,7 +309,7 @@ def _score_en(bd: Session, valor: Security, modelo: str, corte: dt.date) -> Scor
 
 def _bloque_score(fila: Score | None, modelo: str, corte: dt.date) -> Bloque[Puntuacion]:
     if fila is None or fila.overall is None:
-        return Bloque.falta(f"el valor no esta puntuado por el modelo '{modelo}'")
+        return Bloque.falta(f"el valor no está puntuado por el modelo '{modelo}'")
 
     disponibles = set(fila.available_pillars or [])
     pilares = {p: _f(getattr(fila, p)) for p in PILARES}
@@ -348,7 +348,7 @@ def _bloque_senal(
         .limit(1)
     ).first()
     if fila is None:
-        return Bloque.falta("no se ha emitido ninguna senal para este valor")
+        return Bloque.falta("no se ha emitido ninguna señal para este valor")
     return Bloque.con(
         SenalPublicada(
             fecha=fila.date,
@@ -445,6 +445,7 @@ def analisis(
         # suficientes. Se declara ausente en lugar de omitir el bloque: quien
         # consume la API tiene que poder ver que existe y por que esta vacio.
         prediccion=Bloque.falta(
-            "sin modelo estadistico: aplazado por D-7 hasta tener universo >= 1000 y 15 anos"
+            "sin modelo estadístico: aplazado por D-7 hasta tener un universo de "
+            "1.000 valores y 15 años de histórico"
         ),
     )
