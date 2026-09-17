@@ -188,15 +188,15 @@ def refrescar(datos: Refresco, bd: BD) -> Tokens:
         cuerpo = leer(datos.refresco, Proposito.REFRESCO)
     except TokenInvalido as exc:
         raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED, detail="token de refresco invalido"
+            status_code=status.HTTP_401_UNAUTHORIZED, detail="token de refresco inválido"
         ) from exc
 
     if _esta_revocado(cuerpo["jti"]):
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="sesion cerrada")
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="sesión cerrada")
 
     usuario = bd.scalars(select(User).where(User.id == int(cuerpo["sub"]))).first()
     if usuario is None or not usuario.is_active:
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="sesion invalida")
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="sesión inválida")
 
     # Rotacion: el refresco usado se revoca al emitir el nuevo. Si alguien roba
     # uno y lo usa, el legitimo deja de valer y el robo se nota.
@@ -245,7 +245,7 @@ def confirmar_reinicio(datos: ConfirmacionReinicio, bd: BD) -> Tokens:
         cuerpo = leer(datos.token, Proposito.REINICIO)
     except TokenInvalido as exc:
         raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST, detail="enlace invalido o caducado"
+            status_code=status.HTTP_400_BAD_REQUEST, detail="enlace inválido o caducado"
         ) from exc
 
     if _esta_revocado(cuerpo["jti"]):
@@ -255,7 +255,7 @@ def confirmar_reinicio(datos: ConfirmacionReinicio, bd: BD) -> Tokens:
 
     usuario = bd.scalars(select(User).where(User.id == int(cuerpo["sub"]))).first()
     if usuario is None or not usuario.is_active:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="enlace invalido")
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="enlace inválido")
 
     try:
         usuario.password_hash = cifrar(datos.contrasena)

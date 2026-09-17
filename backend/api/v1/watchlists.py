@@ -267,7 +267,9 @@ def crear(bd: BD, usuario: Actual, limites: MisLimites, cuerpo: ListaNueva) -> L
     cuantas = bd.scalar(
         select(func.count()).select_from(Watchlist).where(Watchlist.user_id == usuario.id)
     )
-    comprobar_cupo(int(cuantas or 0), limites.watchlists, "listas de seguimiento")
+    comprobar_cupo(
+        int(cuantas or 0), limites.watchlists, "listas de seguimiento", "lista de seguimiento"
+    )
 
     lista = Watchlist(user_id=usuario.id, name=cuerpo.nombre)
     bd.add(lista)
@@ -350,7 +352,9 @@ def anadir(
         .select_from(WatchlistItem)
         .where(WatchlistItem.watchlist_id == lista.id)
     )
-    comprobar_cupo(int(cuantos or 0), limites.valores_por_watchlist, "valores por lista")
+    comprobar_cupo(
+        int(cuantos or 0), limites.valores_por_watchlist, "valores por lista", "valor por lista"
+    )
 
     bd.add(WatchlistItem(watchlist_id=lista.id, security_id=valor.id))
     try:
@@ -359,7 +363,7 @@ def anadir(
         bd.rollback()
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
-            detail=f"{valor.ticker} ya esta en esta lista",
+            detail=f"{valor.ticker} ya está en esta lista",
         ) from exc
     return _resumen(bd, lista)
 
@@ -381,7 +385,7 @@ def quitar(
     ).first()
     if fila is None:
         raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND, detail=f"{valor.ticker} no esta en esta lista"
+            status_code=status.HTTP_404_NOT_FOUND, detail=f"{valor.ticker} no está en esta lista"
         )
     bd.delete(fila)
     bd.commit()

@@ -346,8 +346,8 @@ def _resolver(
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
             detail=(
-                f"no hay tipo de cambio {divisa} -> {cartera.base_currency} en o antes de "
-                f"{cuerpo.fecha}; pasa el tuyo en `fx` (el del extracto del broker)"
+                f"no hay tipo de cambio {divisa} → {cartera.base_currency} en o antes de "
+                f"{cuerpo.fecha}; pasa el tuyo en `fx` (el del extracto del bróker)"
             ),
         )
     return valor, divisa, fx
@@ -385,7 +385,7 @@ def crear(bd: BD, usuario: Actual, limites: MisLimites, cuerpo: CarteraNueva) ->
     cuantas = bd.scalar(
         select(func.count()).select_from(Portfolio).where(Portfolio.user_id == usuario.id)
     )
-    comprobar_cupo(int(cuantas or 0), limites.carteras, "carteras")
+    comprobar_cupo(int(cuantas or 0), limites.carteras, "carteras", "cartera")
 
     cartera = Portfolio(
         user_id=usuario.id,
@@ -553,7 +553,7 @@ def corregir(
     ).first()
     if fila is None:
         raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND, detail="transaccion no encontrada"
+            status_code=status.HTTP_404_NOT_FOUND, detail="transacción no encontrada"
         )
 
     valor, divisa, fx = _resolver(bd, cartera, cuerpo)
@@ -591,7 +591,7 @@ def borrar_transaccion(
     ).first()
     if fila is None:
         raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND, detail="transaccion no encontrada"
+            status_code=status.HTTP_404_NOT_FOUND, detail="transacción no encontrada"
         )
     bd.delete(fila)
     bd.commit()
@@ -627,7 +627,7 @@ def fijar_objetivo(
         if not 0 <= peso <= 1:
             raise HTTPException(
                 status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-                detail=f"el peso objetivo de {ticker} esta fuera de [0, 1]",
+                detail=f"el peso objetivo de {ticker} está fuera de [0, 1]",
             )
         valor = _valor_por_ticker(bd, ticker)
         bd.add(

@@ -123,19 +123,19 @@ def _condicion(f: Filtro):
     if columna is None:
         validos = ", ".join(sorted([*CAMPOS, *CAMPOS_TEXTO]))
         raise HTTPException(
-            status_code=400, detail=f"campo desconocido '{f.campo}'. Validos: {validos}"
+            status_code=400, detail=f"campo desconocido '{f.campo}'. Válidos: {validos}"
         )
 
     if f.operador is Operador.ENTRE:
         if not isinstance(f.valor, list | tuple) or len(f.valor) != 2:
             raise HTTPException(
-                status_code=400, detail=f"'between' sobre '{f.campo}' necesita [minimo, maximo]"
+                status_code=400, detail=f"'between' sobre '{f.campo}' necesita [mínimo, máximo]"
             )
         return columna.between(f.valor[0], f.valor[1])
     if f.operador is Operador.EN:
         if not isinstance(f.valor, list | tuple) or not f.valor:
             raise HTTPException(
-                status_code=400, detail=f"'in' sobre '{f.campo}' necesita una lista no vacia"
+                status_code=400, detail=f"'in' sobre '{f.campo}' necesita una lista no vacía"
             )
         return columna.in_(list(f.valor))
 
@@ -165,7 +165,7 @@ def filtrar(peticion: Peticion, bd: BD) -> Respuesta:
     if peticion.orden not in CAMPOS:
         raise HTTPException(
             status_code=400,
-            detail=f"no se puede ordenar por '{peticion.orden}'. Validos: "
+            detail=f"no se puede ordenar por '{peticion.orden}'. Válidos: "
             f"{', '.join(sorted(CAMPOS))}",
         )
 

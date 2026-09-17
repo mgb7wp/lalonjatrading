@@ -30,7 +30,7 @@ _portador = HTTPBearer(auto_error=False, scheme_name="Bearer")
 
 NO_AUTENTICADO = HTTPException(
     status_code=status.HTTP_401_UNAUTHORIZED,
-    detail="hace falta iniciar sesion",
+    detail="hace falta iniciar sesión",
     headers={"WWW-Authenticate": "Bearer"},
 )
 
@@ -46,7 +46,7 @@ def usuario_actual(
     except TokenInvalido as exc:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="token invalido o caducado",
+            detail="token inválido o caducado",
             headers={"WWW-Authenticate": "Bearer"},
         ) from exc
 
@@ -79,22 +79,27 @@ def requiere_plan(minimo: SubscriptionPlan):
         if not al_menos(usuario.subscription_plan, minimo):
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
-                detail=f"esta funcion necesita el plan {minimo.value} o superior",
+                detail=f"esta función necesita el plan {minimo.value} o superior",
             )
         return usuario
 
     return dependencia
 
 
-def comprobar_cupo(actuales: int, maximo: int, que: str) -> None:
+def comprobar_cupo(actuales: int, maximo: int, plural: str, singular: str | None = None) -> None:
     """Un cupo alcanzado es 409, no 403.
 
     403 significa "no puedes"; aqui si puedes, pero ya has gastado lo tuyo. La
     diferencia importa para quien integra: uno se arregla cambiando de plan y el
     otro borrando algo.
+
+    `singular` existe porque este texto se LEE en la web, y el plan gratuito
+    tiene cupo de uno: "el máximo de 1 carteras" esta mal escrito, y un producto
+    que no sabe concordar un numero con su sustantivo se nota.
     """
     if actuales >= maximo:
+        que = singular if maximo == 1 and singular else plural
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
-            detail=f"has alcanzado el maximo de {maximo} {que} de tu plan",
+            detail=f"has alcanzado el máximo de {maximo} {que} de tu plan",
         )

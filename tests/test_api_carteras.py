@@ -640,7 +640,7 @@ def test_el_limite_de_carteras_del_plan_es_un_409_y_no_un_403(cliente):
 
     r = cliente.post("/api/v1/portfolios", json={"nombre": "Segunda"}, headers=cab)
     assert r.status_code == 409, "FREE tiene una sola cartera"
-    assert "maximo" in r.json()["detail"]
+    assert "máximo" in r.json()["detail"]
 
 
 def test_la_cartera_de_otro_no_se_puede_ni_confirmar_que_existe(cliente):
@@ -682,3 +682,16 @@ def test_un_ticker_desconocido_se_rechaza_con_su_motivo(cliente):
     )
     assert r.status_code == 422
     assert "NOEXISTE" in r.json()["detail"]
+
+
+def test_el_mensaje_del_cupo_concuerda_en_numero(cliente):
+    """«el máximo de 1 carteras» está mal escrito, y el plan gratuito tiene cupo
+    de uno, así que es el mensaje que más gente va a leer."""
+    cab = _cabeceras(cliente, "concordancia@pruebas.example.com")
+    _cartera(cliente, cab, "Primera")
+
+    detalle = cliente.post("/api/v1/portfolios", json={"nombre": "Segunda"}, headers=cab).json()[
+        "detail"
+    ]
+    assert "1 cartera de tu plan" in detalle
+    assert "1 carteras" not in detalle
