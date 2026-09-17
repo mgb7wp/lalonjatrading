@@ -316,7 +316,56 @@ anti-sesgo en verde.
 
 ---
 
-## FASE 8 — Machine Learning *(condicionada)*
+## FASE 8 — Machine Learning 🔄 INFRAESTRUCTURA LISTA, BLOQUEADA POR D-7
+
+**Estado medido, no recordado:** `ml.condiciones.medir()` lo comprueba contra la
+base de datos. Hoy: **138 valores de 1.000 (13 %)** y **8 años de histórico de
+los 15** exigidos. Ninguna de las dos condiciones se cumple.
+
+Lo que hay construido y probado:
+
+- [x] **`ml/particion.py` — walk-forward purgado con embargo.** Es la pieza que
+      decide si un backtest de modelo significa algo.
+
+      Una observación aquí no es un punto, es un **intervalo**: preguntar el 1 de
+      enero «¿batirá al índice en tres meses?» da una etiqueta que no se conoce
+      hasta abril. Con la partición ingenua, esa observación entrena mientras su
+      resultado cae dentro del periodo de prueba — el modelo ve el futuro
+      mientras «aprende».
+
+      Hay un test que construye la partición ingenua y **comprueba que sí
+      filtra**, para que el test de que no hay fuga no esté pasando por
+      casualidad.
+
+      Sobre el embargo, dicho claro: en walk-forward estricto **no muerde nunca**,
+      porque no hay entrenamiento posterior a la prueba. Se implementa para la
+      variante de validación cruzada y hay un test que lo demuestra mordiendo
+      allí. Decir «protegido por embargo» donde no toca nada sería una
+      tranquilidad falsa.
+- [x] **`ml/condiciones.py` — D-7 ejecutable.** Mientras la decisión viva solo en
+      un documento, el día que alguien tenga ganas de entrenar se salta sin
+      querer. `exigir()` lanza una excepción, no un aviso: un aviso en el log se
+      lee una vez y se ignora la siguiente.
+- [x] **`ml/seleccion.py` — la puerta de aceptación.** Un modelo sustituye al
+      baseline solo si lo bate fuera de muestra, después de costes, por un margen
+      y **en la mayoría de los pliegues**. Esto último es lo que atrapa el caso
+      que más engaña: ganar de media gracias a un único periodo afortunado
+      mientras se pierde en cuatro de cinco.
+
+      Es código y no una norma escrita porque una norma se cumple cuando uno está
+      tranquilo; después de tres semanas peleando con un modelo, «bate por 0,3
+      dentro de muestra» empieza a parecer suficiente.
+- [ ] **Targets, features y entrenamiento.** No se escriben todavía, y no por
+      falta de tiempo: con 138 valores y ventanas solapadas de tres meses hay
+      decenas de observaciones independientes, menos que los parámetros de
+      cualquier modelo útil. Lo que salga de ahí memoriza el periodo.
+
+      Además, los targets `outperform_*` piden un benchmark de **retorno total**
+      (D-5) y los cinco que hay son índices de precio: entrenar contra ellos
+      premiaría sistemáticamente a las empresas que pagan dividendo.
+
+**Para desbloquear** hacen falta datos, no código: ampliar el universo hacia los
+1.000 valores y descargar 15 años en lugar de 8 (`--anos 15`).
 
 **No arranca por calendario, sino cuando se cumplan las dos condiciones de D-7:**
 universo ≥ 1.000 valores limpios **y** ≥ 15 años de histórico en dos mercados.
