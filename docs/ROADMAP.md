@@ -374,7 +374,7 @@ otros catorce pasan.
 
 ---
 
-## FASE 10 — API de análisis
+## FASE 10 — API de análisis ✅ COMPLETADA
 
 `GET /stocks/{ticker}/analysis` con todos los componentes de §27, cada bloque con
 su disponibilidad y frescura. Explicabilidad de §28: factores positivos y
@@ -382,6 +382,30 @@ negativos, y qué ha cambiado en 30 días descompuesto por pilar.
 
 **Aceptación:** el endpoint responde para un valor de cada mercado; un pilar no
 disponible se declara como tal y **no** se rellena.
+
+`backend/api/v1/stocks.py`.
+
+**Cada bloque se envuelve** en `{disponible, motivo, frescura, datos}`. Un
+`null` suelto no distingue «no lo sabemos» de «vale cero», y esa diferencia es
+justo la que decide si alguien puede fiarse del número. Un pilar ausente sale
+declarado con su motivo; imputar la media convertiría «no lo sabemos» en «es del
+montón», que es otra afirmación y además falsa.
+
+El bloque de **predicción se declara ausente en vez de omitirse**: D-7 aplaza el
+modelo estadístico, y quien consuma la API tiene que poder ver que ese bloque
+existe y por qué está vacío.
+
+**El corte temporal es el punto delicado.** El parámetro `fecha` responde a «qué
+se sabía aquel día», y es el sitio exacto donde RT-2 avisa de que el sesgo de
+anticipación se reintroduce al añadir la capa SaaS: un endpoint que lee la tabla
+de precios sin corte devuelve el futuro sin que nadie lo note. Todas las
+consultas filtran por esa fecha, los fundamentales por `publication_date` y no
+por `period_end` —lo que importa es cuándo se supo—, y hay un test con un precio
+plantado el día siguiente al corte que falla si aparece.
+
+Un cambio a 30 días que no se puede calcular se declara `no_comparable` en lugar
+de devolver 0: un cero diría «no se movió», que es una afirmación sobre datos
+que no existen.
 
 ---
 
