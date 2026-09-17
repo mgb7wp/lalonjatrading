@@ -409,7 +409,7 @@ que no existen.
 
 ---
 
-## FASE 11 — Rankings y screener
+## FASE 11 — Rankings y screener 🔄 CASI
 
 Los diez rankings de §32 (incluidos «most improved» y «biggest drops», que
 necesitan el historial de la FASE 6) y el screener de §31 con todos sus
@@ -417,6 +417,28 @@ operadores. Screeners guardados. Caché de rankings.
 
 **Aceptación:** top 20 por mercado; screener con filtros combinados por debajo de
 un segundo sobre el universo completo; deduplicación por empresa (D-12).
+
+- [x] **Los diez rankings** (`backend/api/v1/rankings.py`), con `mas_mejorado` y
+      `mayor_caida` comparando dos fotos del score. Sin foto anterior devuelven
+      vacío en lugar del ranking por score: eso sería responder otra pregunta
+      sin avisar.
+- [x] **Deduplicación por empresa (D-12).** Si el ADR y la acción local aparecen
+      los dos, quien construya una cartera con ese top se concentra sin darse
+      cuenta. Se conserva la línea **principal**, no la de más score — no son
+      intercambiables: distinta divisa, distinto huso, distinta liquidez.
+
+      El test se comprobó mutando el código: con la regla del score fallan tres
+      tests. Antes de eso el test existía pero **no discriminaba**, porque el
+      ADR tenía menos score que la local y ambas reglas coincidían.
+- [x] **Screener de §31** con los ocho operadores. Los campos van por **lista
+      blanca**: resolverlos con `getattr` convertiría una petición en acceso
+      arbitrario al esquema. Un operador mal usado da 400, no un 500.
+- [x] La respuesta distingue `n` de `total`: «20 resultados» no dice si hay 20 o
+      400.
+- [ ] **Screeners guardados.** Dependen de usuarios: `saved_screener` tiene
+      `user_id` y la autenticación es la FASE 12.
+- [ ] **Caché de rankings.** Con 138 valores no hace falta todavía; medirlo
+      antes de añadir una capa que hay que invalidar.
 
 ---
 
