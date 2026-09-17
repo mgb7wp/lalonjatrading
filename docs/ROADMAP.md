@@ -590,10 +590,44 @@ que es una migración de otra fase.
 
 ---
 
-## FASE 14 — Watchlists
+## FASE 14 — Watchlists ✅ COMPLETADA
 
 Con score, variación de score, variación de precio, señal y probabilidad por
 valor (§35).
+
+`backend/api/v1/watchlists.py`. Crear listas, añadir y quitar valores, y la
+vista de vigilancia con las cinco columnas.
+
+**Una consulta por columna, no una por valor.** Lo natural sería reutilizar los
+ayudantes de `stocks.py` en un bucle; con una lista PREMIUM de 250 valores eso
+son más de mil consultas para pintar una pantalla. Aquí son cinco consultas
+tenga la lista tres valores o doscientos cincuenta, y hay un test que cuenta las
+consultas y falla si el número crece con el tamaño de la lista.
+
+**Una variación que no se puede calcular sale `None` con su motivo, no cero.**
+Un cero afirma «no se movió», que es una afirmación sobre datos que no existen.
+Misma regla que en §27 y en las carteras.
+
+**La probabilidad de §35 se declara bloqueada por D-7** en lugar de omitirse. La
+columna está en la respuesta y trae escrito por qué viene vacía: quien consuma
+la API tiene que poder ver que el dato está previsto, no encontrarse un hueco y
+suponer que se le olvidó a alguien.
+
+**Aquí NO se deduplica por empresa.** En los rankings, tener la acción local y
+su ADR es un defecto (D-12): la misma empresa ocupa dos puestos. En una
+watchlist es una elección — si alguien ha puesto las dos líneas, quiere ver las
+dos — y quitarle una sería decidir por él.
+
+La foto anterior se busca desde la última fecha puntuada y no desde hoy: si el
+último cálculo es de hace una semana, comparar contra hace 30 días naturales
+mediría 37 días y no 30.
+
+Cinco mutaciones comprobadas: variación a cero, una consulta por valor, un
+`None` ordenando como un cero, quitar el corte temporal y omitir la
+probabilidad. **La del orden sobrevivió la primera vez**: con solo scores
+positivos, tratar un `None` como cero da el mismo orden que tratarlo como
+ausente. Hubo que ordenar por variación de score —que sí puede ser negativa—
+para que el test distinguiera una implementación de la otra.
 
 ---
 
