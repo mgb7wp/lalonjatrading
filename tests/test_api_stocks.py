@@ -249,3 +249,49 @@ def test_un_cambio_que_no_se_puede_calcular_se_declara(entorno):
 def test_un_ticker_que_no_existe_da_404(entorno):
     cliente, _ = entorno
     assert cliente.get("/api/v1/stocks/NOEXISTE/analysis").status_code == 404
+
+
+# --- Busqueda (FASE 17: "buscar un valor" sin tocar la API a mano) ---------
+
+
+def test_la_busqueda_encuentra_por_ticker_y_por_nombre(entorno, bd_con_referencia):
+    cliente, ticker = entorno
+    with sa.orm.Session(bd_con_referencia) as s:
+        nombre = s.scalars(sa.select(Security.name).where(Security.ticker == ticker)).first()
+
+    por_ticker = cliente.get("/api/v1/stocks", params={"q": ticker}).json()
+    assert any(f["ticker"] == ticker for f in por_ticker)
+
+    por_nombre = cliente.get("/api/v1/stocks", params={"q": nombre.split()[0]}).json()
+    assert any(f["ticker"] == ticker for f in por_nombre)
+
+
+def test_la_busqueda_no_devuelve_indices(entorno, bd_con_referencia):
+    """Un indice no se compra, asi que no pinta nada en un buscador de valores."""
+    cliente, _ = entorno
+    filas = cliente.get("/api/v1/stocks", params={"q": "a", "n": 50}).json()
+    assert filas, "la busqueda tiene que devolver algo"
+    with sa.orm.Session(bd_con_referencia) as s:
+        indices = set(
+            s.scalars(
+                sa.select(Security.ticker).where(Security.asset_type == AssetType.INDEX.value)
+            ).all()
+        )
+    assert not ({f["ticker"] for f in filas} & indices)
+
+
+def test_el_que_empieza_por_lo_buscado_va_antes(entorno):
+    """Quien escribe «ACS» quiere ACS.MC, no la tercera empresa cuyo nombre lo
+    lleva dentro."""
+    cliente, _ = entorno
+    filas = cliente.get("/api/v1/stocks", params={"q": "ACS"}).json()
+    assert filas
+    assert filas[0]["ticker"].upper().startswith("ACS")
+
+
+def test_un_comodin_escrito_por_el_usuario_se_busca_como_caracter(entorno):
+    """Sin escapar, un `%` convierte la busqueda en «todo» y devuelve el universo
+    entero como si hubiera coincidido con algo."""
+    cliente, _ = entorno
+    assert cliente.get("/api/v1/stocks", params={"q": "%"}).json() == []
+    assert cliente.get("/api/v1/stocks", params={"q": "_"}).json() == []

@@ -31,7 +31,7 @@ from typing import Annotated, Generic, TypeVar
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, ConfigDict
-from sqlalchemy import select
+from sqlalchemy import func, or_, select
 from sqlalchemy.orm import Session
 
 from ...db.models import (
@@ -43,6 +43,7 @@ from ...db.models import (
     Signal,
     TechnicalIndicator,
 )
+from ...db.models.enums import AssetType
 from ...db.session import sesion
 
 router = APIRouter(prefix="/stocks", tags=["stocks"])
@@ -73,6 +74,91 @@ SUBSCORES = (
     "volatility",
     "volume",
 )
+
+
+class Encontrado(BaseModel):
+    """Una linea de resultado de busqueda. Lo justo para elegir y navegar."""
+
+    ticker: str
+    nombre: str
+    mercado: str
+    divisa: str
+    sector: str | None
+    #: Se publica porque importa al elegir: entre la accion local y su ADR de la
+    #: misma empresa, la principal es la que de verdad se puede operar (D-12).
+    linea_principal: bool
+
+
+#: Tope de resultados. Una busqueda que devuelve el universo entero no es una
+#: busqueda, es un volcado, y ademas tarda.
+TOPE_BUSQUEDA = 50
+
+
+@router.get("", response_model=list[Encontrado], summary="Buscar un valor por ticker o nombre")
+def buscar(
+    bd: BD,
+    q: Annotated[str, Query(min_length=1, max_length=64, description="Ticker o parte del nombre")],
+    mercado: Annotated[str | None, Query(description="Acota a un mercado")] = None,
+    n: Annotated[int, Query(ge=1, le=TOPE_BUSQUEDA, description="Cuantos resultados")] = 20,
+) -> list[Encontrado]:
+    """Busca por ticker, nombre o ISIN, sin distinguir mayusculas.
+
+    **Los acentos SI cuentan**: `ilike` no los normaliza. Hacerlo pide la
+    extension `unaccent` de Postgres y un indice aparte, y con un universo de
+    138 valores no compensa todavia. Se dice aqui en lugar de prometerlo.
+
+    **Se buscan tambien los valores dados de baja.** Alguien puede tener en
+    cartera algo que ya no cotiza, y no encontrarlo seria justo el sesgo de
+    supervivencia (D-13) trasladado a la interfaz: la busqueda ensenaria solo las
+    empresas que sobrevivieron. Lo que si se excluyen son los indices, que no se
+    compran.
+
+    El patron va parametrizado y con los comodines escapados: sin eso, un `%` en
+    la busqueda del usuario convierte cualquier consulta en un recorrido de la
+    tabla entera.
+    """
+    aguja = q.strip()
+    if not aguja:
+        return []
+    # `\` escapa los comodines de LIKE para que un `%` escrito por el usuario se
+    # busque como caracter y no como "todo".
+    patron = "%" + aguja.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_") + "%"
+
+    consulta = select(Security).where(
+        Security.asset_type != AssetType.INDEX.value,
+        or_(
+            Security.ticker.ilike(patron, escape="\\"),
+            Security.name.ilike(patron, escape="\\"),
+            Security.isin.ilike(patron, escape="\\"),
+        ),
+    )
+    if mercado:
+        consulta = consulta.where(Security.market_id == mercado)
+
+    # El que empieza por lo buscado va antes que el que solo lo contiene: quien
+    # escribe "ACS" quiere ACS.MC y no la tercera empresa cuyo nombre lo lleva
+    # dentro. Despues, la linea principal antes que el ADR, y luego alfabetico.
+    empieza = func.upper(Security.ticker).startswith(aguja.upper())
+    filas = bd.scalars(
+        consulta.order_by(
+            empieza.desc(),
+            Security.is_primary_listing.desc(),
+            Security.active.desc(),
+            Security.ticker,
+        ).limit(n)
+    ).all()
+
+    return [
+        Encontrado(
+            ticker=v.ticker,
+            nombre=v.name,
+            mercado=v.market_id,
+            divisa=v.currency_code,
+            sector=v.sector,
+            linea_principal=v.is_primary_listing,
+        )
+        for v in filas
+    ]
 
 
 class Frescura(BaseModel):
