@@ -652,13 +652,14 @@ cifras que no estaban en la entrada.
 
 ---
 
-## FASE 17 — Frontend MVP 🔄 LA MITAD QUE NO NECESITA LOGIN
+## FASE 17 — Frontend MVP ✅ COMPLETADA
 
 Las nueve páginas de §39, funcionales y sin diseño elaborado. Dashboard (§40) y
 página de valor (§41). Disclaimers visibles (§44).
 
 **Aceptación:** un usuario puede registrarse, buscar un valor, ver su análisis,
-crear una cartera y añadir a watchlist, sin tocar la API a mano.
+crear una cartera y añadir a watchlist, sin tocar la API a mano. **Cumplida**, y
+comprobada dirigiendo un navegador de verdad por ese recorrido.
 
 - [x] **Panel (§40)**: estado, mercados, mejor puntuados, los que más han
       mejorado y los que más han caído.
@@ -667,9 +668,48 @@ crear una cartera y añadir a watchlist, sin tocar la API a mano.
       y técnico. Cada bloque dice si falta y por qué.
 - [x] **Rankings** (las diez vistas, filtrables por mercado) y **screener**.
 - [x] **Aviso legal (§44)** en todas las páginas, no escondido en un enlace.
-- [ ] Registro, cartera y watchlist: **dependen de la FASE 12**. Sin usuarios no
-      hay nada que guardar, así que la aceptación de esta fase no se puede
-      cumplir hasta entonces.
+- [x] **Registro y sesión**, **carteras** (crear, operar, ver valoración) y
+      **seguimiento** (§35 completo), más un **buscador** de valores por ticker,
+      nombre o ISIN.
+
+**El token nunca pisa el navegador.** Va en una cookie `httpOnly` y las llamadas
+a la API las hace el servidor de Next; lo que escribe pasa por acciones de
+servidor. La alternativa —el JWT en `localStorage`— convierte cualquier XSS en
+un robo de sesión, incluido el de una dependencia comprometida. El coste es que
+no hay `fetch` desde el cliente; a cambio los formularios funcionan aunque el
+JavaScript no haya cargado.
+
+El token se renueva en el **middleware**, que es el único sitio que puede
+escribir cookies: un componente de servidor puede leerlas pero no ponerlas. Se
+refresca solo cuando la cookie de acceso ha caducado, no «por si acaso», porque
+el refresco rota y renovar de más multiplica las ocasiones de pisarse. Queda
+escrita la limitación: dos navegaciones simultáneas justo al caducar pueden
+echar al usuario.
+
+**Tres fallos que solo aparecieron al levantarlo y mirarlo:**
+
+- Las tarjetas de la cartera usaban `<span>` para etiqueta y cifra. Los `span`
+  son en línea, así que la cifra se pintaba **al lado** de su etiqueta en vez de
+  debajo, y las cuatro tarjetas se desbordaban unas sobre otras. Compilaba
+  perfectamente. Es el mismo fallo que el relleno del medidor de la primera
+  mitad de esta fase.
+- La barra de navegación medía **778 px en una pantalla de 390**: con sesión
+  pasa de tres enlaces a siete más el correo. Ahora envuelve, y el correo se
+  oculta en móvil.
+- «Has alcanzado el máximo de 1 **carteras** de tu plan». El plan gratuito tiene
+  cupo de uno, así que ese es el mensaje que más gente iba a leer.
+
+Y una hipótesis **descartada**: los errores 418 de React que aparecían en el
+recorrido parecían venir de un `<form>` dentro de un `<p>`. Volviendo a ponerlo
+no se reproducen: venían de que la API estaba caída y el render fallaba. El
+`<div>` se queda porque el markup era inválido igual, pero no arregló lo que
+parecía.
+
+Recorrido comprobado de punta a punta con Chromium: registrarse, crear cartera,
+chocar con el cupo del plan, buscar un valor, verlo, seguirlo, registrar una
+compra con comisiones, verla en la valoración y cerrar sesión. Sin errores de
+página ni de consola, en claro y oscuro, y sin desbordamiento horizontal a
+390 px.
 
 **Decisiones visuales que no son de gusto:**
 

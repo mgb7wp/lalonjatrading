@@ -223,3 +223,117 @@ export function screener(cuerpo: Record<string, unknown>): Promise<RespuestaScre
     body: JSON.stringify(cuerpo),
   });
 }
+
+// --- Busqueda -------------------------------------------------------------
+
+export type Encontrado = {
+  ticker: string;
+  nombre: string;
+  mercado: string;
+  divisa: string;
+  sector: string | null;
+  linea_principal: boolean;
+};
+
+// --- Carteras (§33) -------------------------------------------------------
+
+export type CarteraResumen = {
+  id: number;
+  nombre: string;
+  descripcion: string | null;
+  divisa_base: string;
+  transacciones: number;
+};
+
+export type PosicionFila = {
+  ticker: string;
+  nombre: string;
+  sector: string | null;
+  pais: string | null;
+  cantidad: string;
+  coste: string;
+  coste_medio: string | null;
+  precio: string | null;
+  fecha_precio: string | null;
+  valor: string | null;
+  no_realizado: string | null;
+  realizado: string;
+  dividendos: string;
+  peso: number | null;
+  objetivo: number | null;
+  desviacion: number | null;
+  score: number | null;
+};
+
+export type TransaccionFila = {
+  id: number;
+  ticker: string;
+  tipo: string;
+  cantidad: string;
+  precio: string;
+  comisiones: string;
+  impuestos: string;
+  divisa: string;
+  fx: string | null;
+  fecha: string;
+  nota: string | null;
+};
+
+export type Valoracion = {
+  id: number;
+  nombre: string;
+  divisa_base: string;
+  fecha: string;
+  posiciones: PosicionFila[];
+  totales: {
+    valor: string;
+    coste: string;
+    no_realizado: string;
+    realizado: string;
+    dividendos: string;
+    gastos: string;
+    total: string;
+  };
+  exposicion_sector: Record<string, number>;
+  exposicion_pais: Record<string, number>;
+  diversificacion: {
+    posiciones: number;
+    hhi: number | null;
+    posiciones_efectivas: number | null;
+    mayor_peso: number | null;
+  };
+  score_medio: { valor: number | null; cobertura: number; fecha_datos: string | null };
+  sin_valorar: string[];
+};
+
+// --- Seguimiento (§35) ----------------------------------------------------
+
+export type ListaResumen = { id: number; nombre: string; valores: number };
+
+export type Vigilado = {
+  ticker: string;
+  nombre: string;
+  mercado: string;
+  sector: string | null;
+  score: number | null;
+  fecha_score: string | null;
+  variacion_score: number | null;
+  precio: number | null;
+  fecha_precio: string | null;
+  variacion_precio: number | null;
+  senal: string | null;
+  motivo_senal: string | null;
+  fecha_senal: string | null;
+  probabilidad: number | null;
+  motivos: Record<string, string>;
+};
+
+export type Lista = {
+  id: number;
+  nombre: string;
+  fecha: string;
+  modelo: string;
+  dias_variacion: number;
+  n: number;
+  valores: Vigilado[];
+};

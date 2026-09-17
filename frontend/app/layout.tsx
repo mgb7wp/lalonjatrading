@@ -2,7 +2,15 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import type { ReactNode } from "react";
 
+import { salir } from "./acciones";
+import { BotonAccion } from "@/components/formularios";
+import { usuarioActual } from "@/lib/sesion";
+
 import "./globals.css";
+
+// La cabecera lee la sesion, asi que ninguna pagina puede quedarse cacheada
+// estatica: se serviria con la sesion de otro.
+export const dynamic = "force-dynamic";
 
 export const metadata: Metadata = {
   title: "La Lonja — análisis cuantitativo de mercados",
@@ -10,7 +18,9 @@ export const metadata: Metadata = {
     "Rankings, screener y análisis por valor sobre un motor determinista y reproducible.",
 };
 
-export default function RootLayout({ children }: { children: ReactNode }) {
+export default async function RootLayout({ children }: { children: ReactNode }) {
+  const usuario = await usuarioActual();
+
   return (
     <html lang="es">
       <body>
@@ -23,6 +33,19 @@ export default function RootLayout({ children }: { children: ReactNode }) {
               <Link href="/">Panel</Link>
               <Link href="/rankings">Rankings</Link>
               <Link href="/screener">Screener</Link>
+              <Link href="/buscar">Buscar</Link>
+              {usuario ? (
+                <>
+                  <Link href="/cartera">Carteras</Link>
+                  <Link href="/seguimiento">Seguimiento</Link>
+                  <span className="apunte" title={`Plan ${usuario.plan}`}>
+                    {usuario.email}
+                  </span>
+                  <BotonAccion accion={salir}>Salir</BotonAccion>
+                </>
+              ) : (
+                <Link href="/entrar">Entrar</Link>
+              )}
             </nav>
           </div>
         </header>

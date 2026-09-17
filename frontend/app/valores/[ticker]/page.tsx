@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { notFound } from "next/navigation";
 
 import {
@@ -9,7 +10,10 @@ import {
   nombre,
   numero,
 } from "@/components/piezas";
+import { anadirASeguimiento } from "@/app/acciones";
+import { Formulario } from "@/components/formularios";
 import { ApiError, api, type Analisis } from "@/lib/api";
+import { usuarioActual } from "@/lib/sesion";
 
 export const dynamic = "force-dynamic";
 
@@ -42,6 +46,7 @@ export default async function Valor({ params }: { params: Promise<{ ticker: stri
   }
 
   const v = a.valor;
+  const dentro = (await usuarioActual()) !== null;
 
   return (
     <>
@@ -53,6 +58,19 @@ export default async function Valor({ params }: { params: Promise<{ ticker: stri
         {v.is_primary_listing ? "" : " · línea secundaria (no es la cotización principal)"}
         {v.active ? "" : " · dado de baja"}
       </p>
+
+      {/* La accion crea la lista si todavia no hay ninguna: "seguir un valor"
+          tiene que funcionar a la primera, y en que lista cae es un detalle de
+          organizacion, no una decision que haya que tomar antes. */}
+      {dentro ? (
+        <Formulario accion={anadirASeguimiento} etiquetaBoton="Seguir este valor">
+          <input type="hidden" name="ticker" value={v.ticker} />
+        </Formulario>
+      ) : (
+        <p className="apunte">
+          <Link href="/entrar">Entra</Link> para seguir este valor o añadirlo a una cartera.
+        </p>
+      )}
 
       <div className="rejilla" style={{ marginTop: 18 }}>
         <div className="tarjeta">

@@ -101,7 +101,26 @@ h3 { font-size: 0.95rem; }
 }
 .marca { font-weight: 700; letter-spacing: -0.02em; text-decoration: none; }
 .marca span { color: var(--tinta-3); font-weight: 400; }
-.nav { display: flex; gap: 18px; font-size: 0.92rem; }
+.nav {
+  display: flex;
+  gap: 18px;
+  font-size: 0.92rem;
+  /* Envuelve en lugar de desbordar. Con sesion la barra pasa de tres
+     elementos a siete mas el correo, y en un movil eso no cabe en una
+     linea por mucho que quepa en el portatil de quien lo programa. */
+  flex-wrap: wrap;
+  align-items: center;
+  row-gap: 8px;
+  min-width: 0;
+}
+/* El correo es lo unico de ancho impredecible: se recorta con puntos
+   suspensivos en vez de empujar a los demas fuera de la pantalla. */
+.nav .apunte {
+  max-width: 22ch;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
 .nav a { color: var(--tinta-2); text-decoration: none; padding: 4px 0; }
 .nav a:hover { color: var(--tinta); }
 
@@ -235,6 +254,58 @@ button:hover { background: var(--superficie-2); }
 }
 
 @media (max-width: 620px) {
-  .cabecera-fila { height: auto; padding: 10px 0; }
+  .cabecera-fila { height: auto; padding: 10px 0; gap: 12px; }
   h1 { font-size: 1.35rem; }
+  .nav { gap: 14px; font-size: 0.88rem; }
+  /* En movil el correo no aporta —quien mira su telefono sabe de quien es— y
+     se lleva media barra. El boton de salir si se queda. */
+  .nav .apunte { display: none; }
 }
+
+/* --- Sesion, formularios y carteras (FASE 17) --------------------------- */
+
+/* Formulario en columna, para el de entrar: un correo y una contrasena en
+   fila quedan estrechos y el error aparece a un lado en vez de debajo. */
+.formulario-vertical {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  align-items: stretch;
+}
+.formulario-vertical button { align-self: flex-start; }
+
+/* Las etiquetas envuelven su control, asi que pulsar el texto enfoca el campo
+   sin necesidad de `for`/`id` emparejados a mano, que es donde se descuadran. */
+.formulario label,
+.formulario-vertical label {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 0.82rem;
+  color: var(--tinta-2);
+}
+
+/* Un boton que hace de enlace. Sigue siendo <button> porque ejecuta una accion
+   —borrar, salir—, y un <a> para eso rompe la navegacion y el teclado. */
+.enlace-boton {
+  background: none;
+  border: none;
+  padding: 0;
+  font: inherit;
+  font-weight: 600;
+  color: var(--tinta-2);
+  text-decoration: underline;
+  cursor: pointer;
+}
+.enlace-boton:hover { background: none; color: var(--critico); }
+
+.tarjeta-enlace { text-decoration: none; display: flex; flex-direction: column; gap: 4px; }
+.tarjeta-enlace:hover { border-color: var(--tinta-3); }
+
+/* Colores de RESULTADO, y siempre con el signo delante: el "+" y el "−" se leen
+   sin interpretar el color, que es lo que hace falta cuando el color no se
+   distingue o no se ve. */
+.sube { color: var(--bueno); font-variant-numeric: tabular-nums; }
+.baja { color: var(--critico); font-variant-numeric: tabular-nums; }
+
+button[disabled] { opacity: 0.6; cursor: progress; }
