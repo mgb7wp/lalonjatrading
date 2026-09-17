@@ -529,7 +529,7 @@ medias sería peor que no existir.
 
 ---
 
-## FASE 13 — Carteras
+## FASE 13 — Carteras ✅ COMPLETADA
 
 Crear cartera, posiciones, transacciones con precio y comisiones. Valor actual,
 P&L, asignación, diversificación, score medio, exposición por sector y país.
@@ -537,6 +537,56 @@ P&L, asignación, diversificación, score medio, exposición por sector y país.
 
 **Aceptación:** el P&L cuadra con un caso calculado a mano, incluidas comisiones
 y divisa; corregir una transacción antigua corrige todo lo que cuelga de ella.
+
+`backend/carteras.py` (el motor, sin base de datos) y
+`backend/api/v1/portfolios.py` (los endpoints).
+
+**Lo único que se escribe es la transacción.** No hay endpoint para «pon la
+cantidad de AAPL a 30». Posiciones, coste medio, P&L, pesos y exposición salen de
+recorrer las transacciones en cada consulta, y por eso el criterio de aceptación
+se cumple por construcción: corregir una compra de hace ocho meses corrige el
+P&L realizado de todas las ventas posteriores sin ningún paso de recálculo,
+porque no existe ninguno que llamar.
+
+`portfolio_position` sobrevive **solo** para `target_weight`, que sí es una
+decisión de alguien y no una consecuencia. Sus columnas `quantity` y
+`average_price` no se leen ni se escriben: son exactamente la denormalización
+que esta fase prohíbe.
+
+**FIFO y no coste medio**, porque es la convención fiscal española para valores
+homogéneos y un P&L realizado que no coincide con el que hay que declarar sirve
+de poco. Sobre el mismo caso, el coste medio da 5.718,04 € donde FIFO da
+6.147,92 €: 429,88 € de diferencia. Hay un test que comprueba que **no** sale el
+otro número.
+
+**El cambio se congela al escribir.** El tipo de una operación es el del día en
+que se ejecutó, guardado con ella; recalcularlo con el de hoy reescribiría la
+historia de la cartera cada mañana. Si quien la registra aporta el suyo manda ese
+—lo que se pagó de verdad es lo que puso el broker—; si no, se busca en
+`fx_rate`. Si no hay ninguno, la transacción **se rechaza** en lugar de guardarse
+con un 1 implícito: un 1 entre USD y EUR no falla, solo da un P&L equivocado.
+
+**El corte temporal también vale aquí** (RT-2). `?fecha=` deja fuera precios,
+scores y transacciones posteriores. Sin eso, «cómo iba mi cartera en marzo» se
+contesta con precios de hoy.
+
+**Lo que no se sabe se declara.** Un valor sin precio va a `sin_valorar` y no se
+valora a coste, que fingiría que no se ha movido. El score medio va ponderado por
+peso y **con su cobertura al lado**; lo que no tiene score no se imputa a 50
+(D-8). La diversificación se mide con HHI y posiciones efectivas: cuatro
+posiciones con el 85 % en una dan 1,35, que es el número que dice la verdad.
+
+La cartera de otro responde **404 y no 403**: un 403 sobre la cartera 41
+confirmaría que la cartera 41 existe.
+
+Los cuatro criterios se comprobaron mutando el código —media aritmética, imputar
+un 50, quitar el corte, no invertir el convenio de cambio— y cada mutación tumba
+su test.
+
+**Limitación conocida:** `portfolio_transaction.security_id` es obligatorio, así
+que una comisión de custodia que no pertenece a ningún valor hay que imputarla a
+uno. El motor sabe tratarla (`Cartera.gastos`); falta hacer la columna anulable,
+que es una migración de otra fase.
 
 ---
 
