@@ -107,16 +107,18 @@ export default async function Portada() {
   return (
     <div style={{ minHeight: "100vh", background: "var(--fondo)" }}>
       <header
+        className="portada-cabecera"
         style={{
           display: "flex",
           alignItems: "center",
           gap: 20,
           padding: "18px 48px",
           borderBottom: "1px solid var(--borde)",
+          flexWrap: "wrap",
         }}
       >
         <MarcaConNombre />
-        <nav style={{ display: "flex", gap: 26, marginLeft: 20 }}>
+        <nav style={{ display: "flex", gap: 22, marginLeft: 20, flexWrap: "wrap" }}>
           <a href="#producto" style={{ color: "var(--tinta-2)", fontSize: 13 }}>
             Producto
           </a>
@@ -136,7 +138,7 @@ export default async function Portada() {
         </Boton>
       </header>
 
-      <section style={{ padding: "88px 48px 70px", maxWidth: 1240 }}>
+      <section className="portada-seccion" style={{ paddingTop: 88, paddingBottom: 70, maxWidth: 1240 }}>
         <div className="rotulo" style={{ letterSpacing: "0.2em", color: ORO }}>
           Análisis cuantitativo de mercados
           {nValores !== null ? ` · ${nValores} empresas` : null}
@@ -144,7 +146,7 @@ export default async function Portada() {
         <h1
           style={{
             fontWeight: 600,
-            fontSize: 64,
+            fontSize: "clamp(38px, 7vw, 64px)",
             lineHeight: 1.06,
             letterSpacing: "-0.03em",
             margin: "24px 0 0",
@@ -192,7 +194,7 @@ export default async function Portada() {
         </div>
       </section>
 
-      <section id="producto" style={{ padding: "0 48px 80px" }}>
+      <section id="producto" className="portada-seccion" style={{ paddingBottom: 80 }}>
         <div
           style={{
             border: "1px solid var(--borde-2)",
@@ -238,8 +240,8 @@ export default async function Portada() {
         </div>
       </section>
 
-      <section id="datos" style={{ padding: "0 48px 90px", maxWidth: 1240 }}>
-        <h2 style={{ fontWeight: 600, fontSize: 34, margin: "0 0 12px" }}>
+      <section id="datos" className="portada-seccion" style={{ paddingBottom: 90, maxWidth: 1240 }}>
+        <h2 style={{ fontWeight: 600, fontSize: "clamp(26px, 4vw, 34px)", margin: "0 0 12px" }}>
           Cuatro trabajos, una herramienta
         </h2>
         <p style={{ color: "var(--tinta-3)", fontSize: 16, maxWidth: "62ch", margin: "0 0 40px" }}>
@@ -273,7 +275,7 @@ export default async function Portada() {
         </div>
       </section>
 
-      <section id="empezar" style={{ padding: "0 48px 100px" }}>
+      <section id="empezar" className="portada-seccion" style={{ paddingBottom: 100 }}>
         <div
           style={{
             borderTop: "1px solid var(--borde)",
@@ -287,7 +289,7 @@ export default async function Portada() {
           }}
         >
           <div>
-            <h2 style={{ fontWeight: 600, fontSize: 38, margin: 0, maxWidth: "18ch" }}>
+            <h2 style={{ fontWeight: 600, fontSize: "clamp(26px, 4.4vw, 38px)", margin: 0, maxWidth: "18ch" }}>
               Empieza por una empresa que ya sigas.
             </h2>
             <p style={{ color: "var(--tinta-3)", fontSize: 16, margin: "16px 0 0", maxWidth: "54ch" }}>

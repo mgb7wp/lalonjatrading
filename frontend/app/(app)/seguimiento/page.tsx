@@ -1,4 +1,6 @@
 import Link from "next/link";
+
+import { Cabecera } from "@/components/armazon";
 import { redirect } from "next/navigation";
 
 import { anadirASeguimiento, borrarLista, crearLista, quitarDeSeguimiento } from "@/app/acciones";
@@ -75,6 +77,8 @@ export default async function Seguimiento({
 
   return (
     <>
+      <Cabecera miga="Seguimiento" />
+      <div className="pagina">
       <h1>Seguimiento</h1>
 
       {fallo ? <p className="bloque-falta">No disponible. {fallo}</p> : null}
@@ -246,6 +250,7 @@ export default async function Seguimiento({
           </div>
         </>
       ) : null}
+      </div>
     </>
   );
 }

@@ -1,5 +1,8 @@
 import Link from "next/link";
 
+import { Cabecera } from "@/components/armazon";
+import { usuarioActual } from "@/lib/sesion";
+
 import { Medidor } from "@/components/piezas";
 import { api, intenta, type Market, type RespuestaRanking } from "@/lib/api";
 
@@ -37,8 +40,12 @@ export default async function Rankings({
 
   const esVariacion = VARIACION.has(tipo);
 
+  const dentro = (await usuarioActual()) !== null;
+
   return (
     <>
+      {dentro ? <Cabecera miga="Rankings" /> : null}
+      <div className="pagina">
       <h1>Rankings</h1>
       <p className="apunte">
         Una empresa, una fila: cuando un ADR y su acción local conviven en el
@@ -133,6 +140,7 @@ export default async function Rankings({
           </table>
         </div>
       )}
+      </div>
     </>
   );
 }

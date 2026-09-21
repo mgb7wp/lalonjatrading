@@ -1,4 +1,6 @@
 import Link from "next/link";
+
+import { Cabecera } from "@/components/armazon";
 import { notFound, redirect } from "next/navigation";
 
 import { anadirTransaccion, borrarCartera, borrarTransaccion } from "@/app/acciones";
@@ -62,6 +64,8 @@ export default async function Cartera({ params }: { params: Promise<{ id: string
 
   return (
     <>
+      <Cabecera miga="Cartera" />
+      <div className="pagina">
       <p className="apunte">
         <Link href="/cartera">← Mis carteras</Link>
       </p>
@@ -305,6 +309,7 @@ export default async function Cartera({ params }: { params: Promise<{ id: string
         >
           Borrar esta cartera
         </BotonAccion>
+      </div>
       </div>
     </>
   );

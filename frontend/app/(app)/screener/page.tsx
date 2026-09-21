@@ -1,5 +1,8 @@
 import Link from "next/link";
 
+import { Cabecera } from "@/components/armazon";
+import { usuarioActual } from "@/lib/sesion";
+
 import { InsigniaSenal, Medidor, nombre } from "@/components/piezas";
 import { api, intenta, type Market, type RespuestaScreener } from "@/lib/api";
 
@@ -56,8 +59,12 @@ export default async function Screener({
     intenta(api<Market[]>("/markets")),
   ]);
 
+  const dentro = (await usuarioActual()) !== null;
+
   return (
     <>
+      {dentro ? <Cabecera miga="Descubrir" /> : null}
+      <div className="pagina">
       <h1>Screener</h1>
       <p className="apunte">
         Filtra el universo por percentil. Recuerda que un 70 en «riesgo» significa
@@ -162,6 +169,7 @@ export default async function Screener({
           </div>
         </>
       )}
+      </div>
     </>
   );
 }

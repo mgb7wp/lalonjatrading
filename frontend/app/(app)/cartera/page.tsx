@@ -2,6 +2,7 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 
 import { crearCartera } from "@/app/acciones";
+import { Cabecera } from "@/components/armazon";
 import { Formulario } from "@/components/formularios";
 import { apiSesion, usuarioActual } from "@/lib/sesion";
 import type { CarteraResumen } from "@/lib/api";
@@ -23,6 +24,8 @@ export default async function Carteras() {
 
   return (
     <>
+      <Cabecera miga="Cartera" />
+      <div className="pagina">
       <h1>Mis carteras</h1>
 
       {fallo ? <p className="bloque-falta">No disponible. {fallo}</p> : null}
@@ -68,6 +71,7 @@ export default async function Carteras() {
         vez que abres la cartera. Corregir una operación antigua corrige todo lo que
         depende de ella, sin recalcular nada a mano.
       </p>
+      </div>
     </>
   );
 }

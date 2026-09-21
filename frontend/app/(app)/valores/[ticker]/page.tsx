@@ -1,17 +1,37 @@
+// La ficha de un valor. Implementa la pantalla `asset` del diseno.
+//
+// ## Las siete pestanias del diseno, y cuales existen
+//
+// El diseno dibuja Resumen, Fundamental, Tecnico, Valoracion, Comparables, IA y
+// Noticias. Las tres primeras salen de `/stocks/{ticker}/analysis` y estan
+// conectadas. Las otras cuatro NO tienen backend:
+//
+// - Valoracion pide un DCF de tres metodos que el motor no calcula.
+// - Comparables no existe.
+// - IA es la FASE 16.
+// - Noticias no tiene fuente y no la va a tener gratis.
+//
+// Se quedan en la barra de pestanias, marcadas, y al abrirlas explican por que
+// estan vacias. Quitarlas escondería que estan previstas; rellenarlas con
+// numeros de ejemplo seria justo lo que este producto promete no hacer.
+
 import Link from "next/link";
 import { notFound } from "next/navigation";
 
+import { anadirASeguimiento } from "@/app/acciones";
+import { Cabecera } from "@/components/armazon";
+import { Formulario } from "@/components/formularios";
 import {
   Bloque,
+  EtiquetaFrescura,
   InsigniaRegimen,
   InsigniaSenal,
   Medidor,
+  Panel,
   millones,
   nombre,
   numero,
 } from "@/components/piezas";
-import { anadirASeguimiento } from "@/app/acciones";
-import { Formulario } from "@/components/formularios";
 import { ApiError, api, type Analisis } from "@/lib/api";
 import { usuarioActual } from "@/lib/sesion";
 
@@ -29,8 +49,47 @@ const MOTIVOS: Record<string, string> = {
   datos_insuficientes: "No hay datos suficientes para emitir una señal",
 };
 
-export default async function Valor({ params }: { params: Promise<{ ticker: string }> }) {
+type Pestana = { id: string; etiqueta: string; motivo?: string };
+
+const PESTANAS: Pestana[] = [
+  { id: "resumen", etiqueta: "Resumen" },
+  { id: "fundamental", etiqueta: "Fundamental" },
+  { id: "tecnico", etiqueta: "Técnico" },
+  {
+    id: "valoracion",
+    etiqueta: "Valoración",
+    motivo:
+      "El diseño muestra un valor razonable calculado por tres métodos ponderados. El motor no calcula descuento de flujos: publicaría un precio objetivo sin poder enseñar de dónde sale, que es lo contrario de lo que hace el resto de la ficha.",
+  },
+  {
+    id: "comparables",
+    etiqueta: "Comparables",
+    motivo:
+      "Comparar con el sector exige agrupar empresas por actividad real y no por la etiqueta del proveedor, y capitalización y múltiplos para todas ellas. El universo tiene 140 valores: las cohortes saldrían de dos o tres empresas y la comparación no diría nada.",
+  },
+  {
+    id: "ia",
+    etiqueta: "Análisis IA",
+    motivo:
+      "Es la FASE 16. La capa de IA interpreta los scores ya calculados y nunca produce un número: hasta que exista, esta pestaña estaría inventando la explicación.",
+  },
+  {
+    id: "noticias",
+    etiqueta: "Noticias",
+    motivo:
+      "No hay fuente de noticias gratuita con licencia para reproducirlas a escala. Por eso el pilar de sentimiento se declara no disponible en el score en lugar de imputarse un valor neutro.",
+  },
+];
+
+export default async function Valor({
+  params,
+  searchParams,
+}: {
+  params: Promise<{ ticker: string }>;
+  searchParams: Promise<{ tab?: string }>;
+}) {
   const { ticker } = await params;
+  const { tab = "resumen" } = await searchParams;
 
   let a: Analisis;
   try {
@@ -38,7 +97,7 @@ export default async function Valor({ params }: { params: Promise<{ ticker: stri
   } catch (e) {
     if (e instanceof ApiError && e.status === 404) notFound();
     return (
-      <div className="error">
+      <div style={{ padding: "30px 28px" }}>
         <h1>No se ha podido cargar {ticker.toUpperCase()}</h1>
         <p className="apunte">El motor no ha respondido. Inténtalo de nuevo en un momento.</p>
       </div>
@@ -47,265 +106,418 @@ export default async function Valor({ params }: { params: Promise<{ ticker: stri
 
   const v = a.valor;
   const dentro = (await usuarioActual()) !== null;
+  const score = a.score.datos;
+  const activa = PESTANAS.find((p) => p.id === tab) ?? PESTANAS[0];
 
   return (
     <>
-      <h1>
-        {v.ticker} <span style={{ color: "var(--tinta-2)", fontWeight: 400 }}>{v.name}</span>
-      </h1>
-      <p className="apunte">
-        {v.market_id.toUpperCase()} · {v.currency_code} · {v.sector ? v.sector.replace(/_/g, " ") : "sector sin clasificar"}
-        {v.is_primary_listing ? "" : " · línea secundaria (no es la cotización principal)"}
-        {v.active ? "" : " · dado de baja"}
-      </p>
+      {dentro ? <Cabecera miga={`Mercados / ${v.market_id.toUpperCase()} / ${v.ticker}`} /> : null}
 
-      {/* La accion crea la lista si todavia no hay ninguna: "seguir un valor"
-          tiene que funcionar a la primera, y en que lista cae es un detalle de
-          organizacion, no una decision que haya que tomar antes. */}
-      {dentro ? (
-        <Formulario accion={anadirASeguimiento} etiquetaBoton="Seguir este valor">
-          <input type="hidden" name="ticker" value={v.ticker} />
-        </Formulario>
-      ) : (
-        <p className="apunte">
-          <Link href="/entrar">Entra</Link> para seguir este valor o añadirlo a una cartera.
-        </p>
-      )}
+      <div style={{ padding: "26px 28px 0" }}>
+        <div style={{ display: "flex", alignItems: "flex-start", gap: 28, flexWrap: "wrap" }}>
+          <div style={{ flex: 1, minWidth: "min(300px, 100%)" }}>
+            <div className="rotulo" style={{ fontSize: 10, letterSpacing: "0.14em" }}>
+              {v.market_id.toUpperCase()} · {v.currency_code}
+              {v.sector ? ` · ${v.sector.replace(/_/g, " ")}` : null}
+            </div>
+            <div style={{ display: "flex", alignItems: "baseline", gap: 14, marginTop: 10, flexWrap: "wrap" }}>
+              <h1 style={{ fontSize: 32, margin: 0 }}>{v.name}</h1>
+              <span className="mono" style={{ fontSize: 16, color: "var(--tinta-3)" }}>
+                {v.ticker}
+              </span>
+            </div>
 
-      <div className="rejilla" style={{ marginTop: 18 }}>
-        <div className="tarjeta">
-          <div className="etiqueta">Score global</div>
-          <div className="cifra">
-            {a.score.datos ? a.score.datos.overall.toFixed(0) : "—"}
+            <div style={{ display: "flex", alignItems: "baseline", gap: 16, marginTop: 16 }}>
+              {a.precio.datos ? (
+                <>
+                  <span className="mono" style={{ fontSize: 38, letterSpacing: "-0.02em" }}>
+                    {numero(a.precio.datos.cierre)} {v.currency_code}
+                  </span>
+                  <span className="apunte">
+                    último cierre
+                    <EtiquetaFrescura frescura={a.precio.frescura} />
+                  </span>
+                </>
+              ) : (
+                <span className="bloque-falta" style={{ display: "block" }}>
+                  Sin precio. {a.precio.motivo ?? "No hay precios cargados para este valor."}
+                </span>
+              )}
+            </div>
+
+            <div style={{ display: "flex", gap: 26, marginTop: 20, flexWrap: "wrap" }}>
+              <Dato k="Señal" v={<InsigniaSenal senal={a.senal.datos?.senal ?? null} />} />
+              <Dato k="Régimen" v={<InsigniaRegimen regimen={a.senal.datos?.regimen ?? null} />} />
+              {v.is_primary_listing ? null : <Dato k="Línea" v="secundaria" />}
+              {v.active ? null : <Dato k="Estado" v="dado de baja" />}
+            </div>
           </div>
-          <div className="apunte">
-            {a.score.datos
-              ? `percentil dentro de ${a.score.datos.n_cohorte} comparables`
-              : "sin puntuar"}
+
+          <div style={{ minWidth: "min(320px, 100%)", flex: "0 1 380px" }}>
+            <Panel>
+              <div style={{ display: "flex", alignItems: "center", gap: 20 }}>
+                <AnilloScore valor={score?.overall ?? null} />
+                <div style={{ flex: 1 }}>
+                  <div className="rotulo" style={{ fontSize: 10, letterSpacing: "0.14em", color: "var(--oro)" }}>
+                    Score LaLonja
+                  </div>
+                  {score ? (
+                    <>
+                      <div style={{ fontWeight: 600, fontSize: 15, marginTop: 6 }}>
+                        Mejor que el {score.overall.toFixed(0)} % de su cohorte
+                      </div>
+                      <div style={{ fontSize: 12, color: "var(--tinta-3)", marginTop: 4, lineHeight: 1.45 }}>
+                        {score.n_cohorte} comparables · {score.cohorte.replace(/_/g, " ")} ·{" "}
+                        {score.fecha}
+                      </div>
+                    </>
+                  ) : (
+                    <div style={{ fontSize: 13, color: "var(--tinta-3)", marginTop: 6, lineHeight: 1.5 }}>
+                      {a.score.motivo ?? "Sin puntuar."}
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {score ? (
+                <div style={{ display: "flex", flexDirection: "column", gap: 9, marginTop: 18 }}>
+                  {Object.entries(score.pilares).map(([clave, valor]) => (
+                    <div key={clave} style={{ display: "flex", alignItems: "center", gap: 12 }}>
+                      <span
+                        className="mono"
+                        style={{ fontSize: 10, letterSpacing: "0.1em", color: "var(--tinta-3)", width: 96 }}
+                      >
+                        {nombre(clave)}
+                      </span>
+                      {valor === null ? (
+                        <span
+                          className="apunte"
+                          style={{ flex: 1, fontSize: 11 }}
+                          title={score.pilares_no_disponibles[clave]}
+                        >
+                          no disponible
+                        </span>
+                      ) : (
+                        <span style={{ flex: 1 }}>
+                          <Medidor valor={valor} />
+                        </span>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              ) : null}
+
+              <div style={{ marginTop: 18 }}>
+                {dentro ? (
+                  <Formulario accion={anadirASeguimiento} etiquetaBoton="Seguir este valor">
+                    <input type="hidden" name="ticker" value={v.ticker} />
+                  </Formulario>
+                ) : (
+                  <p className="apunte" style={{ margin: 0 }}>
+                    <Link href="/entrar">Entra</Link> para seguir este valor o añadirlo a una
+                    cartera.
+                  </p>
+                )}
+              </div>
+            </Panel>
           </div>
         </div>
-        <div className="tarjeta">
-          <div className="etiqueta">Señal</div>
-          <div style={{ margin: "8px 0 4px" }}>
-            <InsigniaSenal senal={a.senal.datos?.senal ?? null} />
-          </div>
-          <div className="apunte">
-            {a.senal.datos ? (MOTIVOS[a.senal.datos.motivo] ?? a.senal.datos.motivo) : "sin señal"}
-          </div>
-        </div>
-        <div className="tarjeta">
-          <div className="etiqueta">Régimen del mercado</div>
-          <div style={{ margin: "8px 0 4px" }}>
-            <InsigniaRegimen regimen={a.senal.datos?.regimen ?? null} />
-          </div>
-          <div className="apunte">tendencia, drawdown y volatilidad del índice</div>
-        </div>
-        <div className="tarjeta">
-          <div className="etiqueta">Último cierre</div>
-          <div className="cifra">
-            {a.precio.datos ? numero(a.precio.datos.cierre) : "—"}
-          </div>
-          <div className="apunte">
-            {a.precio.datos ? `${v.currency_code} · ${a.precio.datos.fecha}` : "sin precios"}
-          </div>
-        </div>
+
+        <nav
+          style={{
+            display: "flex",
+            gap: 4,
+            marginTop: 26,
+            borderBottom: "1px solid var(--borde)",
+            overflowX: "auto",
+            maxWidth: "100%",
+            scrollbarWidth: "none",
+          }}
+          aria-label="Secciones del análisis"
+        >
+          {PESTANAS.map((p) => {
+            const sel = p.id === activa.id;
+            return (
+              <Link
+                key={p.id}
+                href={`/valores/${encodeURIComponent(v.ticker)}?tab=${p.id}`}
+                aria-current={sel ? "page" : undefined}
+                style={{
+                  padding: "10px 14px",
+                  fontSize: 13,
+                  whiteSpace: "nowrap",
+                  color: sel ? "var(--tinta)" : p.motivo ? "var(--tinta-4)" : "var(--tinta-3)",
+                  borderBottom: sel ? "2px solid var(--oro)" : "2px solid transparent",
+                  marginBottom: -1,
+                }}
+              >
+                {p.etiqueta}
+                {p.motivo ? (
+                  <span className="mono" style={{ fontSize: 9, marginLeft: 6, color: "var(--tinta-4)" }}>
+                    ·
+                  </span>
+                ) : null}
+              </Link>
+            );
+          })}
+        </nav>
       </div>
 
-      <Bloque titulo="Score por pilares" bloque={a.score}>
-        {(s) => (
-          <>
-            <div className="desliza">
-              <table>
-                <thead>
-                  <tr>
-                    <th>Pilar</th>
-                    <th style={{ width: "50%" }}>Percentil</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {Object.entries(s.pilares).map(([clave, valor]) => (
-                    <tr key={clave}>
-                      <td>{nombre(clave)}</td>
-                      <td>
-                        {valor === null ? (
-                          <span className="apunte">
-                            no disponible — {s.pilares_no_disponibles[clave] ?? "sin motivo"}
-                          </span>
-                        ) : (
-                          <Medidor valor={valor} />
-                        )}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-            <h3 style={{ marginTop: 20 }}>Sub-scores</h3>
-            <div className="desliza">
-              <table>
-                <tbody>
-                  {Object.entries(s.subscores)
-                    .filter(([, valor]) => valor !== null)
-                    .map(([clave, valor]) => (
-                      <tr key={clave}>
-                        <td>{nombre(clave)}</td>
-                        <td style={{ width: "50%" }}>
-                          <Medidor valor={valor} />
-                        </td>
-                      </tr>
-                    ))}
-                </tbody>
-              </table>
-            </div>
-            <p className="apunte" style={{ marginTop: 10 }}>
-              Cohorte: {s.cohorte} · modelo {s.modelo}. Un pilar ausente no se rellena
-              con la media; se declara, y el peso se reparte entre los que sí están.
-            </p>
-          </>
+      <div style={{ padding: "26px 28px 60px" }}>
+        {activa.motivo ? (
+          <p className="bloque-falta" style={{ maxWidth: "80ch" }}>
+            <strong style={{ color: "var(--tinta-2)" }}>Todavía no disponible.</strong>{" "}
+            {activa.motivo}
+          </p>
+        ) : activa.id === "resumen" ? (
+          <Resumen a={a} />
+        ) : activa.id === "fundamental" ? (
+          <Fundamental a={a} />
+        ) : (
+          <Tecnico a={a} />
         )}
-      </Bloque>
+      </div>
+    </>
+  );
+}
 
-      <Bloque titulo="Qué sostiene el score y qué lo lastra" bloque={a.explicacion}>
-        {(e) => (
-          <div className="rejilla" style={{ gridTemplateColumns: "repeat(auto-fit, minmax(260px, 1fr))" }}>
-            <div className="tarjeta">
-              <div className="etiqueta">A favor</div>
-              {e.a_favor.length === 0 ? (
-                <p className="vacio">Nada por encima del percentil 70.</p>
-              ) : (
-                <ul style={{ paddingLeft: 18, margin: "8px 0 0" }}>
-                  {e.a_favor.map((f) => (
-                    <li key={f.nombre}>
-                      {nombre(f.nombre)} <strong>{f.valor.toFixed(0)}</strong>{" "}
-                      <span className="apunte">({f.nivel})</span>
-                    </li>
-                  ))}
-                </ul>
-              )}
-            </div>
-            <div className="tarjeta">
-              <div className="etiqueta">En contra</div>
-              {e.en_contra.length === 0 ? (
-                <p className="vacio">Nada por debajo del percentil 30.</p>
-              ) : (
-                <ul style={{ paddingLeft: 18, margin: "8px 0 0" }}>
-                  {e.en_contra.map((f) => (
-                    <li key={f.nombre}>
-                      {nombre(f.nombre)} <strong>{f.valor.toFixed(0)}</strong>{" "}
-                      <span className="apunte">({f.nivel})</span>
-                    </li>
-                  ))}
-                </ul>
-              )}
-            </div>
-            <div className="tarjeta">
-              <div className="etiqueta">Cambio en 30 días</div>
-              {Object.keys(e.cambio_30d).length === 0 ? (
-                <p className="vacio">
-                  No comparable: falta la foto de hace 30 días. Un cero diría «no se
-                  movió», que es una afirmación sobre datos que no existen.
-                </p>
-              ) : (
-                <ul style={{ paddingLeft: 18, margin: "8px 0 0" }}>
-                  {Object.entries(e.cambio_30d).map(([clave, delta]) => (
-                    <li key={clave}>
-                      {nombre(clave)}{" "}
-                      <strong style={{ fontVariantNumeric: "tabular-nums" }}>
-                        {delta > 0 ? "+" : ""}
-                        {delta.toFixed(1)}
-                      </strong>
-                    </li>
-                  ))}
-                </ul>
-              )}
-              {e.cambio_no_comparable.length > 0 && Object.keys(e.cambio_30d).length > 0 ? (
-                <p className="apunte" style={{ marginTop: 8 }}>
-                  Sin comparar: {e.cambio_no_comparable.map(nombre).join(", ")}.
-                </p>
-              ) : null}
-            </div>
-          </div>
-        )}
-      </Bloque>
+function Dato({ k, v }: { k: string; v: React.ReactNode }) {
+  return (
+    <div>
+      <div className="mono" style={{ fontSize: 9, letterSpacing: "0.14em", color: "var(--tinta-4)", textTransform: "uppercase" }}>
+        {k}
+      </div>
+      <div style={{ marginTop: 6 }}>{v}</div>
+    </div>
+  );
+}
 
-      <Bloque titulo="Señal" bloque={a.senal}>
-        {(s) => (
-          <div className="tarjeta">
-            <p style={{ marginTop: 0 }}>
-              <InsigniaSenal senal={s.senal} />{" "}
-              <span className="apunte">
+/** El anillo de score del diseno. Un solo tono; el arco mide el percentil. */
+function AnilloScore({ valor }: { valor: number | null }) {
+  const r = 38;
+  const circunferencia = 2 * Math.PI * r;
+  const arco = valor === null ? 0 : (Math.max(0, Math.min(100, valor)) / 100) * circunferencia;
+  return (
+    <svg width="88" height="88" viewBox="0 0 88 88" role="img" aria-label={valor === null ? "Sin puntuar" : `Score ${valor.toFixed(0)} sobre 100`}>
+      <circle cx="44" cy="44" r={r} fill="none" stroke="var(--borde)" strokeWidth="7" />
+      {valor !== null ? (
+        <circle
+          cx="44"
+          cy="44"
+          r={r}
+          fill="none"
+          stroke="var(--oro)"
+          strokeWidth="7"
+          strokeLinecap="round"
+          strokeDasharray={`${arco} ${circunferencia}`}
+          transform="rotate(-90 44 44)"
+        />
+      ) : null}
+      <text x="44" y="42" textAnchor="middle" fill="var(--tinta)" className="mono" fontSize="26">
+        {valor === null ? "—" : valor.toFixed(0)}
+      </text>
+      <text x="44" y="57" textAnchor="middle" fill="var(--tinta-3)" className="mono" fontSize="8" letterSpacing="1.4">
+        /100
+      </text>
+    </svg>
+  );
+}
+
+function Resumen({ a }: { a: Analisis }) {
+  return (
+    <div className="dos-columnas" style={{ "--izq": "1.6fr", gap: 18 } as React.CSSProperties}>
+      <div style={{ display: "flex", flexDirection: "column", gap: 18 }}>
+        <Bloque titulo="Qué sostiene el score y qué lo lastra" bloque={a.explicacion}>
+          {(e) => (
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(240px,1fr))", gap: 22 }}>
+              <div>
+                <div className="rotulo" style={{ color: "var(--sube)" }}>A favor</div>
+                <ul style={{ margin: "10px 0 0", paddingLeft: 18, lineHeight: 1.7 }}>
+                  {e.a_favor.length ? (
+                    e.a_favor.map((f) => (
+                      <li key={f.nombre}>
+                        {nombre(f.nombre)} <strong className="mono">{f.valor.toFixed(0)}</strong>{" "}
+                        <span className="apunte">({f.nivel})</span>
+                      </li>
+                    ))
+                  ) : (
+                    <li className="apunte">Nada destaca por encima del umbral.</li>
+                  )}
+                </ul>
+              </div>
+              <div>
+                <div className="rotulo" style={{ color: "var(--baja)" }}>En contra</div>
+                <ul style={{ margin: "10px 0 0", paddingLeft: 18, lineHeight: 1.7 }}>
+                  {e.en_contra.length ? (
+                    e.en_contra.map((f) => (
+                      <li key={f.nombre}>
+                        {nombre(f.nombre)} <strong className="mono">{f.valor.toFixed(0)}</strong>{" "}
+                        <span className="apunte">({f.nivel})</span>
+                      </li>
+                    ))
+                  ) : (
+                    <li className="apunte">Nada cae por debajo del umbral.</li>
+                  )}
+                </ul>
+              </div>
+            </div>
+          )}
+        </Bloque>
+
+        <Bloque titulo="Sub-scores" bloque={a.score}>
+          {(s) => (
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(230px,1fr))", gap: "10px 24px" }}>
+              {Object.entries(s.subscores).map(([clave, valor]) => (
+                <div key={clave} style={{ display: "flex", alignItems: "center", gap: 12 }}>
+                  <span style={{ fontSize: 12, color: "var(--tinta-3)", width: 110 }}>{nombre(clave)}</span>
+                  <span style={{ flex: 1 }}>
+                    <Medidor valor={valor} />
+                  </span>
+                </div>
+              ))}
+            </div>
+          )}
+        </Bloque>
+      </div>
+
+      <div style={{ display: "flex", flexDirection: "column", gap: 18 }}>
+        <Bloque titulo="Señal" bloque={a.senal}>
+          {(s) => (
+            <>
+              <InsigniaSenal senal={s.senal} />
+              <p style={{ margin: "12px 0 0", fontSize: 13, lineHeight: 1.6, color: "var(--tinta-2)" }}>
                 {MOTIVOS[s.motivo] ?? s.motivo}
-                {s.horizonte_dias ? ` · horizonte ${s.horizonte_dias} días` : ""}
-              </span>
+              </p>
+              {/* Metadatos que exige publicar una recomendación general (MAR). */}
+              <div className="mono" style={{ fontSize: 10, color: "var(--tinta-4)", marginTop: 14, lineHeight: 1.7 }}>
+                AUTOR: {s.autor.toUpperCase()}
+                {s.metodologia ? (
+                  <>
+                    <br />
+                    METODOLOGÍA: {s.metodologia}
+                  </>
+                ) : null}
+                <br />
+                FECHA: {s.fecha}
+              </div>
+            </>
+          )}
+        </Bloque>
+
+        <Bloque titulo="Predicción del modelo" bloque={a.prediccion}>
+          {() => <p className="apunte">—</p>}
+        </Bloque>
+      </div>
+    </div>
+  );
+}
+
+function Fundamental({ a }: { a: Analisis }) {
+  return (
+    <Bloque titulo="Cuentas publicadas" bloque={a.fundamental}>
+      {(f) => (
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(260px,1fr))", gap: 18 }}>
+          <Panel titulo="Cuenta de resultados" sinRelleno>
+            <div className="desliza">
+              <table>
+                <tbody>
+                  <Fila k="Ventas" v={millones(f.ventas)} />
+                  <Fila k="EBIT" v={millones(f.ebit)} />
+                  <Fila k="Beneficio neto" v={millones(f.beneficio_neto)} />
+                  <Fila k="Flujo de caja libre" v={millones(f.flujo_caja_libre)} />
+                </tbody>
+              </table>
+            </div>
+          </Panel>
+          <Panel titulo="Balance y ratios" sinRelleno>
+            <div className="desliza">
+              <table>
+                <tbody>
+                  <Fila k="Patrimonio neto" v={millones(f.patrimonio_neto)} />
+                  <Fila k="Deuda neta" v={millones(f.deuda_neta)} />
+                  <Fila k="ROE" v={f.roe === null ? "—" : `${(f.roe * 100).toFixed(1)} %`} />
+                  <Fila
+                    k="Margen operativo"
+                    v={f.margen_operativo === null ? "—" : `${(f.margen_operativo * 100).toFixed(1)} %`}
+                  />
+                </tbody>
+              </table>
+            </div>
+          </Panel>
+          <Panel titulo="Procedencia del dato">
+            <p style={{ margin: 0, fontSize: 13, lineHeight: 1.7, color: "var(--tinta-2)" }}>
+              Ejercicio cerrado el <strong>{f.fin_periodo}</strong> y publicado el{" "}
+              <strong>{f.fecha_publicacion}</strong>.
             </p>
-            {s.detalle ? (
-              <p className="apunte" style={{ fontVariantNumeric: "tabular-nums" }}>
-                {Object.entries(s.detalle)
-                  .map(([k, val]) => `${nombre(k)}: ${String(val)}`)
-                  .join(" · ")}
+            <p style={{ margin: "12px 0 0", fontSize: 12, lineHeight: 1.7, color: "var(--tinta-3)" }}>
+              {f.origen_pit === "captured" ? (
+                <>
+                  La fecha de publicación es <strong>real</strong>, no estimada, y la cifra es la que
+                  se publicó entonces: si la empresa reexpresó sus cuentas después, aquí sigue la
+                  original. Es lo que permite backtestear sin mirar al futuro.
+                </>
+              ) : (
+                <>
+                  La fecha de publicación está <strong>estimada</strong> ({f.origen_pit}) y la cifra
+                  puede venir reexpresada. Se dice porque cambia lo que se puede concluir de ella.
+                </>
+              )}
+            </p>
+            {f.divisa_reporte ? (
+              <p className="mono" style={{ fontSize: 10, color: "var(--tinta-4)", marginTop: 12 }}>
+                DIVISA DE REPORTE: {f.divisa_reporte}
               </p>
             ) : null}
-            {/* Metadatos que exige el Reglamento de Abuso de Mercado para
-                publicar una recomendación de inversión general. */}
-            <p className="apunte" style={{ marginBottom: 0 }}>
-              Autor: {s.autor}
-              {s.metodologia ? ` · Metodología: ${s.metodologia}` : ""}
-              {s.confianza !== null
-                ? ` · Cobertura de datos: ${(s.confianza * 100).toFixed(0)} %`
-                : ""}
-            </p>
-          </div>
-        )}
-      </Bloque>
+          </Panel>
+        </div>
+      )}
+    </Bloque>
+  );
+}
 
-      <Bloque titulo="Fundamentales" bloque={a.fundamental}>
-        {(f) => (
-          <>
-            <div className="desliza">
-              <table>
-                <tbody>
-                  <tr><td>Ventas</td><td className="num">{millones(f.ventas)}</td></tr>
-                  <tr><td>EBIT</td><td className="num">{millones(f.ebit)}</td></tr>
-                  <tr><td>Beneficio neto</td><td className="num">{millones(f.beneficio_neto)}</td></tr>
-                  <tr><td>Flujo de caja libre</td><td className="num">{millones(f.flujo_caja_libre)}</td></tr>
-                  <tr><td>Patrimonio neto</td><td className="num">{millones(f.patrimonio_neto)}</td></tr>
-                  <tr><td>Deuda neta</td><td className="num">{millones(f.deuda_neta)}</td></tr>
-                  <tr><td>ROE</td><td className="num">{numero(f.roe)}</td></tr>
-                  <tr><td>Margen operativo</td><td className="num">{numero(f.margen_operativo)}</td></tr>
-                </tbody>
-              </table>
-            </div>
-            <p className="apunte" style={{ marginTop: 10 }}>
-              Ejercicio cerrado el {f.fin_periodo}, publicado el {f.fecha_publicacion}
-              {f.divisa_reporte ? ` · cifras en ${f.divisa_reporte}` : ""}.{" "}
-              {f.origen_pit === "captured"
-                ? "Cifra capturada tal y como se publicó entonces."
-                : "Cifra reconstruida a posteriori: puede llevar reexpresiones que no se conocían en su día."}
-            </p>
-          </>
-        )}
-      </Bloque>
+function Tecnico({ a }: { a: Analisis }) {
+  return (
+    <Bloque titulo="Indicadores técnicos" bloque={a.tecnico}>
+      {(t) => (
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(200px,1fr))", gap: 14 }}>
+          <Indicador k="RSI 14" v={numero(t.rsi_14)} nota="sobrecompra por encima de 70" />
+          <Indicador k="Media 50" v={numero(t.sma_50)} nota="tendencia de medio plazo" />
+          <Indicador k="Media 200" v={numero(t.sma_200)} nota="tendencia de fondo" />
+          <Indicador k="ATR 14" v={numero(t.atr_14)} nota="recorrido medio diario" />
+          <Indicador k="Beta" v={numero(t.beta)} nota="frente a su índice" />
+          <Indicador k="Fuerza relativa" v={numero(t.fuerza_relativa)} nota="frente a su índice" />
+        </div>
+      )}
+    </Bloque>
+  );
+}
 
-      <Bloque titulo="Técnico" bloque={a.tecnico}>
-        {(t) => (
-          <div className="desliza">
-            <table>
-              <tbody>
-                <tr><td>RSI 14</td><td className="num">{numero(t.rsi_14)}</td></tr>
-                <tr><td>Media 50</td><td className="num">{numero(t.sma_50)}</td></tr>
-                <tr><td>Media 200</td><td className="num">{numero(t.sma_200)}</td></tr>
-                <tr><td>ATR 14</td><td className="num">{numero(t.atr_14)}</td></tr>
-                <tr><td>Beta</td><td className="num">{numero(t.beta)}</td></tr>
-                <tr><td>Fuerza relativa</td><td className="num">{numero(t.fuerza_relativa)}</td></tr>
-              </tbody>
-            </table>
-          </div>
-        )}
-      </Bloque>
+function Fila({ k, v }: { k: string; v: string }) {
+  return (
+    <tr>
+      <td style={{ color: "var(--tinta-2)" }}>{k}</td>
+      <td className="num">{v}</td>
+    </tr>
+  );
+}
 
-      <Bloque titulo="Predicción del modelo" bloque={a.prediccion}>
-        {() => null}
-      </Bloque>
-    </>
+function Indicador({ k, v, nota }: { k: string; v: string; nota: string }) {
+  return (
+    <div
+      style={{
+        background: "var(--superficie)",
+        border: "1px solid var(--borde-2)",
+        borderRadius: "var(--radio)",
+        padding: "15px 18px",
+      }}
+    >
+      <div className="mono" style={{ fontSize: 10, letterSpacing: "0.12em", color: "var(--tinta-3)" }}>
+        {k.toUpperCase()}
+      </div>
+      <div className="mono" style={{ fontSize: 20, marginTop: 8 }}>
+        {v}
+      </div>
+      <div style={{ fontSize: 11, color: "var(--tinta-4)", marginTop: 6 }}>{nota}</div>
+    </div>
   );
 }

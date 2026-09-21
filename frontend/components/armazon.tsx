@@ -117,6 +117,7 @@ export function BarraLateral({ correo, plan }: { correo: string; plan: string })
 
   return (
     <aside
+      className="barra-lateral"
       style={{
         width: 236,
         flex: "0 0 236px",
@@ -247,5 +248,52 @@ export function Cabecera({ miga, accion }: { miga: string; accion?: ReactNode })
       <div style={{ flex: 1 }} />
       {accion}
     </header>
+  );
+}
+
+
+/** La barra inferior de movil.
+ *
+ * El diseno lo dice explicitamente: "En movil desaparece el sidebar: cinco
+ * destinos en una barra inferior". No es una adaptacion inventada, es la
+ * pantalla `Mobile` del export.
+ *
+ * Cinco y no ocho: en una barra de 390 px, ocho destinos dan objetivos de 48 px
+ * donde el pulgar falla. Los que no caben siguen alcanzables desde dentro de
+ * las paginas.
+ */
+export function BarraInferior() {
+  const ruta = usePathname();
+  const destinos = PLATAFORMA.filter((d) => !d.pronto).slice(0, 5);
+
+  return (
+    <nav className="barra-inferior" aria-label="Navegación principal">
+      {destinos.map((d) => {
+        const activo = esActivo(ruta, d.href);
+        return (
+          <Link
+            key={d.href}
+            href={d.href}
+            aria-current={activo ? "page" : undefined}
+            style={{
+              flex: 1,
+              display: "flex",
+              flexDirection: "column",
+              alignItems: "center",
+              gap: 4,
+              padding: "10px 4px",
+              fontSize: 10,
+              color: activo ? "var(--oro)" : "var(--tinta-3)",
+              textDecoration: "none",
+            }}
+          >
+            <span style={{ fontSize: 16 }} aria-hidden>
+              {d.icono}
+            </span>
+            {d.etiqueta}
+          </Link>
+        );
+      })}
+    </nav>
   );
 }

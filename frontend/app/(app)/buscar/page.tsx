@@ -1,5 +1,8 @@
 import Link from "next/link";
 
+import { Cabecera } from "@/components/armazon";
+import { usuarioActual } from "@/lib/sesion";
+
 import { api, intenta, type Encontrado } from "@/lib/api";
 
 export const dynamic = "force-dynamic";
@@ -20,8 +23,12 @@ export default async function Buscar({
       )) ?? null)
     : [];
 
+  const dentro = (await usuarioActual()) !== null;
+
   return (
     <>
+      {dentro ? <Cabecera miga="Buscar" /> : null}
+      <div className="pagina">
       <h1>Buscar un valor</h1>
 
       <form className="formulario" method="get">
@@ -72,6 +79,7 @@ export default async function Buscar({
           </table>
         </div>
       )}
+      </div>
     </>
   );
 }

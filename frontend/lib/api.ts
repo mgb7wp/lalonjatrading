@@ -56,11 +56,16 @@ export async function intenta<T>(p: Promise<T>): Promise<T | null> {
 export type Market = {
   id: string;
   name: string;
+  country_code: string;
   currency: string;
   classification: string;
   ticker_suffix: string;
   trading_calendar: string;
+  timezone: string;
   benchmark: string | null;
+  /** D-5: los cinco benchmarks configurados son indices de PRECIO, sin
+   * dividendos. Se publica porque cambia para que sirve la comparacion. */
+  benchmark_is_total_return: boolean;
   securities: number;
 };
 

@@ -11,7 +11,7 @@
 import Link from "next/link";
 import type { ReactNode } from "react";
 
-import { BarraLateral } from "@/components/armazon";
+import { BarraInferior, BarraLateral } from "@/components/armazon";
 import { MarcaConNombre } from "@/components/marca";
 import { usuarioActual } from "@/lib/sesion";
 
@@ -47,15 +47,19 @@ export default async function LayoutApp({ children }: { children: ReactNode }) {
           style={{
             display: "flex",
             alignItems: "center",
-            gap: 24,
+            gap: 16,
             padding: "16px 28px",
             borderBottom: "1px solid var(--borde)",
+            flexWrap: "wrap",
           }}
         >
           <Link href="/" style={{ color: "inherit" }}>
             <MarcaConNombre />
           </Link>
-          <nav style={{ display: "flex", gap: 22, fontSize: 13 }}>
+          <nav style={{ display: "flex", gap: 18, fontSize: 13, flexWrap: "wrap" }}>
+            <Link href="/mercados" style={{ color: "var(--tinta-2)" }}>
+              Mercados
+            </Link>
             <Link href="/rankings" style={{ color: "var(--tinta-2)" }}>
               Rankings
             </Link>
@@ -81,7 +85,7 @@ export default async function LayoutApp({ children }: { children: ReactNode }) {
             Entrar
           </Link>
         </header>
-        <main style={{ flex: 1, padding: "30px 28px 60px", animation: "fadeUp .25s ease" }}>
+        <main style={{ flex: 1, animation: "fadeUp .25s ease" }}>
           {children}
         </main>
         <Aviso />
@@ -96,6 +100,7 @@ export default async function LayoutApp({ children }: { children: ReactNode }) {
         <div style={{ flex: 1, animation: "fadeUp .25s ease" }}>{children}</div>
         <Aviso />
       </main>
+      <BarraInferior />
     </div>
   );
 }

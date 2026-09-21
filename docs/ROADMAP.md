@@ -663,7 +663,30 @@ cifras que no estaban en la entrada.
 
 ---
 
-## FASE 17 — Frontend MVP ✅ COMPLETADA
+## FASE 17 — Frontend MVP ✅ COMPLETADA · rediseñada 21/09/2026
+
+> **Rediseño desde Claude Design, 21/09/2026.** Toda la interfaz pasó al diseño
+> exportado en `LaLonja Trading.dc.html`: terminal oscuro, Sora para el texto,
+> IBM Plex Mono para toda cifra, un único acento en oro. Lo que sigue describe
+> la primera versión; las decisiones de fondo —score en un solo tono, glifo
+> junto al color, cada hueco con su motivo— se conservaron todas, porque el
+> diseño nuevo pedía lo mismo.
+>
+> Tres cosas que el diseño traía y **no** se implementaron tal cual:
+>
+> - El sistema `Broadsheet` que el export enlaza **no se usa**: el diseño no
+>   emplea ni uno de sus tokens ni de sus clases y lo anula entero. Es
+>   andamiaje del exportador.
+> - Las cifras de la portada («48.000 empresas», «datos desde 2005») eran
+>   falsas. Ahora se leen de `/markets`.
+> - Seis funciones dibujadas no tienen backend —IA, noticias, valoración por
+>   descuento de flujos, comparables, calendario de resultados y alertas—.
+>   Mantienen su bloque **con el motivo escrito**, ni rellenas con datos de
+>   ejemplo ni borradas.
+>
+> Se pierde el modo claro: el diseño no define variante clara y mantener las dos
+> obligaría a inventarse la mitad de los valores.
+
 
 Las nueve páginas de §39, funcionales y sin diseño elaborado. Dashboard (§40) y
 página de valor (§41). Disclaimers visibles (§44).
