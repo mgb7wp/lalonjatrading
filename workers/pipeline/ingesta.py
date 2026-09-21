@@ -58,6 +58,18 @@ COBERTURA_MINIMA = 0.80
 DIAS_PARA_RANCIO = {"precios": 5, "divisas": 5}
 DIAS_PARA_RANCIO_POR_DEFECTO = 5
 
+#: Anios de historico que se descargan. **Un solo sitio**: lo usan la ingesta,
+#: el planificador y el script de linea de ordenes, y con el valor repartido por
+#: tres ficheros basta con cambiar dos para que el backtest y el trabajo diario
+#: cubran periodos distintos sin que nada avise.
+#:
+#: 20 y no 8. El minimo que exige D-7 para entrenar son 15 anios en dos
+#: mercados, y con 8 no lo cumple ninguno; el proveedor si los sirve —comprobado
+#: ticker a ticker— asi que el limite lo ponia este numero y nada mas. Los
+#: valores que salieron a bolsa despues traen menos, que es correcto: no
+#: existian.
+ANOS_HISTORICO = 20
+
 
 def _umbrales_rancio(cfg) -> dict[str, int]:
     return {**DIAS_PARA_RANCIO, "fundamentales": cfg.reglas.fundamental.antiguedad_maxima_dias}
@@ -304,11 +316,21 @@ def ejecutar(
     cfg,
     enrutador,
     mercados: list[str] | None = None,
-    anos: int = 8,
+    anos: int = ANOS_HISTORICO,
     dia: dt.date | None = None,
     forzar: bool = False,
+    con_divisas: bool = True,
 ) -> list[Resultado]:
-    """Descarga y persiste precios, fundamentales y divisas."""
+    """Descarga y persiste precios, fundamentales y divisas.
+
+    `con_divisas=False` deja fuera la etapa de tipos de cambio. Existe por una
+    razon de RELOJ, no de gusto: el BCE publica sus tipos de referencia a media
+    tarde (CET), y el primer mercado que cierra cada dia es la India, a las
+    10:00 UTC. Si esa ejecucion arrastrara la etapa de divisas, se anotaria como
+    hecha con el ultimo tipo publicado —el de ayer— y las de la tarde la
+    saltarian: el tipo de hoy no entraria hasta manana. Por eso el planificador
+    la pide aparte, despues de que el BCE publique.
+    """
     hoy = dt.date.today()
     dia = dia or hoy
     fin = dia
@@ -497,7 +519,9 @@ def ejecutar(
             )
 
     # --- divisas: una sola vez, no por mercado ------------------------------
-    if _ya_hecho(sesion, "divisas", dia, None) and not forzar:
+    if not con_divisas:
+        pass
+    elif _ya_hecho(sesion, "divisas", dia, None) and not forzar:
         resultados.append(Resultado("divisas", None, RunStatus.SKIPPED.value))
     else:
         with _etapa(sesion, resultados, "divisas", None, dia) as r:

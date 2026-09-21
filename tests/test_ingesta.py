@@ -1057,3 +1057,45 @@ def test_un_404_del_bce_no_se_reintenta(cfg):
         assert intentos["n"] == 1, "un 404 no se reintenta"
     finally:
         urllib.request.urlopen = original
+
+
+def test_con_divisas_false_deja_la_etapa_fuera(bd_ingesta, cfg):
+    """El planificador descarga las divisas aparte, y esto es lo que se lo permite.
+
+    No es un matiz: el primer mercado que cierra cada dia es la India, a las
+    10:00 UTC, y el BCE publica sus tipos a media tarde. Si la ingesta de un
+    mercado arrastrara las divisas, se anotarian como hechas con el tipo de AYER
+    y las ejecuciones de la tarde las saltarian por idempotencia. El tipo de hoy
+    no entraria hasta el dia siguiente.
+    """
+    import sqlalchemy as sa
+
+    resultados = _ejecutar(bd_ingesta, cfg, con_divisas=False)
+    etapas = [r.etapa for r in resultados]
+
+    assert "divisas" not in etapas, f"la etapa no puede correr: {etapas}"
+    assert "precios" in etapas, "pero el resto si"
+    with sa.orm.Session(bd_ingesta) as s:
+        assert s.execute(text("SELECT count(*) FROM fx_rate")).scalar() == 0
+
+
+def test_por_defecto_las_divisas_si_entran(bd_ingesta, cfg):
+    """El valor por defecto no cambia: quien llame sin pedir nada lo sigue
+    teniendo todo. Sin este test, invertir el defecto pasaria inadvertido."""
+    resultados = _ejecutar(bd_ingesta, cfg)
+    assert "divisas" in [r.etapa for r in resultados]
+
+
+def test_el_historico_por_defecto_llega_a_los_quince_anios_que_pide_d7():
+    """D-7 exige 15 anios en dos mercados para poder entrenar. Con el valor
+    anterior —8— no lo cumplia ninguno, y el limite lo ponia este numero y no el
+    proveedor: se comprobo que yfinance sirve 20 anios de los cinco mercados.
+
+    Va en una constante y no repartido por el script y el pipeline: con el valor
+    en dos sitios basta con cambiar uno para que la descarga diaria y la de
+    linea de ordenes cubran periodos distintos sin que nada avise.
+    """
+    from ml.condiciones import MINIMO_ANIOS
+    from workers.pipeline.ingesta import ANOS_HISTORICO
+
+    assert ANOS_HISTORICO >= MINIMO_ANIOS, "el historico descargado no puede quedarse corto de D-7"

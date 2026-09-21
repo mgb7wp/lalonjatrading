@@ -29,7 +29,15 @@ if str(RAIZ) not in sys.path:
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--mercados", help="lista separada por comas; por defecto, todos")
-    parser.add_argument("--anos", type=int, default=8, help="historico a descargar")
+    # El valor por defecto NO se escribe aqui: vive en `ingesta.ANOS_HISTORICO`,
+    # para que la descarga diaria del planificador y la de linea de ordenes no
+    # puedan cubrir periodos distintos.
+    parser.add_argument(
+        "--anos",
+        type=int,
+        default=None,
+        help="historico a descargar; por defecto, el del pipeline",
+    )
     parser.add_argument(
         "--proveedor",
         help="fuerza una sola fuente para todo, ignorando el reparto de reglas.yaml",
@@ -75,7 +83,12 @@ def main(argv: list[str] | None = None) -> int:
     print(f"reparto de fuentes: {enrutador.reparto}")
     with _fabrica()() as sesion:
         resultados = ingesta.ejecutar(
-            sesion, cfg, enrutador, mercados=mercados, anos=args.anos, forzar=args.forzar
+            sesion,
+            cfg,
+            enrutador,
+            mercados=mercados,
+            anos=args.anos or ingesta.ANOS_HISTORICO,
+            forzar=args.forzar,
         )
         rancios = ingesta.marcar_rancios(sesion, ingesta._umbrales_rancio(cfg))
 

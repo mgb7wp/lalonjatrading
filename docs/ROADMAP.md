@@ -116,6 +116,17 @@ rancio tenía forma de precio y aplicado a fundamentales marcaba los cinco
 mercados; y el proveedor sintético emite fundamentales con fecha de publicación
 futura, que ahora se cuentan y se avisan en lugar de pasar por «último dato».
 
+> **Corrección, 21/09/2026.** Esta fase se dio por cerrada con la ingesta
+> escrita y probada, pero **nadie la ejecutaba**: `workers/runner.py` se
+> limitaba a `signal.pause()`, aunque `docker-compose.yml` prometiera un
+> pipeline diario y `pyproject.toml` declarara APScheduler. El efecto se vio en
+> producción —dos mercados con datos y tres vacíos— y tardó semanas en salir,
+> porque los dos que se habían cargado a mano funcionaban perfectamente. El
+> planificador está ahora en `workers/planificador.py` y `workers/runner.py`,
+> con sus horas sacadas de los calendarios reales. La lección, escrita donde se
+> pueda tropezar con ella: **una fase que produce datos no está cerrada hasta
+> que algo la dispara sola.**
+
 ---
 
 ## FASE 4 — Indicadores ✅ COMPLETADA
