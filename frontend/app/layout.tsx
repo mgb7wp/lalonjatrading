@@ -1,68 +1,36 @@
-import type { Metadata } from "next";
-import Link from "next/link";
-import type { ReactNode } from "react";
+// Raiz: fuentes y nada mas.
+//
+// La cabecera y el pie NO viven aqui. El diseno tiene dos armazones muy
+// distintos —la portada publica con su cabecera ancha, y la aplicacion con su
+// barra lateral— y meter un tercero comun aqui obligaria a cada pagina a
+// deshacerlo.
 
-import { salir } from "./acciones";
-import { BotonAccion } from "@/components/formularios";
-import { usuarioActual } from "@/lib/sesion";
+import type { Metadata } from "next";
+import type { ReactNode } from "react";
 
 import "./globals.css";
 
-// La cabecera lee la sesion, asi que ninguna pagina puede quedarse cacheada
-// estatica: se serviria con la sesion de otro.
-export const dynamic = "force-dynamic";
-
 export const metadata: Metadata = {
-  title: "La Lonja — análisis cuantitativo de mercados",
+  title: "LaLonja Trading",
   description:
-    "Rankings, screener y análisis por valor sobre un motor determinista y reproducible.",
+    "Análisis cuantitativo de mercados sobre un motor determinista y reproducible.",
 };
 
-export default async function RootLayout({ children }: { children: ReactNode }) {
-  const usuario = await usuarioActual();
-
+export default function RootLayout({ children }: { children: ReactNode }) {
   return (
     <html lang="es">
-      <body>
-        <header className="cabecera">
-          <div className="envoltorio cabecera-fila">
-            <Link href="/" className="marca">
-              La Lonja <span>· análisis cuantitativo</span>
-            </Link>
-            <nav className="nav">
-              <Link href="/">Panel</Link>
-              <Link href="/rankings">Rankings</Link>
-              <Link href="/screener">Screener</Link>
-              <Link href="/buscar">Buscar</Link>
-              {usuario ? (
-                <>
-                  <Link href="/cartera">Carteras</Link>
-                  <Link href="/seguimiento">Seguimiento</Link>
-                  <span className="apunte" title={`Plan ${usuario.plan}`}>
-                    {usuario.email}
-                  </span>
-                  <BotonAccion accion={salir}>Salir</BotonAccion>
-                </>
-              ) : (
-                <Link href="/entrar">Entrar</Link>
-              )}
-            </nav>
-          </div>
-        </header>
-
-        <main className="envoltorio">{children}</main>
-
-        {/* §44. No es letra pequeña de relleno: determina cómo se puede
-            presentar el producto, y por eso está en todas las páginas y no
-            escondido en un enlace. */}
-        <footer className="envoltorio aviso-legal">
-          Información y análisis de carácter general. <strong>No es asesoramiento
-          financiero</strong> ni una recomendación personalizada: no tiene en cuenta
-          la situación ni los objetivos de quien lo consulta. Rentabilidades pasadas
-          no garantizan rentabilidades futuras. Los datos proceden de fuentes
-          públicas gratuitas y pueden contener errores u omisiones.
-        </footer>
-      </body>
+      <head>
+        <link rel="preconnect" href="https://fonts.googleapis.com" />
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="" />
+        {/* Las dos familias del diseno: Sora para el texto y IBM Plex Mono para
+            toda cifra. `display=swap` para que el texto se lea mientras cargan
+            en lugar de dejar la pagina en blanco. */}
+        <link
+          href="https://fonts.googleapis.com/css2?family=Sora:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap"
+          rel="stylesheet"
+        />
+      </head>
+      <body>{children}</body>
     </html>
   );
 }

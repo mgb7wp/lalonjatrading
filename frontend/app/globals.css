@@ -1,311 +1,453 @@
-/* Tokens del sistema visual.
+/* Tokens del diseno de LaLonja Trading.
  *
- * El modo oscuro se ELIGE, no se invierte: sus valores son pasos propios sobre
- * la superficie oscura, no un negativo del claro. Se declara en dos ambitos
- * —la preferencia del sistema y el interruptor explicito— y el interruptor
- * tiene que ganar en los dos sentidos.
+ * Todos los valores salen de `LaLonja Trading.dc.html`, el diseno exportado de
+ * Claude Design. No hay ni un color, tamanio ni espaciado inventado aqui: si
+ * algo no estaba en el diseno, no esta.
+ *
+ * ## Solo oscuro, y es una decision del diseno
+ *
+ * La version anterior tenia modo claro y oscuro, con el oscuro ELEGIDO paso a
+ * paso en lugar de invertido. El diseno nuevo es un terminal oscuro y no define
+ * variante clara, asi que mantener la doble variante significaria inventarse la
+ * mitad. `color-scheme: dark` le dice al navegador que pinte de oscuro tambien
+ * los controles nativos —barras de scroll, selectores de fecha—; sin eso salen
+ * blancos sobre el fondo negro.
+ *
+ * ## Por que el sistema Broadsheet no aparece por ningun lado
+ *
+ * El export enlaza `_ds/broadsheet-.../styles.css`, pero el diseno no usa ni uno
+ * solo de sus tokens ni de sus clases: lo comprobe contando referencias y salen
+ * cero. Broadsheet es papel de periodico —serif, fondo #f3f2f2, cian y
+ * magenta—; esto es lo contrario. Aplicarlo daria una pagina que no se parece
+ * al diseno que hay que implementar.
  */
+
 :root {
-  color-scheme: light;
-
-  --superficie: #fcfcfb;
-  --superficie-2: #f4f4f1;
-  --borde: #e2e2dd;
-  --tinta: #0b0b0b;
-  --tinta-2: #52514e;
-  --tinta-3: #78776f;
-
-  /* Magnitud (el score es 0-100): un solo tono, claro -> oscuro. Nunca arcoiris. */
-  --escala-100: #cde2fb;
-  --escala-300: #6da7ec;
-  --escala-450: #2a78d6;
-  --escala-600: #184f95;
-
-  /* Estado. Reservados: no se reutilizan para "una serie mas". */
-  --bueno: #0ca30c;
-  --aviso: #fab219;
-  --serio: #ec835a;
-  --critico: #d03b3b;
-
-  --radio: 8px;
-  --sombra: 0 1px 2px rgba(0, 0, 0, 0.04), 0 2px 8px rgba(0, 0, 0, 0.04);
-}
-
-@media (prefers-color-scheme: dark) {
-  :root:where(:not([data-theme="light"])) {
-    color-scheme: dark;
-    --superficie: #1a1a19;
-    --superficie-2: #232322;
-    --borde: #35352f;
-    --tinta: #ffffff;
-    --tinta-2: #c3c2b7;
-    --tinta-3: #97968c;
-    --escala-100: #104281;
-    --escala-300: #2a78d6;
-    --escala-450: #3987e5;
-    --escala-600: #86b6ef;
-    --sombra: none;
-  }
-}
-
-:root[data-theme="dark"] {
   color-scheme: dark;
-  --superficie: #1a1a19;
-  --superficie-2: #232322;
-  --borde: #35352f;
-  --tinta: #ffffff;
-  --tinta-2: #c3c2b7;
-  --tinta-3: #97968c;
-  --escala-100: #104281;
-  --escala-300: #2a78d6;
-  --escala-450: #3987e5;
-  --escala-600: #86b6ef;
-  --sombra: none;
+
+  /* Fondos, del mas hondo al mas claro. */
+  --fondo: #0b0e11;        /* lienzo y barra lateral */
+  --superficie: #12161c;   /* tarjetas, tablas, paneles */
+  --superficie-2: #161b22; /* fila resaltada al pasar por encima */
+
+  /* Bordes: el fino separa filas, el marcado dibuja el contorno de una tarjeta. */
+  --linea: #161b22;
+  --borde: #1a1f26;
+  --borde-2: #1e242c;
+  --borde-vivo: #2a323c;   /* contorno al pasar por encima */
+
+  /* Tinta. */
+  --tinta: #f5f5f5;
+  --tinta-2: #c4cad2;
+  --tinta-3: #848e9c;
+  --tinta-4: #5c6470;
+
+  /* Acento. Uno solo, y es oro: marca lo interactivo y lo que dice LaLonja. */
+  --oro: #f0b90b;
+  --oro-claro: #ffd34d;
+  --oro-10: rgba(240, 185, 11, 0.1);
+  --oro-16: rgba(240, 185, 11, 0.16);
+  --oro-35: rgba(240, 185, 11, 0.35);
+
+  /* Direccion de un cambio: hecho, no juicio. Nunca viajan solos —el diseno
+   * antepone ▲/▼— porque un porcentaje tiene que leerse sin interpretar color. */
+  --sube: #1fa37a;
+  --baja: #e0604c;
+
+  --radio: 6px;
+  --radio-2: 4px;
+  --radio-pildora: 100px;
 }
 
-* { box-sizing: border-box; }
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
 
+html,
 body {
   margin: 0;
-  background: var(--superficie);
+  padding: 0;
+  background: var(--fondo);
+}
+
+body {
   color: var(--tinta);
-  font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
-  font-size: 15px;
-  line-height: 1.55;
+  font-family: Sora, "Helvetica Neue", Helvetica, Arial, sans-serif;
+  font-size: 14px;
+  line-height: 1.5;
   -webkit-font-smoothing: antialiased;
 }
 
-a { color: inherit; }
-
-h1, h2, h3 { line-height: 1.25; margin: 0 0 0.4em; font-weight: 650; }
-h1 { font-size: 1.6rem; letter-spacing: -0.015em; }
-h2 { font-size: 1.15rem; margin-top: 2rem; }
-h3 { font-size: 0.95rem; }
-
-.envoltorio { max-width: 1120px; margin: 0 auto; padding: 0 16px; }
-
-/* Cabecera y navegacion */
-.cabecera {
-  border-bottom: 1px solid var(--borde);
-  background: var(--superficie);
-  position: sticky;
-  top: 0;
-  z-index: 10;
+h1,
+h2,
+h3 {
+  font-weight: 600;
+  letter-spacing: -0.02em;
+  margin: 0;
 }
-.cabecera-fila {
-  display: flex;
-  align-items: center;
-  gap: 24px;
-  height: 56px;
-  flex-wrap: wrap;
-}
-.marca { font-weight: 700; letter-spacing: -0.02em; text-decoration: none; }
-.marca span { color: var(--tinta-3); font-weight: 400; }
-.nav {
-  display: flex;
-  gap: 18px;
-  font-size: 0.92rem;
-  /* Envuelve en lugar de desbordar. Con sesion la barra pasa de tres
-     elementos a siete mas el correo, y en un movil eso no cabe en una
-     linea por mucho que quepa en el portatil de quien lo programa. */
-  flex-wrap: wrap;
-  align-items: center;
-  row-gap: 8px;
-  min-width: 0;
-}
-/* El correo es lo unico de ancho impredecible: se recorta con puntos
-   suspensivos en vez de empujar a los demas fuera de la pantalla. */
-.nav .apunte {
-  max-width: 22ch;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-.nav a { color: var(--tinta-2); text-decoration: none; padding: 4px 0; }
-.nav a:hover { color: var(--tinta); }
 
-main { padding: 28px 0 56px; }
+a {
+  color: var(--oro);
+  text-decoration: none;
+}
+a:hover {
+  color: var(--oro-claro);
+}
 
-/* Tarjetas */
+button {
+  font-family: inherit;
+  cursor: pointer;
+}
+input,
+select,
+textarea {
+  font-family: inherit;
+}
+
+/* El foco de teclado es del sistema, no el azul del navegador. */
+:focus-visible {
+  outline: 2px solid var(--oro);
+  outline-offset: 2px;
+}
+
+::selection {
+  background: rgba(240, 185, 11, 0.28);
+}
+
+::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+::-webkit-scrollbar-thumb {
+  background: var(--borde-2);
+  border-radius: var(--radio);
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+/* Las cifras van en monoespaciada de ancho fijo: una columna de precios que
+ * baila al cambiar un digito es ilegible de un vistazo, que es justo para lo
+ * que sirve una tabla de mercado. */
+.mono {
+  font-family: "IBM Plex Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-weight: 500;
+  font-variant-numeric: tabular-nums;
+}
+
+/* Rotulo pequenio en versalitas espaciadas: el patron de etiqueta del diseno. */
+.rotulo {
+  font-family: "IBM Plex Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-weight: 500;
+  font-size: 10px;
+  letter-spacing: 0.18em;
+  color: var(--tinta-3);
+  text-transform: uppercase;
+}
+
+.sube {
+  color: var(--sube);
+}
+.baja {
+  color: var(--baja);
+}
+
+@keyframes fadeUp {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@keyframes pulseDot {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.25;
+  }
+}
+
+/* Quien prefiere menos movimiento no lo recibe. El diseno anima la entrada de
+ * cada pantalla; una animacion de entrada no lleva informacion, asi que
+ * suprimirla no quita nada. */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+
+/* --- Capa de compatibilidad, TEMPORAL -----------------------------------
+ *
+ * Las paginas que aun no se han convertido al diseno nuevo usan las clases del
+ * sistema anterior. Se remapean a los tokens nuevos para que NINGUN commit deje
+ * la aplicacion a medio pintar: el sitio esta desplegado y en produccion, y una
+ * rama que solo se ve bien cuando termina el trabajo entero no se puede probar.
+ *
+ * Esto se borra —y estas lineas con el— cuando la ultima pagina pase al diseno.
+ * Si queda aqui, es que quedan paginas sin convertir.
+ */
+
+.envoltorio {
+  max-width: 1240px;
+  margin: 0 auto;
+}
+
 .rejilla {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(230px, 1fr));
-  gap: 12px;
+  grid-template-columns: repeat(auto-fit, minmax(230px, 1fr));
+  gap: 14px;
 }
+
 .tarjeta {
   background: var(--superficie);
-  border: 1px solid var(--borde);
+  border: 1px solid var(--borde-2);
   border-radius: var(--radio);
-  padding: 14px 16px;
-  box-shadow: var(--sombra);
+  padding: 18px 20px;
 }
+.tarjeta-enlace {
+  text-decoration: none;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  color: inherit;
+}
+.tarjeta-enlace:hover {
+  border-color: var(--borde-vivo);
+}
+
 .etiqueta {
-  font-size: 0.74rem;
-  text-transform: uppercase;
-  letter-spacing: 0.06em;
+  font-family: "IBM Plex Mono", ui-monospace, monospace;
+  font-weight: 500;
+  font-size: 10px;
+  letter-spacing: 0.14em;
   color: var(--tinta-3);
-  font-weight: 600;
+  text-transform: uppercase;
 }
-/* Numero protagonista: tabular para que no baile al actualizarse. */
 .cifra {
-  font-size: 1.85rem;
-  font-weight: 680;
+  font-family: "IBM Plex Mono", ui-monospace, monospace;
+  font-weight: 500;
+  font-size: 26px;
   letter-spacing: -0.02em;
-  font-variant-numeric: tabular-nums;
-  margin-top: 2px;
+  margin-top: 8px;
+  display: block;
 }
-.apunte { color: var(--tinta-2); font-size: 0.85rem; }
-
-/* Tablas */
-.desliza { overflow-x: auto; }
-table { border-collapse: collapse; width: 100%; font-size: 0.9rem; }
-th, td { padding: 9px 12px; text-align: left; white-space: nowrap; }
-th {
-  font-size: 0.74rem;
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
+.apunte {
   color: var(--tinta-3);
-  border-bottom: 1px solid var(--borde);
-  font-weight: 600;
+  font-size: 12px;
 }
-td { border-bottom: 1px solid var(--borde); }
-tbody tr:hover { background: var(--superficie-2); }
-.num { text-align: right; font-variant-numeric: tabular-nums; }
 
-/* Medidor de score: magnitud, un solo tono. El extremo del dato se redondea
- * 4px y se ancla en la linea base; el canal va recesivo. */
+.desliza {
+  overflow-x: auto;
+}
+table {
+  border-collapse: collapse;
+  width: 100%;
+  font-size: 13px;
+}
+th {
+  text-align: left;
+  font-family: "IBM Plex Mono", ui-monospace, monospace;
+  font-weight: 500;
+  font-size: 9px;
+  letter-spacing: 0.14em;
+  color: var(--tinta-4);
+  text-transform: uppercase;
+  padding: 10px 12px;
+  border-bottom: 1px solid var(--borde);
+}
+td {
+  padding: 13px 12px;
+  border-bottom: 1px solid var(--linea);
+}
+tbody tr:hover {
+  background: var(--superficie-2);
+}
+.num {
+  text-align: right;
+  font-family: "IBM Plex Mono", ui-monospace, monospace;
+  font-variant-numeric: tabular-nums;
+}
+
+/* El medidor del score: UN solo tono, del oro tenue al oro pleno. Sigue sin ser
+ * un semaforo — un percentil no es un aprobado ni un suspenso. */
 .medidor {
-  display: inline-flex;
+  display: flex;
   align-items: center;
-  gap: 8px;
-  min-width: 132px;
+  gap: 9px;
 }
 .medidor-canal {
+  display: block;
   flex: 1;
-  height: 7px;
-  background: var(--superficie-2);
-  border-radius: 4px;
+  min-width: 60px;
+  height: 6px;
+  background: var(--borde);
+  border-radius: 3px;
   overflow: hidden;
 }
-/* `display: block` no es opcional: un <span> es en linea y `height` no le
- * aplica, asi que el relleno salia invisible y el medidor parecia vacio.
- * Se veia al renderizar, no al compilar. */
-.medidor-relleno { display: block; height: 100%; border-radius: 0 4px 4px 0; }
-.medidor-valor { font-variant-numeric: tabular-nums; font-weight: 640; min-width: 34px; }
+.medidor-relleno {
+  display: block;
+  height: 100%;
+  border-radius: 0 3px 3px 0;
+}
+.medidor-valor {
+  font-family: "IBM Plex Mono", ui-monospace, monospace;
+  font-weight: 500;
+  font-variant-numeric: tabular-nums;
+  min-width: 26px;
+}
 
-/* Insignias de estado: SIEMPRE con glifo y texto. El color no carga solo con
- * el significado, entre otras cosas porque dos de los cuatro estados no llegan
- * a 3:1 sobre la superficie clara. */
 .insignia {
   display: inline-flex;
   align-items: center;
-  gap: 5px;
-  padding: 2px 9px;
-  border-radius: 999px;
-  font-size: 0.78rem;
-  font-weight: 650;
+  gap: 6px;
   border: 1px solid;
+  border-radius: var(--radio-2);
+  padding: 3px 9px;
+  font-size: 12px;
   white-space: nowrap;
 }
-.insignia-glifo { font-size: 0.85em; }
+.insignia-glifo {
+  font-size: 0.85em;
+}
 
 .bloque-falta {
-  border: 1px dashed var(--borde);
-  border-radius: var(--radio);
-  padding: 14px 16px;
-  color: var(--tinta-2);
-  font-size: 0.9rem;
-  background: var(--superficie-2);
-}
-
-.frescura { color: var(--tinta-3); font-size: 0.78rem; font-weight: 400; }
-
-.aviso-legal {
-  border-top: 1px solid var(--borde);
-  margin-top: 48px;
-  padding: 16px 0 40px;
-  font-size: 0.82rem;
-  color: var(--tinta-2);
-}
-
-.formulario { display: flex; gap: 10px; flex-wrap: wrap; align-items: flex-end; }
-label { display: block; font-size: 0.78rem; color: var(--tinta-2); margin-bottom: 3px; }
-select, input, button {
-  font: inherit;
-  font-size: 0.9rem;
-  /* Altura fija: `select`, `input` y `button` la calculan distinto y los tres
-   * en una fila salen escalonados. Se ve enseguida y no se deduce del codigo. */
-  height: 34px;
-  padding: 0 10px;
-  border-radius: 6px;
-  border: 1px solid var(--borde);
+  color: var(--tinta-3);
   background: var(--superficie);
-  color: var(--tinta);
-}
-button { cursor: pointer; font-weight: 600; }
-button:hover { background: var(--superficie-2); }
-
-.vacio { color: var(--tinta-2); font-style: italic; }
-.error {
-  border: 1px solid var(--critico);
+  border: 1px solid var(--borde-2);
+  border-left: 2px solid var(--borde-vivo);
   border-radius: var(--radio);
-  padding: 14px 16px;
-  color: var(--tinta);
+  padding: 14px 18px;
+  font-size: 13px;
+  line-height: 1.6;
+}
+.frescura {
+  color: var(--tinta-4);
+  font-size: 11px;
+  font-weight: 400;
+}
+.vacio {
+  color: var(--tinta-3);
+  font-style: italic;
+}
+.error {
+  color: var(--baja);
+  border: 1px solid var(--baja);
+  border-radius: var(--radio);
+  padding: 12px 16px;
+  font-size: 13px;
 }
 
-@media (max-width: 620px) {
-  .cabecera-fila { height: auto; padding: 10px 0; gap: 12px; }
-  h1 { font-size: 1.35rem; }
-  .nav { gap: 14px; font-size: 0.88rem; }
-  /* En movil el correo no aporta —quien mira su telefono sabe de quien es— y
-     se lleva media barra. El boton de salir si se queda. */
-  .nav .apunte { display: none; }
+.formulario {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+  align-items: flex-end;
 }
-
-/* --- Sesion, formularios y carteras (FASE 17) --------------------------- */
-
-/* Formulario en columna, para el de entrar: un correo y una contrasena en
-   fila quedan estrechos y el error aparece a un lado en vez de debajo. */
 .formulario-vertical {
   display: flex;
   flex-direction: column;
   gap: 12px;
   align-items: stretch;
 }
-.formulario-vertical button { align-self: flex-start; }
-
-/* Las etiquetas envuelven su control, asi que pulsar el texto enfoca el campo
-   sin necesidad de `for`/`id` emparejados a mano, que es donde se descuadran. */
+.formulario-vertical button {
+  align-self: flex-start;
+}
 .formulario label,
 .formulario-vertical label {
   display: flex;
   flex-direction: column;
-  gap: 4px;
-  font-size: 0.82rem;
-  color: var(--tinta-2);
+  gap: 5px;
+  font-family: "IBM Plex Mono", ui-monospace, monospace;
+  font-size: 9px;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--tinta-3);
 }
-
-/* Un boton que hace de enlace. Sigue siendo <button> porque ejecuta una accion
-   —borrar, salir—, y un <a> para eso rompe la navegacion y el teclado. */
+select,
+input,
+textarea {
+  background: var(--superficie);
+  border: 1px solid var(--borde-2);
+  border-radius: var(--radio);
+  padding: 10px 12px;
+  color: var(--tinta);
+  font-size: 14px;
+  letter-spacing: normal;
+  text-transform: none;
+}
+button {
+  background: var(--oro);
+  color: var(--fondo);
+  border: none;
+  border-radius: var(--radio);
+  padding: 10px 16px;
+  font-size: 13px;
+  font-weight: 700;
+}
+button:hover {
+  background: var(--oro-claro);
+}
+button[disabled] {
+  opacity: 0.6;
+  cursor: progress;
+}
 .enlace-boton {
   background: none;
   border: none;
   padding: 0;
   font: inherit;
   font-weight: 600;
-  color: var(--tinta-2);
+  color: var(--tinta-3);
   text-decoration: underline;
-  cursor: pointer;
 }
-.enlace-boton:hover { background: none; color: var(--critico); }
+.enlace-boton:hover {
+  background: none;
+  color: var(--oro);
+}
 
-.tarjeta-enlace { text-decoration: none; display: flex; flex-direction: column; gap: 4px; }
-.tarjeta-enlace:hover { border-color: var(--tinta-3); }
+h1 {
+  font-size: 28px;
+  margin: 0 0 4px;
+}
+h2 {
+  font-size: 16px;
+  margin: 28px 0 12px;
+}
+section {
+  margin-bottom: 28px;
+}
 
-/* Colores de RESULTADO, y siempre con el signo delante: el "+" y el "−" se leen
-   sin interpretar el color, que es lo que hace falta cuando el color no se
-   distingue o no se ve. */
-.sube { color: var(--bueno); font-variant-numeric: tabular-nums; }
-.baja { color: var(--critico); font-variant-numeric: tabular-nums; }
+/* Rampa del score: UN solo tono, del oro tenue al oro pleno.
+ *
+ * Sustituye a la rampa azul del sistema anterior. Sigue siendo un solo tono, y
+ * por la misma razon: el score es un PERCENTIL —"esta por encima del 87% de sus
+ * comparables"—, no un aprobado. Un semaforo convertiria el numero en un juicio
+ * que el numero no hace; ese juicio lo emite el motor de senales y llega aparte.
+ *
+ * El diseno hace lo mismo en su pildora de score: oro pleno arriba, oro tenue
+ * en medio, gris abajo. */
+:root {
+  --escala-100: rgba(240, 185, 11, 0.22);
+  --escala-300: rgba(240, 185, 11, 0.45);
+  --escala-450: rgba(240, 185, 11, 0.7);
+  --escala-600: #f0b90b;
 
-button[disabled] { opacity: 0.6; cursor: progress; }
+  /* Estados de senal y regimen, sobre fondo oscuro. Reservados: no se
+   * reutilizan para "una serie mas". */
+  --bueno: #1fa37a;
+  --aviso: #f0b90b;
+  --serio: #e0904c;
+  --critico: #e0604c;
+}
