@@ -86,6 +86,9 @@ lado restrictivo cuesta una queja; hacia el otro, una factura.
 
 FREE tiene **cero** explicaciones de IA al día. Cada una cuesta dinero real en
 tokens, y §50 pone el control de coste como restricción, no como aspiración.
+En PRO y PREMIUM el cupo cuenta explicaciones **generadas**, no leídas: una
+servida desde la caché no cuesta nada y no lo gasta. El contador vive en Redis,
+se descuenta antes de llamar al modelo y falla cerrado igual que el limitador.
 
 ## Secretos
 

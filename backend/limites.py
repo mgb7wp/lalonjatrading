@@ -180,3 +180,34 @@ def limitar(nombre: str, maximo: int, ventana: int = 60):
             )
 
     return dependencia
+
+
+#: Un dia en segundos. La ventana es fija y alineada a medianoche UTC, que es lo
+#: que un usuario entiende por "al dia" con un margen de horas aceptable.
+DIA = 86_400
+
+
+def gastar_explicacion_ia(usuario_id: int, maximo: int) -> None:
+    """Descuenta una explicacion generada del cupo diario del usuario.
+
+    Se llama SOLO cuando hay que pedirsela al modelo: una explicacion servida
+    desde la cache no cuesta nada y no gasta cupo. Se descuenta antes de la
+    llamada, no despues, porque un intento que falla la validacion tambien se
+    ha pagado.
+
+    Falla cerrado sin Redis, como el limitador: un contador que se apaga cuando
+    cae su dependencia es una factura sin techo.
+    """
+    try:
+        n = _contar(f"ia:{usuario_id}", DIA)
+    except _SinRedis as exc:
+        log.error("cupo de IA sin Redis, se rechaza la peticion: %s", exc)
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="servicio de limitacion no disponible; intentalo en un momento",
+        ) from exc
+    if n > maximo:
+        raise HTTPException(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            detail=f"has alcanzado el máximo de {maximo} explicaciones con IA al día de tu plan",
+        )

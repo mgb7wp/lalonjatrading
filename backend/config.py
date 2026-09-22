@@ -43,6 +43,13 @@ class Settings(BaseSettings):
     # solo necesita saber donde esta para informar de frescura en /health/data.
     datos_dir: Path = RAIZ / "datos"
 
+    # Capa LLM (FASE 16). Sin clave, la API arranca igual y las explicaciones se
+    # declaran no disponibles: un despliegue sin IA es un despliegue valido, no
+    # uno roto. El modelo se puede cambiar sin tocar codigo.
+    anthropic_api_key: str = ""
+    llm_modelo: str = "claude-opus-5"
+    llm_timeout_segundos: float = 60.0
+
     @property
     def es_produccion(self) -> bool:
         return self.entorno == "produccion"

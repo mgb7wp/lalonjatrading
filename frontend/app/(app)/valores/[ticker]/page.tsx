@@ -4,11 +4,13 @@
 //
 // El diseno dibuja Resumen, Fundamental, Tecnico, Valoracion, Comparables, IA y
 // Noticias. Las tres primeras salen de `/stocks/{ticker}/analysis` y estan
-// conectadas. Las otras cuatro NO tienen backend:
+// conectadas. IA sale de `/stocks/{ticker}/explanation` (FASE 16), y solo se
+// pide al abrir su pestania: cada explicacion nueva cuesta tokens y cupo, y
+// pedirla en cada visita a la ficha seria gastar por quien no la va a leer.
+// Las otras tres NO tienen backend:
 //
 // - Valoracion pide un DCF de tres metodos que el motor no calcula.
 // - Comparables no existe.
-// - IA es la FASE 16.
 // - Noticias no tiene fuente y no la va a tener gratis.
 //
 // Se quedan en la barra de pestanias, marcadas, y al abrirlas explican por que
@@ -32,8 +34,15 @@ import {
   nombre,
   numero,
 } from "@/components/piezas";
-import { ApiError, api, type Analisis } from "@/lib/api";
-import { usuarioActual } from "@/lib/sesion";
+import {
+  ApiError,
+  NO_DISPONIBLE,
+  api,
+  type Analisis,
+  type ExplicacionIA,
+  type RespuestaExplicacion,
+} from "@/lib/api";
+import { apiSesion, usuarioActual } from "@/lib/sesion";
 
 export const dynamic = "force-dynamic";
 
@@ -67,12 +76,7 @@ const PESTANAS: Pestana[] = [
     motivo:
       "Comparar con el sector exige agrupar empresas por actividad real y no por la etiqueta del proveedor, y capitalización y múltiplos para todas ellas. El universo tiene 140 valores: las cohortes saldrían de dos o tres empresas y la comparación no diría nada.",
   },
-  {
-    id: "ia",
-    etiqueta: "Análisis IA",
-    motivo:
-      "Es la FASE 16. La capa de IA interpreta los scores ya calculados y nunca produce un número: hasta que exista, esta pestaña estaría inventando la explicación.",
-  },
+  { id: "ia", etiqueta: "Análisis IA" },
   {
     id: "noticias",
     etiqueta: "Noticias",
@@ -273,6 +277,8 @@ export default async function Valor({
           <Resumen a={a} />
         ) : activa.id === "fundamental" ? (
           <Fundamental a={a} />
+        ) : activa.id === "ia" ? (
+          <AnalisisIA ticker={v.ticker} dentro={dentro} />
         ) : (
           <Tecnico a={a} />
         )}
@@ -518,6 +524,141 @@ function Indicador({ k, v, nota }: { k: string; v: string; nota: string }) {
         {v}
       </div>
       <div style={{ fontSize: 11, color: "var(--tinta-4)", marginTop: 6 }}>{nota}</div>
+    </div>
+  );
+}
+
+/** La pestaña de IA. Pide la explicación con la sesión del usuario: el plan
+ * decide si la hay y el cupo cuántas nuevas al día. */
+async function AnalisisIA({ ticker, dentro }: { ticker: string; dentro: boolean }) {
+  if (!dentro) {
+    return (
+      <p className="bloque-falta" style={{ maxWidth: "80ch" }}>
+        <Link href="/entrar">Entra</Link> para ver la explicación con IA de este valor. Está
+        incluida en los planes Pro y Premium.
+      </p>
+    );
+  }
+
+  let r: RespuestaExplicacion;
+  try {
+    r = await apiSesion<RespuestaExplicacion>(`/stocks/${encodeURIComponent(ticker)}/explanation`);
+  } catch (e) {
+    // 403 (plan) y 429 (cupo) traen un `detail` escrito para leerlo tal cual.
+    const texto =
+      e instanceof ApiError && (e.status === 403 || e.status === 429)
+        ? e.message
+        : "El servicio de explicaciones no ha respondido. Inténtalo de nuevo en un momento.";
+    return (
+      <p className="bloque-falta" style={{ maxWidth: "80ch" }}>
+        {texto.charAt(0).toUpperCase() + texto.slice(1)}.
+      </p>
+    );
+  }
+
+  return (
+    <Bloque titulo="Qué dicen los datos, explicado" bloque={r.explicacion}>
+      {(e) => <Explicacion e={e} />}
+    </Bloque>
+  );
+}
+
+function Explicacion({ e }: { e: ExplicacionIA }) {
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 20, maxWidth: "80ch" }}>
+      <Frase texto={e.resumen} grande />
+
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(240px,1fr))", gap: 22 }}>
+        <Lista titulo="A favor" color="var(--sube)" items={e.a_favor} vacia="Nada destaca por encima del umbral." />
+        <Lista titulo="En contra" color="var(--baja)" items={e.en_contra} vacia="Nada cae por debajo del umbral." />
+      </div>
+
+      <Lista titulo="Qué ha cambiado en 30 días" items={e.cambios} vacia={NO_DISPONIBLE} />
+      <Lista titulo="Preguntas para seguir investigando" items={e.preguntas} vacia="—" />
+
+      <details>
+        <summary className="apunte" style={{ cursor: "pointer" }}>
+          Los datos que recibió la IA: cada cifra del texto sale de aquí
+        </summary>
+        <pre
+          className="mono"
+          style={{
+            fontSize: 11,
+            lineHeight: 1.55,
+            background: "var(--superficie)",
+            border: "1px solid var(--borde-2)",
+            borderRadius: "var(--radio)",
+            padding: 14,
+            overflowX: "auto",
+            marginTop: 10,
+          }}
+        >
+          {JSON.stringify(e.entrada, null, 2)}
+        </pre>
+      </details>
+
+      {/* §44: esto es información general, no asesoramiento. */}
+      <p className="apunte" style={{ margin: 0, lineHeight: 1.6 }}>
+        Redactado por IA a partir del score del {e.fecha_score}. La IA no calcula: explica cifras
+        que ya ha calculado el motor, y un validador descarta cualquier respuesta que cite una cifra
+        que no esté en sus datos. No es asesoramiento financiero.
+      </p>
+      <div className="mono" style={{ fontSize: 10, color: "var(--tinta-4)", lineHeight: 1.7 }}>
+        MODELO: {(e.modelo_llm ?? "—").toUpperCase()}
+        <br />
+        GENERADA: {e.generada.slice(0, 16).replace("T", " ")}
+        {e.desde_cache ? " · DESDE CACHÉ" : null}
+      </div>
+    </div>
+  );
+}
+
+/** Una frase de la IA. «Información no disponible» se pinta como hueco, no
+ * como una afirmación más. */
+function Frase({ texto, grande = false }: { texto: string; grande?: boolean }) {
+  if (texto.trim() === NO_DISPONIBLE) {
+    return <span className="bloque-falta" style={{ display: "block" }}>{NO_DISPONIBLE}.</span>;
+  }
+  return (
+    <p style={{ margin: 0, fontSize: grande ? 15 : 13, lineHeight: 1.7, color: "var(--tinta-2)" }}>
+      {texto}
+    </p>
+  );
+}
+
+function Lista({
+  titulo,
+  items,
+  vacia,
+  color,
+}: {
+  titulo: string;
+  items: string[];
+  vacia: string;
+  color?: string;
+}) {
+  return (
+    <div>
+      <div className="rotulo" style={color ? { color } : undefined}>
+        {titulo}
+      </div>
+      <ul style={{ margin: "10px 0 0", paddingLeft: 18, lineHeight: 1.7 }}>
+        {items.length ? (
+          items.map((t, i) =>
+            t.trim() === NO_DISPONIBLE ? (
+              <li key={i} className="apunte">
+                {NO_DISPONIBLE}
+              </li>
+            ) : (
+              <li key={i} style={{ fontSize: 13, color: "var(--tinta-2)" }}>
+                {t}
+              </li>
+            ),
+          )
+        ) : (
+          <li className="apunte">{vacia}</li>
+        )}
+      </ul>
     </div>
   );
 }

@@ -38,6 +38,10 @@ services:
       DEBUG: "false"
       CORS_ORIGENES: '["https://${DOMINIO}"]'
       SEC_USER_AGENT: ${SEC_USER_AGENT}
+      # Opcional: sin clave, las explicaciones con IA se declaran no
+      # disponibles y el resto de la API funciona igual (FASE 16).
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
+      LLM_MODELO: ${LLM_MODELO:-claude-opus-5}
 
   worker:
     volumes: !override []

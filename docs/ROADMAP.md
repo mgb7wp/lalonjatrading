@@ -681,7 +681,7 @@ arquitectura de canales preparada para push/Telegram/WhatsApp.
 
 ---
 
-## FASE 16 — Explicaciones con IA
+## FASE 16 — Explicaciones con IA ✅ COMPLETADA
 
 Capa LLM sobre JSON estructurado, con las cuatro reglas duras de
 ARCHITECTURE.md §12 y caché por `(security, fecha, hash_score)`.
@@ -689,6 +689,59 @@ ARCHITECTURE.md §12 y caché por `(security, fecha, hash_score)`.
 **Aceptación:** test que verifica que el LLM responde «Información no
 disponible» ante un hueco; validador que **rechaza** la respuesta si contiene
 cifras que no estaban en la entrada.
+
+**Entregado:** `backend/explicaciones.py` (entrada, hash, prompt, validador y
+cliente de Claude), `GET /api/v1/stocks/{ticker}/explanation` y la pestaña
+«Análisis IA» de la ficha, que deja de ser un hueco con motivo. 33 tests en
+`tests/test_explicaciones.py`.
+
+**Las reglas no se confían al prompt; cada una tiene un mecanismo.** El prompt
+las pide, pero lo que las garantiza es código que se ejecuta después:
+
+1. *No calcula.* La entrada lleva las cifras ya redondeadas a un decimal, tal
+   como se pueden decir. Todo lo demás lo caza la regla 3.
+2. *«Información no disponible».* Los huecos viajan en la entrada con su
+   motivo, nunca como un `null` suelto que invite a rellenarlo. El validador
+   exige la frase exacta en la sección que corresponde a un hueco (cambios a 30
+   días sin score anterior, señal ausente) y rechaza cualquier frase que nombre
+   un pilar ausente sin declararlo ausente. Las preguntas quedan fuera de esa
+   comprobación: preguntar por lo que no se sabe es su papel.
+3. *El validador de cifras.* Se extraen todas las cifras del texto —con coma o
+   punto decimal, con separador de miles— y cada una tiene que poder leerse en
+   la entrada: tal cual, en valor absoluto («cayó 5 puntos» por un −5) o
+   redondeada a 0, 1 o 2 decimales. Una resta entre dos cifras de la entrada
+   **no** pasa, aunque sea correcta: una resta mal hecha sería igual de
+   convincente. Si falla, se reintenta una vez diciendo al modelo qué cifra
+   sobraba; si vuelve a fallar, **no se publica ni se guarda**.
+4. *Caché.* La clave es el hash de la entrada completa más la versión del
+   prompt, no sólo del score: si cambia la señal, cambia lo que hay que contar;
+   si cambia el prompt, las explicaciones viejas dejan de servir. La fecha de
+   la clave es la del score, así que dos cortes con el mismo score comparten
+   explicación.
+
+**La entrada se publica con la respuesta** (`entrada`), y la pestaña la enseña
+bajo el texto: «la IA no inventa» pasa de ser una promesa a algo que el lector
+comprueba.
+
+**Coste.** FREE no tiene explicaciones (403, SECURITY.md). En PRO y PREMIUM el
+cupo diario cuenta **generaciones**, no lecturas: servir desde la caché es
+gratis y no gasta cupo. Se descuenta antes de llamar, porque un intento
+rechazado también se ha pagado, y falla cerrado sin Redis como el limitador.
+La pestaña pide la explicación sólo al abrirla, no en cada visita a la ficha.
+
+**Sin clave no se rompe nada.** Sin `ANTHROPIC_API_KEY` la API arranca y el
+bloque se declara «no configurado». Un fallo o una negativa del modelo son un
+bloque no disponible, no un 500.
+
+**Modelo.** `claude-opus-5` por defecto (`LLM_MODELO`), con salida
+estructurada por esquema JSON y el *fallback* de servidor ante una negativa;
+el modelo que de verdad sirvió cada explicación queda en `llm_model`.
+
+**Lo que no se ha probado:** una llamada real al modelo. Los tests usan un
+redactor falso que se porta mal a propósito —inventa una cifra, rellena un
+hueco—, que es lo que la aceptación pide demostrar. Cómo redacta el modelo de
+verdad, y cuántas veces lo rechaza el validador, hay que medirlo en producción:
+cada rechazo queda en el log con sus motivos.
 
 ---
 
@@ -708,10 +761,10 @@ cifras que no estaban en la entrada.
 >   andamiaje del exportador.
 > - Las cifras de la portada («48.000 empresas», «datos desde 2005») eran
 >   falsas. Ahora se leen de `/markets`.
-> - Seis funciones dibujadas no tienen backend —IA, noticias, valoración por
->   descuento de flujos, comparables, calendario de resultados y alertas—.
->   Mantienen su bloque **con el motivo escrito**, ni rellenas con datos de
->   ejemplo ni borradas.
+> - Seis funciones dibujadas no tenían backend —IA, noticias, valoración por
+>   descuento de flujos, comparables, calendario de resultados y alertas—. La
+>   IA ya lo tiene (FASE 16); las otras cinco mantienen su bloque **con el
+>   motivo escrito**, ni rellenas con datos de ejemplo ni borradas.
 >
 > Se pierde el modo claro: el diseño no define variante clara y mantener las dos
 > obligaría a inventarse la mitad de los valores.

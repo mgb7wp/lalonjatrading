@@ -178,6 +178,33 @@ export type Analisis = {
   prediccion: Bloque<Record<string, unknown>>;
 };
 
+// --- Explicacion con IA (FASE 16, §12) -----------------------------------
+
+/** La frase exacta con la que la IA declara un hueco. La misma constante que
+ * el backend (`backend/explicaciones.py`): la interfaz la reconoce para
+ * pintarla como hueco y no como una afirmacion mas. */
+export const NO_DISPONIBLE = "Información no disponible";
+
+export type ExplicacionIA = {
+  resumen: string;
+  a_favor: string[];
+  en_contra: string[];
+  cambios: string[];
+  preguntas: string[];
+  fecha_score: string;
+  modelo_llm: string | null;
+  generada: string;
+  desde_cache: boolean;
+  /** Exactamente lo que recibio el LLM. Cada cifra del texto sale de aqui. */
+  entrada: Record<string, unknown>;
+};
+
+export type RespuestaExplicacion = {
+  ticker: string;
+  fecha_corte: string;
+  explicacion: Bloque<ExplicacionIA>;
+};
+
 // --- Rankings (§32) y screener (§31) --------------------------------------
 
 export type Puesto = {

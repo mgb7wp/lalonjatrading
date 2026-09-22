@@ -4,10 +4,21 @@ from __future__ import annotations
 
 from fastapi import APIRouter
 
-from . import auth, health, markets, portfolios, rankings, screener, stocks, watchlists
+from . import (
+    auth,
+    explicaciones,
+    health,
+    markets,
+    portfolios,
+    rankings,
+    screener,
+    stocks,
+    watchlists,
+)
 
 router = APIRouter()
 router.include_router(auth.router)
+router.include_router(explicaciones.router)
 router.include_router(health.router)
 router.include_router(markets.router)
 router.include_router(portfolios.router)
