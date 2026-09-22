@@ -191,6 +191,34 @@ Splits y dividendos vienen con los precios ajustados de yfinance. Fusiones,
 cambios de ticker y bajas: **sin fuente gratuita**. Es la causa del sesgo de
 supervivencia (RD-4) y hoy se publica en lugar de disimularse.
 
+#### RD-4 en carne y hueso: Tata Motors, 22/09/2026
+
+El primer caso concreto en producción, y conviene tenerlo escrito porque
+describe la forma exacta del problema.
+
+El primer recálculo completo puntuó **137 valores de 138**. El que faltaba era
+`TATAMOTORS.NS`, y la fuente responde `404 — Quote not found for symbol`. Hubo
+una escisión: `TMPV.NS` (Tata Motors Passenger Vehicles) cotiza con normalidad.
+
+Tres cosas que aprender de aquí:
+
+1. **El motor se comportó bien.** El valor salía sin puntuar y con su motivo
+   escrito —«no hay precios cargados para este valor»— en lugar de imputar
+   nada. Eso es §12 y no había que tocarlo.
+2. **La vigilancia no.** La India cubría 29 de 30 valores, el 97 %, muy por
+   encima del 80 % de `COBERTURA_MINIMA`, así que no saltaba ningún aviso. Un
+   ticker que no ha tenido **nunca** un precio no es un día malo del proveedor.
+   De ahí la comprobación `valores_sin_ni_un_precio`.
+3. **La serie del sucesor está empalmada.** `TMPV.NS` trae 9.019 sesiones desde
+   1991, pero lo anterior a la escisión es la sociedad **combinada**, no la de
+   vehículos de pasajeros. Para el ranking de hoy da igual; para un backtest
+   largo es exactamente el artefacto que RD-4 describe, y no desaparece por
+   haber cambiado el ticker en `universo.yaml`.
+
+**Sin fuente de acciones corporativas, la única forma de enterarse de que un
+ticker ha muerto es que un día deje de responder.** Eso es lo que RD-4 significa
+en la práctica, y por qué no se cierra escribiendo código.
+
 ### 2.6 Noticias, analistas, insiders, short interest
 
 | Dato | Gratuito y legal | Decisión |

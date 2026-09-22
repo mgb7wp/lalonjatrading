@@ -122,7 +122,10 @@ mercados:
     - {ticker: "DRREDDY.NS",    nombre: "Dr. Reddy's",           sector_declarado: salud}
     - {ticker: "CIPLA.NS",      nombre: "Cipla",                 sector_declarado: salud}
     - {ticker: "MARUTI.NS",     nombre: "Maruti Suzuki",         sector_declarado: consumo_discrecional}
-    - {ticker: "TATAMOTORS.NS", nombre: "Tata Motors",           sector_declarado: consumo_discrecional}
+    # Escision de Tata Motors: `TATAMOTORS.NS` devuelve 404 en la fuente desde
+    # el 22/09/2026 y su sucesora cotiza con normalidad. Ojo al usar la serie
+    # para un backtest largo: antes de la escision es la sociedad COMBINADA.
+    - {ticker: "TMPV.NS",       nombre: "Tata Motors Passenger Vehicles", sector_declarado: consumo_discrecional}
     - {ticker: "TITAN.NS",      nombre: "Titan Company",         sector_declarado: consumo_discrecional}
     - {ticker: "ASIANPAINT.NS", nombre: "Asian Paints",          sector_declarado: materiales}
     - {ticker: "ULTRACEMCO.NS", nombre: "UltraTech Cement",      sector_declarado: materiales}
