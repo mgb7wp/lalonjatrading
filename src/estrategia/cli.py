@@ -43,12 +43,30 @@ RUTA_CONSULTAS = DIR_DATOS / "consultas_validacion.json"
 def _enrutador(cfg, forzar: str | None = None) -> Enrutador:
     """El enrutador de fuentes, con la opcion de forzar una sola desde el CLI.
 
-    `--proveedor` sigue existiendo porque es comodo para los tests y para
-    trabajar sin red, pero el reparto normal vive en `reglas.yaml`.
+    Sin `--proveedor` manda el reparto de `reglas.yaml`. La opcion sigue
+    existiendo porque es comoda para los tests y para trabajar sin red, pero
+    tiene que pedirse a proposito: un valor por defecto que forzara una fuente
+    haria inalcanzable el reparto y, si esa fuente fuera la sintetica, daria
+    datos inventados a quien cree estar trabajando con los reales.
     """
     if forzar:
         cfg = cfg.con_fuente_unica(forzar)
     return Enrutador(cfg)
+
+
+def _nombre_cache(args, cfg) -> str:
+    """Carpeta de `datos/cache/` que corresponde a esta ejecucion.
+
+    Es el origen de los datos (`yfinance`, `eodhd+yfinance`, `sintetico`...), el
+    mismo que queda anotado en la instantanea. Asi `datos` escribe justo donde
+    luego leen los demas comandos y el panel, que ofrece una opcion por carpeta.
+    """
+    return _enrutador(cfg, args.proveedor).origen
+
+
+def _opcion_proveedor(args) -> str:
+    """Como repetir la opcion `--proveedor` en un mensaje, si se uso."""
+    return f"--proveedor {args.proveedor} " if args.proveedor else ""
 
 
 def _descargar(cfg, nombre_proveedor: str | None, inicio: date, fin: date) -> Instantanea:
@@ -82,21 +100,19 @@ def _descargar(cfg, nombre_proveedor: str | None, inicio: date, fin: date) -> In
 
     # El origen refleja el reparto real, no una sola fuente: si los precios
     # vienen de una y los fundamentales de otra, el informe tiene que decirlo.
-    usadas = enrutador.fuentes_usadas
-    origen = usadas[0] if len(usadas) == 1 else "+".join(usadas)
-
     return Instantanea(
         precios=precios, fundamentales=fundamentales, fx=fx, sectores=sectores,
-        fecha_descarga=date.today(), origen=origen,
+        fecha_descarga=date.today(), origen=enrutador.origen,
     )
 
 
 def _cargar_instantanea(args, cfg) -> Instantanea:
-    directorio = DIR_CACHE / args.proveedor
+    nombre = _nombre_cache(args, cfg)
+    directorio = DIR_CACHE / nombre
     if not (directorio / "precios.parquet").is_file():
         print(
-            f"No hay datos en cache para '{args.proveedor}'. "
-            f"Ejecuta primero: estrategia datos --proveedor {args.proveedor}",
+            f"No hay datos en cache para '{nombre}' ({directorio}). "
+            f"Ejecuta primero: estrategia {_opcion_proveedor(args)}datos",
             file=sys.stderr,
         )
         raise SystemExit(2)
@@ -112,7 +128,7 @@ def cmd_datos(args, cfg) -> None:
     fin = date.today()
     inicio = fin - timedelta(days=int(args.anos * 365.25))
     inst = _descargar(cfg, args.proveedor, inicio, fin)
-    destino = DIR_CACHE / args.proveedor
+    destino = DIR_CACHE / inst.origen
     inst.guardar(destino)
     print(
         f"Guardado en {destino}: {len(inst.precios)} filas de precios, "
@@ -253,7 +269,7 @@ def cmd_backtest(args, cfg) -> None:
     inf = informe_mod.construir(r, cfg, inst, consultas_validacion=consultas)
     texto = informe_mod.a_markdown(inf)
     print("\n" + texto)
-    _guardar_informe(inf, texto, args)
+    _guardar_informe(inf, texto, args, _nombre_cache(args, cfg))
 
 
 def cmd_validar(args, cfg) -> None:
@@ -278,14 +294,14 @@ def cmd_validar(args, cfg) -> None:
     )
     texto = informe_mod.a_markdown(inf)
     print("\n" + texto)
-    _guardar_informe(inf, texto, args)
+    _guardar_informe(inf, texto, args, _nombre_cache(args, cfg))
 
 
 def cmd_informe(args, cfg) -> None:
     cmd_backtest(args, cfg)
 
 
-def _guardar_informe(inf, texto: str, args) -> None:
+def _guardar_informe(inf, texto: str, args, nombre: str) -> None:
     DIR_RESULTADOS.mkdir(parents=True, exist_ok=True)
     marca = "sintetico_" if inf.sintetico else ""
     formato = getattr(args, "formato", "md")
@@ -295,7 +311,17 @@ def _guardar_informe(inf, texto: str, args) -> None:
         ruta.write_text(texto, encoding="utf-8")
         print(f"\nInforme guardado en {ruta}")
 
-    if formato in ("html", "ambos"):
+    if formato in ("html", "ambos") and inf.sintetico:
+        # El sitio se despliega entero: un informe sintetico en `sitio/` acabaria
+        # publicado como si fuera el estado real de la cartera. Se deja en
+        # resultados, que no se publica, para poder mirarlo igualmente.
+        ruta = DIR_RESULTADOS / f"informe_{marca}{date.today().isoformat()}.html"
+        ruta.write_text(informe_html_mod.a_html(inf), encoding="utf-8")
+        print(
+            f"\nInforme HTML guardado en {ruta}. No se copia a {DIR_SITIO} "
+            f"porque esta hecho con datos sinteticos."
+        )
+    elif formato in ("html", "ambos"):
         # El sitio se despliega entero, asi que el informe de esta semana es el
         # index y ademas queda archivado por semana: poder ver que decia el
         # sistema una semana concreta es justo lo que hace que no valga
@@ -304,22 +330,20 @@ def _guardar_informe(inf, texto: str, args) -> None:
         (DIR_SITIO / "informes").mkdir(exist_ok=True)
         pagina = informe_html_mod.a_html(inf)
         ano, semana, _ = date.today().isocalendar()
-        archivo = DIR_SITIO / "informes" / f"{marca}{ano}-S{semana:02d}.html"
+        archivo = DIR_SITIO / "informes" / f"{ano}-S{semana:02d}.html"
         archivo.write_text(pagina, encoding="utf-8")
         (DIR_SITIO / "index.html").write_text(pagina, encoding="utf-8")
         print(f"\nSitio generado en {DIR_SITIO} (index.html y {archivo.name})")
-    inf.curva.to_parquet(DIR_RESULTADOS / f"curva_{args.proveedor}.parquet", index=False)
+    inf.curva.to_parquet(DIR_RESULTADOS / f"curva_{nombre}.parquet", index=False)
     if not inf.operaciones.empty:
         inf.operaciones.to_parquet(
-            DIR_RESULTADOS / f"operaciones_{args.proveedor}.parquet", index=False
+            DIR_RESULTADOS / f"operaciones_{nombre}.parquet", index=False
         )
     if not inf.eventos.empty:
-        inf.eventos.to_parquet(
-            DIR_RESULTADOS / f"eventos_{args.proveedor}.parquet", index=False
-        )
+        inf.eventos.to_parquet(DIR_RESULTADOS / f"eventos_{nombre}.parquet", index=False)
     if inf.sensibilidad is not None and not inf.sensibilidad.empty:
         inf.sensibilidad.to_parquet(
-            DIR_RESULTADOS / f"sensibilidad_{args.proveedor}.parquet", index=False
+            DIR_RESULTADOS / f"sensibilidad_{nombre}.parquet", index=False
         )
 
 
@@ -342,10 +366,11 @@ def construir_parser() -> argparse.ArgumentParser:
         help="directorio de configuracion (por defecto config/)",
     )
     p.add_argument(
-        "--proveedor", default="sintetico",
+        "--proveedor", default=None,
         help="fuerza UNA sola fuente para todos los tipos de dato, ignorando el "
-             "reparto de reglas.yaml. Comodo para trabajar sin red "
-             "('sintetico') o para probar una fuente concreta.",
+             "reparto de reglas.yaml. Sin esta opcion manda reglas.yaml. Comodo "
+             "para trabajar sin red ('sintetico') o para probar una fuente "
+             "concreta.",
     )
     sub = p.add_subparsers(dest="comando", required=True)
 

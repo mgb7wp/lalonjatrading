@@ -52,7 +52,18 @@ class Informe:
 
     @property
     def sintetico(self) -> bool:
-        return str(self.meta.get("origen", "")).startswith("sintetico")
+        return es_sintetico(str(self.meta.get("origen", "")))
+
+
+def es_sintetico(origen: str) -> bool:
+    """Si en el origen interviene la fuente sintetica, aunque sea para un solo
+    tipo de dato.
+
+    El origen de un reparto mixto une las fuentes con `+` (`eodhd+sintetico`).
+    Basta con que una sea inventada para que el resultado no valga: unos
+    fundamentales reales con precios sinteticos siguen siendo una curva ficticia.
+    """
+    return "sintetico" in (parte.strip() for parte in origen.split("+"))
 
 
 def _avisos_permanentes() -> list[Aviso]:

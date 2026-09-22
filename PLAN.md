@@ -367,3 +367,4 @@ Marca aquí cada tarea al terminarla (Claude Code lo hace al cerrar cada sesión
 - [x] A2 — Tests en verde (92/92). Versiones máximas en `yfinance` (<1.8), `streamlit` (<1.65) y `exchange-calendars` (<4.14); `plotly` quitado; el test de la clave de EODHD ya no depende de tu ordenador (fusionada en `main`).
 - [x] A3 — Los tests usan su propia copia fija de la configuración (`tests/config_prueba/`). Comprobado: con `config/` quitada entera, los 94 tests pasan (fusionada en `main`).
 - [x] A4 — `.github/workflows/tests.yml`: GitHub ejecuta `pytest` en cada cambio (fusionada en `main`).
+- [x] B1 — Sin `--proveedor` manda el reparto de `reglas.yaml`. La caché va a `datos/cache/<origen>/`, la misma carpeta que ofrece el panel (primero la del reparto configurado). Un origen mixto con `sintetico` se marca como sintético, y un informe sintético ya no se escribe en `sitio/`. Tests en `tests/test_cli.py` (rama `claude/tarea-b1-plan-upatwu`, pendiente de fusionar).

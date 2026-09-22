@@ -21,9 +21,14 @@ El reparto por especialidad es lo que resuelve el problema real de este
 proyecto: quedarse con los precios gratuitos de yfinance y traer los
 fundamentales de una fuente con histórico largo y fechas de publicación reales.
 
-`--proveedor` en la línea de comandos fuerza una sola fuente para todo,
-ignorando el reparto. Es cómodo para trabajar sin red (`--proveedor sintetico`)
-o para probar una fuente concreta.
+Sin más opciones, la línea de comandos usa este reparto. `--proveedor` fuerza
+una sola fuente para todo, ignorando el reparto. Es cómodo para trabajar sin red
+(`--proveedor sintetico`) o para probar una fuente concreta.
+
+Los datos descargados se guardan en `datos/cache/<origen>/`, donde el origen es
+la fuente o las fuentes usadas unidas por `+` (`eodhd+yfinance`). Si en el
+origen aparece `sintetico`, el informe lleva la marca de datos sintéticos y no
+se publica en `sitio/`.
 
 ## Las fuentes que hay
 

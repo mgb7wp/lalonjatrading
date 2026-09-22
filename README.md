@@ -52,8 +52,12 @@ estrategia informe --periodo todo --formato ambos
 streamlit run panel/app.py
 ```
 
-Todos los comandos aceptan `--proveedor {sintetico,yfinance}`. El informe se
-guarda en `datos/resultados/`.
+Sin `--proveedor`, cada comando usa el reparto de fuentes de `reglas.yaml`
+(`proveedor_datos`). Con `--proveedor {sintetico,yfinance,...}`, que va antes del
+subcomando, se fuerza una sola fuente para todo. Los datos se guardan en
+`datos/cache/<origen>/` (`yfinance`, `eodhd+yfinance`, `sintetico`...), que es lo
+que ofrece el panel. El informe se guarda en `datos/resultados/`; si está hecho
+con datos sintéticos, aunque sea en parte, nunca se copia a `sitio/`.
 
 ### Sin conexión: el proveedor sintético
 

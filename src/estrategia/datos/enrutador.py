@@ -63,6 +63,16 @@ class Enrutador:
     def fuentes_usadas(self) -> list[str]:
         return sorted(set(self._por_tipo.values()))
 
+    @property
+    def origen(self) -> str:
+        """Nombre del reparto: `yfinance` si hay una sola fuente, o las fuentes
+        unidas por `+` (`eodhd+yfinance`) si se mezclan.
+
+        Es el origen que queda anotado en la instantanea y tambien el nombre de
+        su carpeta de cache, que es la que lista el panel.
+        """
+        return "+".join(self.fuentes_usadas)
+
     def fuente(self, tipo: str) -> Fuente:
         """La fuente dueña de un tipo de dato, ya construida."""
         if tipo not in TIPOS_DE_DATO:

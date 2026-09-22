@@ -34,6 +34,6 @@
 - **Tests:** `pytest`. Ejecútalos siempre antes de dar algo por terminado. Cada arreglo lleva su test.
   - Los tests usan su propia copia de la configuración, `tests/config_prueba/`, no `config/`. Un cambio de parámetro del dueño en `config/` no se copia allí.
 - **Sin red:** `estrategia --proveedor sintetico ...`. La opción `--proveedor` va antes del subcomando.
-  - Hoy `--proveedor` vale `sintetico` por defecto. Es un fallo pendiente: la tarea B1 de `PLAN.md`.
+  - Sin `--proveedor` se usa el reparto de fuentes de `reglas.yaml`, que pide datos reales (red).
 - **Datos reales:** desde la nube, Yahoo Finance devuelve el error 429. Lo que necesite datos reales se ejecuta en el ordenador Windows del dueño (tareas marcadas 💻 en `PLAN.md`).
 - **Ramas:** trabaja en la rama indicada para la sesión y no fusiones en `main` sin que el dueño lo pida.

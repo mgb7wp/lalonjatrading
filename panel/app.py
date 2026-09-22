@@ -29,6 +29,7 @@ from estrategia import informe as informe_mod  # noqa: E402
 from estrategia import universo as universo_mod  # noqa: E402
 from estrategia import validacion as validacion_mod  # noqa: E402
 from estrategia.datos.almacen import Instantanea  # noqa: E402
+from estrategia.datos.enrutador import Enrutador  # noqa: E402
 from estrategia.sectores import MapaSectores  # noqa: E402
 
 DIR_CACHE = RAIZ / "datos" / "cache"
@@ -89,13 +90,24 @@ def pintar_avisos(inf) -> None:
 # --------------------------------------------------------------------------
 
 st.sidebar.title("Estrategia mixta")
-proveedores = [d.name for d in DIR_CACHE.iterdir() if d.is_dir()] if DIR_CACHE.is_dir() else []
+proveedores = (
+    sorted(d.name for d in DIR_CACHE.iterdir() if d.is_dir()) if DIR_CACHE.is_dir() else []
+)
 if not proveedores:
     st.error(
         "No hay datos disponibles todavia.\n\n"
-        "Si estas en local: `estrategia --proveedor sintetico datos`"
+        "Descargalos con `estrategia datos` (usa el reparto de fuentes de "
+        "`reglas.yaml`) o, sin red, con `estrategia --proveedor sintetico datos`."
     )
     st.stop()
+
+# Cada carpeta de la cache lleva el nombre de su origen, el mismo que usa el CLI.
+# Se ofrece primero la del reparto de `reglas.yaml`, para que lo que se ve por
+# defecto sean los datos con los que se opera y no los sinteticos.
+configurado = Enrutador(config_mod.cargar()).origen
+if configurado in proveedores:
+    proveedores.remove(configurado)
+    proveedores.insert(0, configurado)
 
 proveedor = st.sidebar.selectbox("Proveedor de datos", proveedores)
 cfg, inst = cargar(proveedor)
