@@ -157,6 +157,11 @@ no filtren información entre train y test) y con la regla de que un modelo sól
 sustituye al baseline si lo bate **fuera de muestra y después de costes**. Un
 resultado negativo se publica, no se esconde.
 
+> **Estado a 22/09/2026.** La condición (b) **ya se cumple**: el histórico se
+> recargó a 20 años el 21/09 y EE. UU., Brasil e India tienen precios desde
+> 2008 o antes. Queda sólo la (a): 138 valores de los 1.000. El bloqueo de la
+> FASE 8 es hoy el tamaño del universo y nada más.
+
 ### I-8. §16 pide un sentiment score sin fuente que lo alimente
 No hay fuente gratuita, legal y con cobertura de ES/BR/IN para sentimiento de
 noticias. El propio encargo lo anticipa y da la respuesta correcta: «NO inventar

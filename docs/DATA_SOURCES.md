@@ -14,7 +14,8 @@ de cobrar a nadie. Es el documento que pide §50 del encargo.
 > | **yfinance** | ✅ **VERIFICADA** | 5/5 mercados. Destapó un fallo real del adaptador (abajo) |
 > | **Stooq** | ❌ **NO SIRVE** | Desafío anti-bot; cero datos en los cinco mercados |
 > | **SEC EDGAR** | ✅ **VERIFICADA** | 19 ejercicios de AAPL, 0 % de huecos, **todas point-in-time real** |
-> | **EODHD / CVM** | ⏸ pendiente | Sin clave la una, sin adaptador la otra (FASE 5) |
+> | **CVM** | ✅ **EN PRODUCCIÓN** | 26/26 valores brasileños, con fecha de recepción real |
+> | **EODHD** | ⏸ pendiente | Adaptador escrito, **nunca ejecutado con clave real** |
 >
 > Las cuotas y los precios de las APIs cambian, así que esto caduca. Vuelve a
 > pasar el verificador antes de fiarte.
@@ -70,7 +71,7 @@ mercados dependen de una sola fuente no oficial. Ver el punto 6 del plan.
 | Mercado | Fuente gratuita | Fechas de publicación reales | Histórico | Estado |
 |---|---|---|---|---|
 | **EE. UU.** | **SEC EDGAR** (`data.sec.gov`, XBRL `companyfacts`) | **Sí** (`filed`) | 2007→ | ✅ **VERIFICADA 16/09/2026**: 19 ejercicios de AAPL, `pit_origin = captured` en todas |
-| **Brasil** | **CVM Dados Abertos** (DFP anuales, ITR trimestrales, CSV por año) | **Sí** (fecha de recepción) | ~2010→ | **Host alcanzable** (responde 200); adaptador pendiente — FASE 5 |
+| **Brasil** | **CVM Dados Abertos** (DFP anuales, ITR trimestrales, CSV por año) | **Sí** (fecha de recepción) | ~2010→ | ✅ **EN PRODUCCIÓN**: `cvm_proveedor.py`, 26/26 valores, `pit_origin = captured` |
 | **España** | — | No | — | **Sin fuente gratuita fiable.** La CNMV publica los informes financieros, pero no en formato explotable de forma sistemática. BME/SIX es de pago. |
 | **India** | — | No | — | **Sin fuente gratuita fiable.** NSE y BSE exponen endpoints públicos, pero sus condiciones no permiten uso sistemático ni comercial. |
 | **Alemania** | Bundesanzeiger | Parcial | — | No explorado. Baja prioridad. |
@@ -253,8 +254,11 @@ de verdad.
 - **Legal:** uso público expresamente permitido.
 - **Respaldo:** yfinance (degradado a `reconstructed`).
 
-### CVM Dados Abertos (Brasil) — *prioridad alta*
+### CVM Dados Abertos (Brasil) — ✅ **EN PRODUCCIÓN**
 - **Aporta:** DFP/ITR con fecha de recepción; histórico ~2010.
+- **Comprobado en producción el 22/09/2026:** Ambev sirve el ejercicio cerrado
+  el 31/12/2025 con fecha de publicación 12/02/2026 y `origen_pit = capturado`.
+  Es la segunda —y última— fuente gratuita del proyecto capaz de marcar eso.
 - **Coste:** 0 €. **Límites:** descarga de ZIP/CSV anuales, no API por ticker; requiere un proceso de carga en bloque.
 - **Legal:** datos abiertos oficiales.
 - **Respaldo:** yfinance.
@@ -306,7 +310,7 @@ mercados dependen de una única fuente no oficial y sin SLA. Ver el plan de acci
 | 4 | Adaptador **Stooq** | ❌ **descartado** | Desafío anti-bot: no sirve |
 | 5 | Adaptador **SEC EDGAR** | ✅ **verificado** (y corregido dos veces) | PIT real en EE. UU.: 19 ejercicios con cifras de su momento |
 | 6 | **Buscar un respaldo de precios** que sustituya a Stooq | ⏳ **pendiente, es lo siguiente** | Que caiga yfinance y no caiga todo |
-| 7 | Adaptador **CVM** | FASE 5 | PIT real en Brasil |
+| 7 | Adaptador **CVM** | ✅ **en producción** | PIT real en Brasil: `origen_pit = capturado` en los 26 valores |
 | 8 | Evaluar **EODHD** con clave real | FASE 5 / 8 | España, India, histórico y licencia |
 | 9 | Deslistadas y composición histórica de índices | post-MVP | Sesgo de supervivencia (RD-4) |
 

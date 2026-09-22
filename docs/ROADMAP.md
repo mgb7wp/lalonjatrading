@@ -126,6 +126,23 @@ futura, que ahora se cuentan y se avisan en lugar de pasar por «último dato».
 > con sus horas sacadas de los calendarios reales. La lección, escrita donde se
 > pueda tropezar con ella: **una fase que produce datos no está cerrada hasta
 > que algo la dispara sola.**
+>
+> **Segunda corrección, 22/09/2026.** El planificador funcionaba —las horas de
+> producción coincidían con las calculadas desde los calendarios— pero cubría
+> media tubería: `ejecutar_mercado` encadenaba ingesta e indicadores y se
+> paraba ahí. `workers/pipeline/scores.py` y `senales.py` existían, tenían su
+> `ejecutar()`, y **no los llamaba nadie**. Con los precios ya al día,
+> `/rankings` devolvía `fecha_datos` de cinco días antes, la web servía el
+> precio de hoy con el score de la semana pasada, y la India —recién cargada,
+> con precios y fundamentales— daba `n: 0` en su ranking: para el motor no
+> existía.
+>
+> Puntuar es ahora una tarea propia, **una sola y después del último cierre**,
+> porque el ranking de §25 compara los cinco mercados y lee los scores de UNA
+> fecha: puntuar tras cada cierre dejaría la tabla global incompleta once horas
+> al día. La lección es la misma de arriba, una capa más abajo, y por eso vale
+> la pena escribirla otra vez: **comprobar que la tarea existe no es comprobar
+> que hace el trabajo entero.**
 
 ---
 
@@ -330,8 +347,20 @@ anti-sesgo en verde.
 ## FASE 8 — Machine Learning 🔄 INFRAESTRUCTURA LISTA, BLOQUEADA POR D-7
 
 **Estado medido, no recordado:** `ml.condiciones.medir()` lo comprueba contra la
-base de datos. Hoy: **138 valores de 1.000 (13 %)** y **8 años de histórico de
-los 15** exigidos. Ninguna de las dos condiciones se cumple.
+base de datos. A 22/09/2026: **138 valores de 1.000 (13 %)** y **20 años de
+histórico**, por encima de los 15 exigidos desde que se recargó el 21/09/2026.
+
+De las dos condiciones ya se cumple una. **Lo único que sigue bloqueando la
+fase es el tamaño del universo**, y eso lo mueve la lista de tickers, no el
+código: ampliar los cinco mercados vale más que añadir mercados nuevos, porque
+la cohorte de percentiles es `mercado × sector` y cinco cohortes pequeñas más
+no dan lo que da una cohorte profunda.
+
+Y una advertencia que no desaparece al cumplir D-7: los cinco *benchmarks* son
+índices de precio (`benchmark_is_total_return: false` en los cinco), que es la
+decisión **D-5**. Entrenar contra ellos sesga el objetivo a favor de las
+empresas que reparten dividendo. Medir «13 % del universo» es fácil; esto no lo
+mide nadie solo.
 
 Lo que hay construido y probado:
 
@@ -811,11 +840,22 @@ Y las dos decisiones que no son técnicas y bloquean el cobro:
 
 ## Después del MVP
 
-Por orden de valor, no de facilidad:
+Por orden de valor, no de facilidad. El objetivo declarado del proyecto es que
+el motor saque buenas conclusiones de buenos datos, así que el orden es: que el
+dato que ya hay llegue entero al motor, que el sistema diga la verdad sobre él,
+y sólo entonces que haya más.
 
+0. **Un respaldo de precios.** No estaba en esta lista y debería: hoy los cinco
+   mercados cuelgan de yfinance, una sola fuente no oficial, sin SLA y sin
+   alternativa desde que Stooq quedó descartado (RD-1). Es el punto 6 del plan
+   de `DATA_SOURCES.md`. Candidatas: Tiingo, Twelve Data, o el plan de pago de
+   EODHD, que resolvería a la vez el respaldo y los fundamentales de España e
+   India.
 1. **Deslistadas y composición histórica de índices** (RD-4). Es lo que convierte
    el backtest en evidencia en lugar de en indicio.
-2. **Ampliar universo** a 1.000+ valores, que además es la puerta de la FASE 8.
+2. **Ampliar universo** a 1.000+ valores. Es lo **único** que queda para
+   desbloquear la FASE 8: D-7 pide además 15 años en dos mercados y eso ya
+   está, desde que el histórico subió a 20 años el 21/09/2026.
 3. **Copiloto conversacional** (§30): pregunta → filtros → nuestra API → respuesta.
 4. **Análisis de cartera con IA** (§34), sólo en su parte descriptiva.
 5. **Más mercados** (UK, FR, IT, PT, CA, JP, AU, MX): una fila en `market`, su
