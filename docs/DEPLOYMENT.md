@@ -179,9 +179,35 @@ con cero valores. La ingesta inicial se lanza a mano una vez:
 cp=(docker compose -f docker-compose.yml -f docker-compose.produccion.yml)
 "${cp[@]}" exec api python scripts/update_market_data.py
 "${cp[@]}" exec api python scripts/calculate_scores.py
+"${cp[@]}" exec api python scripts/calculate_signals.py
 ```
 
-A partir de ahí el `worker` la mantiene al día.
+A partir de ahí el `worker` la mantiene al día: descarga cada mercado tras su
+cierre y puntúa el universo entero tras el último, sobre las 19:30 de São Paulo.
+
+### 5b. Recalcular hacia atrás, cuando entran valores nuevos
+
+Los scores tienen fecha. Si se da de alta un mercado —o se amplía uno— después
+del último cálculo, esos valores **tienen datos y no aparecen en los rankings**
+hasta que se vuelva a puntuar: `/rankings?mercado=es` devuelve `n: 0` con la
+base llena. Pasó el 22/09/2026 con España, Alemania e India.
+
+No hace falta esperar al cierre de la tarde:
+
+```bash
+"${cp[@]}" exec api python scripts/calculate_scores.py
+"${cp[@]}" exec api python scripts/calculate_signals.py
+```
+
+Y para comprobar que ha surtido efecto, que es lo que de verdad cierra la
+operación:
+
+```bash
+curl -s https://$DOMINIO/api/v1/rankings | grep -o '"fecha_datos":"[^"]*"'
+curl -s "https://$DOMINIO/api/v1/rankings?mercado=es" | grep -o '"n":[0-9]*'
+```
+
+La primera tiene que dar la fecha de hoy y la segunda, un número mayor que cero.
 
 ### Alternativa: Cloudflare Tunnel (sin IP pública)
 
