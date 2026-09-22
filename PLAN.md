@@ -365,4 +365,4 @@ Marca aquí cada tarea al terminarla (Claude Code lo hace al cerrar cada sesión
 
 - [x] A1 — `PLAN.md` y `CLAUDE.md` creados (fusionada en `main`).
 - [x] A2 — Tests en verde (92/92). Versiones máximas en `yfinance` (<1.8), `streamlit` (<1.65) y `exchange-calendars` (<4.14); `plotly` quitado; el test de la clave de EODHD ya no depende de tu ordenador (fusionada en `main`).
-- [x] A3 — Los tests usan su propia copia fija de la configuración (`tests/config_prueba/`). Comprobado: con `config/` quitada entera, los 94 tests pasan (rama `claude/tarea-a2-plan-3vkpwa`; pendiente de fusionar en `main`).
+- [x] A3 — Los tests usan su propia copia fija de la configuración (`tests/config_prueba/`). Comprobado: con `config/` quitada entera, los 94 tests pasan (fusionada en `main`).
