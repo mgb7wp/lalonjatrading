@@ -25,18 +25,28 @@ hace aqui dos cosas que no se pueden dejar a la buena voluntad de cada adaptador
 2. **Aplica el contrato.** Ningun lote entra en el almacen sin pasar por
    `contrato.py`. Es lo que convierte un mapeo roto en un error ruidoso en vez de
    en media puntuacion fundamental muerta en silencio.
+
+Y una tercera, solo para precios y divisas: **el respaldo**. Los cinco mercados
+cuelgan de la misma fuente, asi que si cae no cae un mercado, caen los cinco. Si
+la duena falla —excepcion, lote vacio o contrato incumplido— o deja tickers sin
+servir, lo que falta se pide a las fuentes de `implementacion.yaml`
+(`respaldos`), por orden. La unidad es la serie entera: un ticker sale de una
+sola fuente, nunca media serie de una y media de otra, porque cada proveedor
+ajusta a su manera y la costura seria un hueco inventado. Todo lo que pasa queda
+en `incidencias`, y cada fila sigue diciendo de donde salio.
 """
 
 from __future__ import annotations
 
 from datetime import date
+from typing import Callable
 
 import pandas as pd
 
 from ..config import Config
-from ..errores import ErrorConfiguracion
+from ..errores import ErrorConfiguracion, ErrorDatos
 from . import contrato, registro
-from .proveedor import TIPOS_DE_DATO, Capacidades, Fuente
+from .proveedor import COLUMNAS_FX, TIPOS_DE_DATO, Capacidades, Fuente
 
 
 class Enrutador:
@@ -49,6 +59,10 @@ class Enrutador:
         self._por_tipo: dict[str, str] = {
             tipo: cfg.reglas.proveedor_datos.fuente_de(tipo) for tipo in TIPOS_DE_DATO
         }
+        #: Lo que ha pasado durante la descarga y conviene que alguien lea:
+        #: fuentes que han fallado, respaldos usados, tickers sin servir.
+        self.incidencias: list[str] = []
+        self._servidas: set[str] = set()
 
     # -- resolucion --------------------------------------------------------
 
@@ -63,11 +77,26 @@ class Enrutador:
     def fuentes_usadas(self) -> list[str]:
         return sorted(set(self._por_tipo.values()))
 
+    @property
+    def fuentes_servidas(self) -> list[str]:
+        """Las fuentes que de verdad han dado datos, respaldos incluidos.
+
+        No es lo mismo que `fuentes_usadas`: si la principal cae y el respaldo
+        sirve todo, el origen honesto de la descarga es el respaldo.
+        """
+        return sorted(self._servidas)
+
+    def respaldos_de(self, tipo: str) -> list[str]:
+        principal = self._por_tipo[tipo]
+        return [n for n in self._cfg.implementacion.respaldos_de(tipo) if n != principal]
+
     def fuente(self, tipo: str) -> Fuente:
         """La fuente dueña de un tipo de dato, ya construida."""
         if tipo not in TIPOS_DE_DATO:
             raise ErrorConfiguracion(f"tipo de dato desconocido: {tipo!r}")
-        nombre = self._por_tipo[tipo]
+        return self._construir(self._por_tipo[tipo], tipo)
+
+    def _construir(self, nombre: str, tipo: str) -> Fuente:
         if nombre not in self._instancias:
             self._instancias[nombre] = registro.crear(nombre, self._cfg)
         fuente = self._instancias[nombre]
@@ -88,6 +117,20 @@ class Enrutador:
                 salida[nombre] = self.fuente(tipo).capacidades
         return salida
 
+    def respaldos_no_disponibles(self) -> list[str]:
+        """Respaldos que no se podrian usar si hicieran falta.
+
+        No impiden arrancar —la principal puede ir bien—, pero conviene saberlo
+        antes y no el dia que cae la principal.
+        """
+        avisos: list[str] = []
+        for tipo in TIPOS_DE_DATO:
+            for nombre in self.respaldos_de(tipo):
+                ok, motivo = self._construir(nombre, tipo).disponible()
+                if not ok:
+                    avisos.append(f"respaldo de {tipo} {nombre}: {motivo}")
+        return avisos
+
     def comprobar_disponibilidad(self) -> list[str]:
         """Problemas que impedirian usar alguna fuente, antes de empezar.
 
@@ -106,12 +149,13 @@ class Enrutador:
     # -- datos -------------------------------------------------------------
 
     def precios(self, tickers: list[str], inicio: date, fin: date) -> pd.DataFrame:
-        fuente = self.fuente("precios")
-        df = fuente.precios(tickers, inicio, fin)
-        df = _estampar(df, fuente.nombre)
-        if self._verificar:
-            contrato.verificar_precios(df, fuente.nombre).exigir()
-        return df
+        return self._con_respaldo(
+            "precios",
+            list(dict.fromkeys(tickers)),
+            "ticker",
+            lambda fuente, faltan: fuente.precios(faltan, inicio, fin),
+            contrato.verificar_precios,
+        )
 
     def fundamentales(self, tickers: list[str], inicio: date, fin: date) -> pd.DataFrame:
         fuente = self.fuente("fundamentales")
@@ -122,15 +166,101 @@ class Enrutador:
         return df
 
     def fx(self, divisas: list[str], inicio: date, fin: date) -> pd.DataFrame:
-        fuente = self.fuente("divisas")
-        df = fuente.fx(divisas, inicio, fin)
-        df = _estampar(df, fuente.nombre)
-        if self._verificar:
-            contrato.verificar_fx(df, fuente.nombre).exigir()
-        return df
+        # Solo se esperan las que necesitan cruce: la divisa base no viene nunca.
+        base = self._cfg.reglas.cartera.divisa_base
+        pares = self._cfg.implementacion.divisas
+        necesarias = [d for d in dict.fromkeys(divisas) if d != base and pares.get(d)]
+        if not necesarias:
+            # Una cartera enteramente en divisa base no necesita tipos de cambio.
+            return pd.DataFrame(columns=COLUMNAS_FX + ["fuente"])
+        return self._con_respaldo(
+            "divisas",
+            necesarias,
+            "divisa",
+            lambda fuente, faltan: fuente.fx(faltan, inicio, fin),
+            contrato.verificar_fx,
+        )
 
     def sectores(self, tickers: list[str]) -> dict[str, str | None]:
         return self.fuente("sectores").sectores(tickers)
+
+    # -- respaldo ----------------------------------------------------------
+
+    def _con_respaldo(
+        self,
+        tipo: str,
+        claves: list[str],
+        columna: str,
+        pedir: Callable[[Fuente, list[str]], pd.DataFrame],
+        verificar: Callable[[pd.DataFrame, str], contrato.Informe],
+    ) -> pd.DataFrame:
+        """Pide `claves` a la duena y lo que falte a los respaldos, por orden.
+
+        Cada fuente recibe solo lo que las anteriores no han servido, y su lote
+        pasa el contrato por separado, para que un incumplimiento se atribuya a
+        quien lo cometio. Si al final nadie ha servido nada, se lanza con la
+        lista entera de lo ocurrido.
+        """
+        principal = self._por_tipo[tipo]
+        lotes: list[pd.DataFrame] = []
+        fallos: list[str] = []
+        faltan = list(claves)
+
+        for nombre in [principal, *self.respaldos_de(tipo)]:
+            if not faltan:
+                break
+            fuente = self._construir(nombre, tipo)
+            ok, motivo = fuente.disponible()
+            if not ok:
+                fallos.append(f"{nombre} no disponible: {motivo}")
+                continue
+            try:
+                df = pedir(fuente, faltan)
+            except Exception as exc:  # noqa: BLE001 - cualquier fallo pasa al respaldo
+                fallos.append(f"{nombre} ha fallado: {exc}")
+                continue
+            if df is None or df.empty or columna not in df.columns:
+                fallos.append(f"{nombre} no ha devuelto nada")
+                continue
+
+            # Solo lo que se le pidio: el resto ya vino de una fuente anterior,
+            # y una serie no se cose con trozos de dos proveedores.
+            df = _estampar(df[df[columna].isin(faltan)], nombre)
+            if df.empty:
+                fallos.append(f"{nombre} no ha devuelto nada de lo pedido")
+                continue
+            if self._verificar:
+                inf = verificar(df, nombre)
+                if not inf.cumple:
+                    detalle = "; ".join(str(i) for i in inf.incumplimientos)
+                    fallos.append(
+                        f"{nombre} no cumple el contrato, se descarta su lote: {detalle}"
+                    )
+                    continue
+
+            servidas = set(df[columna].unique())
+            if nombre != principal:
+                self.incidencias.append(
+                    f"{tipo}: {len(servidas)} de {len(claves)} servidos por el "
+                    f"respaldo {nombre}"
+                )
+            lotes.append(df)
+            self._servidas.add(nombre)
+            faltan = [c for c in faltan if c not in servidas]
+
+        self.incidencias.extend(f"{tipo}: {f}" for f in fallos)
+        if not lotes:
+            lineas = "\n".join(f"  - {f}" for f in fallos)
+            raise ErrorDatos(
+                f"ninguna fuente ha podido servir {tipo} "
+                f"(principal {principal}, respaldos: "
+                f"{', '.join(self.respaldos_de(tipo)) or 'ninguno'}). "
+                f"Lo que ha pasado, contrato incluido:\n{lineas}"
+            )
+        if faltan:
+            muestra = ", ".join(faltan[:10]) + (" ..." if len(faltan) > 10 else "")
+            self.incidencias.append(f"{tipo}: sin datos de {len(faltan)}: {muestra}")
+        return pd.concat(lotes, ignore_index=True)
 
 
 def _estampar(df: pd.DataFrame, nombre: str) -> pd.DataFrame:

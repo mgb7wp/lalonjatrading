@@ -173,6 +173,28 @@ def _avisos_de_datos(
                 )
             )
 
+    # Precios de mas de una fuente: pasa cuando la principal ha fallado y ha
+    # entrado el respaldo. Cada serie es de una sola fuente, pero dos
+    # proveedores no ajustan igual, asi que el resultado no es comparable con
+    # una descarga limpia y el lector tiene que saberlo.
+    precios = instantanea.precios
+    if not precios.empty and "fuente" in precios.columns:
+        por_fuente = precios.groupby("fuente")["ticker"].nunique()
+        if len(por_fuente) > 1:
+            detalle = ", ".join(f"{f}: {n} series" for f, n in por_fuente.items())
+            avisos.append(
+                Aviso(
+                    "precios_varias_fuentes",
+                    f"Los precios vienen de mas de una fuente ({detalle}), "
+                    f"normalmente porque la principal ha fallado y ha entrado el "
+                    f"respaldo. Cada serie sale entera de una sola fuente, pero "
+                    f"cada proveedor ajusta dividendos a su manera: repite la "
+                    f"descarga cuando la principal vuelva antes de comparar este "
+                    f"resultado con otros.",
+                    gravedad="aviso",
+                )
+            )
+
     anos = cfg.reglas.proveedor_datos.fundamentales_anos_disponibles
     if cfg.reglas.fundamental.activo and anos <= 5:
         avisos.append(

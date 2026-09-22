@@ -336,13 +336,37 @@ class ReferenciaCfg(_Base):
     divisa: str
 
 
+#: Tipos de dato que admiten fuente de respaldo. Son los que se pueden pedir
+#: ticker a ticker a otra fuente sin mezclar dos versiones del mismo dato: una
+#: serie de precios entera viene de una sola fuente. Fundamentales y sectores
+#: no: dos proveedores los reexpresan y clasifican distinto, y mezclarlos
+#: calladamente cambiaria el ranking.
+TIPOS_CON_RESPALDO = ("precios", "divisas")
+
+
 class Implementacion(_Base):
     calendarios: dict[str, str]
     codigos_eodhd: dict[str, str] = Field(default_factory=dict)
+    simbolos_eodhd: dict[str, str] = Field(default_factory=dict)
+    respaldos: dict[str, list[str]] = Field(default_factory=dict)
     referencias: dict[str, ReferenciaCfg]
     divisas: dict[str, str | None]
     sectores: dict[str, str]
     equivalencias_excepciones: dict[str, str]
+
+    @model_validator(mode="after")
+    def _respaldos_validos(self) -> "Implementacion":
+        otros = set(self.respaldos) - set(TIPOS_CON_RESPALDO)
+        if otros:
+            raise ValueError(
+                f"solo admiten respaldo {', '.join(TIPOS_CON_RESPALDO)}; "
+                f"sobra: {sorted(otros)}"
+            )
+        return self
+
+    def respaldos_de(self, tipo: str) -> list[str]:
+        """Fuentes a las que acudir, por orden, si la principal falla."""
+        return list(self.respaldos.get(tipo, []))
 
     def sector(self, sector_proveedor: str | None) -> str:
         """Traduce el sector del proveedor a la categoria del documento.
@@ -447,11 +471,16 @@ class Config(_Base):
     impuestos: Impuestos
     dir_config: Path
 
-    def con_fuente_unica(self, nombre: str) -> "Config":
+    def con_fuente_unica(self, nombre: str, respaldos: bool = False) -> "Config":
         """Copia con una sola fuente sirviendo todos los tipos de dato.
 
         Es lo que hay detras de `--proveedor`: util para los tests y para
         trabajar sin red, pero el reparto de verdad vive en `reglas.yaml`.
+
+        Por defecto quita los respaldos: un `--proveedor sintetico` que saliera
+        a EODHD al fallar no seria ni reproducible ni sin red. Quien fuerza una
+        fuente real y quiere conservar la red de seguridad lo pide con
+        `respaldos=True`, que es lo que hace el CLI.
         """
         reglas = self.reglas.model_copy(
             update={
@@ -466,7 +495,12 @@ class Config(_Base):
                 )
             }
         )
-        return self.model_copy(update={"reglas": reglas})
+        implementacion = (
+            self.implementacion
+            if respaldos
+            else self.implementacion.model_copy(update={"respaldos": {}})
+        )
+        return self.model_copy(update={"reglas": reglas, "implementacion": implementacion})
 
     @model_validator(mode="after")
     def _coherencia_entre_ficheros(self) -> "Config":

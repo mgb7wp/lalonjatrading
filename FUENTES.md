@@ -31,7 +31,7 @@ o para probar una fuente concreta.
 |---|---|---|---|---|
 | `sintetico` | todo | — | inventadas | no |
 | `yfinance` | todo | ~4 ejercicios | estimadas por retraso fijo | no |
-| `eodhd` | fundamentales, sectores | ~20 años | **reales** (`filing_date`) | sí |
+| `eodhd` | fundamentales, sectores; precios y divisas como respaldo | ~20 años | **reales** (`filing_date`) | sí |
 
 ### `sintetico`
 
@@ -71,6 +71,59 @@ semanal.
 La clave va en `EODHD_API_KEY`, nunca en el repositorio. **No se ha podido
 ejecutar**: se escribió contra la documentación de la API y se probó con
 respuestas grabadas.
+
+## Respaldo de precios y divisas
+
+Los cinco mercados cuelgan de yfinance. Si Yahoo cae no cae un mercado: caen los
+cinco. Por eso precios y divisas tienen fuentes de respaldo, declaradas en
+`config/implementacion.yaml`:
+
+```yaml
+respaldos:
+  precios: [eodhd]
+  divisas: [eodhd]
+```
+
+Cómo funciona, todo en el enrutador:
+
+- Se pide todo a la dueña. Si falla (excepción, lote vacío o **contrato
+  incumplido**), el lote entero se descarta y se pide al respaldo.
+- Si la dueña sirve solo una parte —cae un mercado, o Yahoo pierde unos
+  cuantos tickers—, al respaldo se le piden **solo los que faltan**.
+- La unidad es la serie entera: **un ticker sale de una sola fuente**. Nunca se
+  cose media serie de Yahoo con media de EODHD, porque cada proveedor ajusta los
+  dividendos a su manera y la costura sería un hueco inventado que movería los
+  stops.
+- Los precios de EODHD pasan por el mismo `ajustar_ohlc` que los de Yahoo, así
+  que el ajuste de los cuatro precios es idéntico.
+- Todo queda dicho: la columna `fuente` de cada fila, las incidencias que el
+  comando `datos` imprime al terminar, el `origen` de la instantánea (las fuentes
+  que **de verdad** han servido, no el reparto sobre el papel) y un aviso en el
+  informe cuando los precios vienen de más de una fuente.
+
+Fundamentales y sectores **no** admiten respaldo, y la configuración lo rechaza:
+dos proveedores reexpresan y clasifican distinto, y mezclarlos calladamente
+cambiaría el ranking. Los sectores ya tienen su red en `sector_declarado` de
+`universo.yaml`.
+
+Los tickers se traducen solos a partir de los sufijos de `reglas.yaml` y de
+`codigos_eodhd` (`SAP.DE` → `SAP.XETRA`, `^IBEX` → `IBEX.INDX`,
+`EURUSD=X` → `EURUSD.FOREX`). Lo que no encaje se declara en `simbolos_eodhd`.
+
+Sin `EODHD_API_KEY` el respaldo no está disponible: el comando `datos` avisa al
+arrancar, pero descarga igual. Cada ticker cuesta una llamada de cuota, así que
+un respaldo completo de unos 150 tickers necesita un plan que cubra precios EOD
+de todas las bolsas; el plan gratuito (20 llamadas al día) no llega.
+`--proveedor yfinance` los conserva, porque es el uso normal y justo donde hacen
+falta. Se desactivan con `--proveedor sintetico` (sin red y determinista), con
+`--sin-respaldo` y en `diagnostico`, que existe para decir qué resuelve la
+fuente y no puede dejar que el respaldo le tape los huecos. El respaldo se
+diagnostica aparte: `estrategia --proveedor eodhd diagnostico`.
+
+Lo que el respaldo **no** cubre: con el reparto actual (`nombre: yfinance`) los
+fundamentales también salen de Yahoo, así que si Yahoo cae del todo `datos` y
+`foto` siguen fallando en los fundamentales. Eso se arregla pasando
+`fundamentales: eodhd` al reparto, no con un respaldo.
 
 ## Cómo se añade una fuente
 

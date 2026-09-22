@@ -40,25 +40,38 @@ DIR_SITIO = RAIZ / "sitio"
 RUTA_CONSULTAS = DIR_DATOS / "consultas_validacion.json"
 
 
-def _enrutador(cfg, forzar: str | None = None) -> Enrutador:
-    """El enrutador de fuentes, con la opcion de forzar una sola desde el CLI.
+def _forzar_fuente(cfg, forzar: str | None, sin_respaldo: bool = False):
+    """La configuracion con la fuente de `--proveedor`, si se ha forzado una.
 
     `--proveedor` sigue existiendo porque es comodo para los tests y para
     trabajar sin red, pero el reparto normal vive en `reglas.yaml`.
+
+    Los respaldos se conservan: `--proveedor yfinance` es el uso normal, y es
+    justo ahi donde hace falta la red de seguridad, porque los cinco mercados
+    cuelgan de yfinance. Se quitan con el sintetico, que es sin red y
+    determinista, y con `--sin-respaldo`, para quien prefiera un error a una
+    descarga con precios de dos fuentes.
     """
-    if forzar:
-        cfg = cfg.con_fuente_unica(forzar)
-    return Enrutador(cfg)
+    if not forzar:
+        return cfg
+    respaldos = not sin_respaldo and forzar != "sintetico"
+    return cfg.con_fuente_unica(forzar, respaldos=respaldos)
 
 
-def _descargar(cfg, nombre_proveedor: str | None, inicio: date, fin: date) -> Instantanea:
-    enrutador = _enrutador(cfg, nombre_proveedor)
+def _descargar(
+    cfg, nombre_proveedor: str | None, inicio: date, fin: date, sin_respaldo: bool = False
+) -> Instantanea:
+    enrutador = Enrutador(_forzar_fuente(cfg, nombre_proveedor, sin_respaldo))
 
     problemas = enrutador.comprobar_disponibilidad()
     if problemas:
         for p in problemas:
             print(f"  fuente no disponible -> {p}", file=sys.stderr)
         raise SystemExit(2)
+    # Un respaldo sin clave no impide descargar, pero el dia que caiga la
+    # principal no habra red; mejor saberlo hoy.
+    for aviso in enrutador.respaldos_no_disponibles():
+        print(f"  aviso -> {aviso}", file=sys.stderr)
 
     reparto = ", ".join(f"{k}={v}" for k, v in enrutador.reparto.items())
     print(f"Fuentes: {reparto}")
@@ -80,9 +93,16 @@ def _descargar(cfg, nombre_proveedor: str | None, inicio: date, fin: date) -> In
     print("Leyendo sectores...")
     sectores = enrutador.sectores(tickers)
 
-    # El origen refleja el reparto real, no una sola fuente: si los precios
-    # vienen de una y los fundamentales de otra, el informe tiene que decirlo.
-    usadas = enrutador.fuentes_usadas
+    for incidencia in enrutador.incidencias:
+        print(f"  incidencia -> {incidencia}", file=sys.stderr)
+
+    # El origen refleja las fuentes que de verdad han servido datos, no una
+    # sola ni el reparto sobre el papel: si los precios vienen de una y los
+    # fundamentales de otra, o la principal ha caido y ha tirado del respaldo,
+    # el informe tiene que decirlo. Sectores no pasa por ahi, asi que se anade.
+    usadas = sorted(
+        set(enrutador.fuentes_servidas) | {enrutador.nombre_de("sectores")}
+    )
     origen = usadas[0] if len(usadas) == 1 else "+".join(usadas)
 
     return Instantanea(
@@ -111,7 +131,7 @@ def _cargar_instantanea(args, cfg) -> Instantanea:
 def cmd_datos(args, cfg) -> None:
     fin = date.today()
     inicio = fin - timedelta(days=int(args.anos * 365.25))
-    inst = _descargar(cfg, args.proveedor, inicio, fin)
+    inst = _descargar(cfg, args.proveedor, inicio, fin, args.sin_respaldo)
     destino = DIR_CACHE / args.proveedor
     inst.guardar(destino)
     print(
@@ -133,7 +153,7 @@ def cmd_foto(args, cfg) -> None:
         return
 
     inicio = hoy - timedelta(days=int(args.anos * 365.25))
-    inst = _descargar(cfg, args.proveedor, inicio, hoy)
+    inst = _descargar(cfg, args.proveedor, inicio, hoy, args.sin_respaldo)
 
     # Se escribe aparte y solo se mueve al final. Una descarga que se corta a
     # medias no puede quedar archivada como si fuera la foto de la semana: el
@@ -210,8 +230,10 @@ def cmd_diagnostico(args, cfg) -> None:
     """
     fin = args.fecha or date.today()
     inicio = fin - timedelta(days=int(args.anos * 365.25))
-    if args.proveedor:
-        cfg = cfg.con_fuente_unica(args.proveedor)
+    # Sin respaldo: el diagnostico dice que resuelve la fuente, y un respaldo
+    # que le tapara los huecos lo dejaria sin decir nada. El respaldo se
+    # diagnostica aparte, con `--proveedor eodhd`.
+    cfg = _forzar_fuente(cfg, args.proveedor, sin_respaldo=True)
 
     filas = diagnostico_mod.ejecutar(cfg, inicio, fin)
     texto = diagnostico_mod.a_texto(filas, cfg, detalle=args.detalle)
@@ -346,6 +368,11 @@ def construir_parser() -> argparse.ArgumentParser:
         help="fuerza UNA sola fuente para todos los tipos de dato, ignorando el "
              "reparto de reglas.yaml. Comodo para trabajar sin red "
              "('sintetico') o para probar una fuente concreta.",
+    )
+    p.add_argument(
+        "--sin-respaldo", action="store_true",
+        help="no acudir a las fuentes de respaldo de implementacion.yaml si "
+             "falla la principal: mejor un error que precios de dos fuentes.",
     )
     sub = p.add_subparsers(dest="comando", required=True)
 

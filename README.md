@@ -55,6 +55,12 @@ streamlit run panel/app.py
 Todos los comandos aceptan `--proveedor {sintetico,yfinance}`. El informe se
 guarda en `datos/resultados/`.
 
+Si yfinance falla al descargar —y como sirve los cinco mercados, caen los
+cinco—, `datos` y `foto` piden los precios y divisas que falten a EODHD, que
+necesita `EODHD_API_KEY`. Cada fila dice de qué fuente salió y el informe avisa
+si hay mezcla. `--sin-respaldo` lo desactiva. Detalles en
+[FUENTES.md](FUENTES.md#respaldo-de-precios-y-divisas).
+
 ### Sin conexión: el proveedor sintético
 
 `--proveedor sintetico` genera precios, fundamentales y divisas deterministas,

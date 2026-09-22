@@ -20,10 +20,16 @@ from estrategia import fundamental as fundamental_mod
 from estrategia.datos import contrato, registro
 from estrategia.datos.enrutador import Enrutador
 from estrategia.datos.eodhd_proveedor import (
+    parsear_eod,
     parsear_fundamentales,
+    parsear_fx,
     parsear_sector,
+    simbolo_fx,
+    simbolo_precio,
     ticker_eodhd,
 )
+from estrategia.datos.proveedor import Capacidades
+from estrategia.datos.sintetico import ProveedorSintetico
 from estrategia.errores import ErrorConfiguracion, ErrorDatos
 
 from ayudas import serie_precios
@@ -172,17 +178,18 @@ def test_la_configuracion_del_documento_sigue_cargando(cfg):
         assert solo.reglas.proveedor_datos.fuente_de(tipo) == "sintetico"
 
 
-def test_una_fuente_sin_precios_no_puede_ser_dueña_de_los_precios(cfg):
-    """EODHD declara que no sirve precios; asignarselos debe fallar pronto."""
-    datos = cfg.reglas.model_dump(mode="json")
-    datos["proveedor_datos"] = {
-        "nombre": "sintetico",
-        "precios": "eodhd",
-        "fundamentales_anos_disponibles": 4,
-    }
-    otra = cfg.model_copy(
-        update={"reglas": config_mod.Reglas.model_validate(datos)}
-    )
+class _SoloFundamentales(ProveedorSintetico):
+    nombre = "solo_fundamentales"
+
+    @property
+    def capacidades(self) -> Capacidades:
+        return Capacidades(tipos=("fundamentales",))
+
+
+def test_una_fuente_sin_precios_no_puede_ser_dueña_de_los_precios(cfg, monkeypatch):
+    """Una fuente que declara no servir precios no puede ser su duena."""
+    monkeypatch.setitem(registro._FUENTES, "solo_fundamentales", _SoloFundamentales)
+    otra = _con_reparto(cfg, precios="solo_fundamentales")
     with pytest.raises(ErrorConfiguracion, match="solo sirve"):
         Enrutador(otra).fuente("precios")
 
@@ -427,3 +434,239 @@ def test_lo_que_devuelve_eodhd_cumple_el_contrato(cfg):
     )
     inf = contrato.verificar_fundamentales(pd.DataFrame(filas), "eodhd")
     assert inf.cumple, [str(i) for i in inf.incumplimientos]
+
+
+# --------------------------------------------------------------------------
+# Respaldo de precios y divisas
+#
+# Los cinco mercados cuelgan de la misma fuente: si cae, caen los cinco. Estos
+# tests fingen la caida con fuentes de mentira sobre el sintetico, porque la de
+# verdad no se puede provocar sin red.
+# --------------------------------------------------------------------------
+
+INI, FIN_ = dt.date(2022, 1, 1), dt.date(2022, 6, 30)
+
+
+class _Caida(ProveedorSintetico):
+    """La principal cuando Yahoo no responde."""
+
+    nombre = "caida"
+
+    def precios(self, tickers, inicio, fin):
+        raise ErrorDatos("fallo tras 4 intentos: Yahoo no responde")
+
+    def fx(self, divisas, inicio, fin):
+        raise ErrorDatos("fallo tras 4 intentos: Yahoo no responde")
+
+
+class _Parcial(ProveedorSintetico):
+    """La principal cuando cae un mercado: no da nada de India."""
+
+    nombre = "parcial"
+
+    def precios(self, tickers, inicio, fin):
+        return super().precios([t for t in tickers if not t.endswith(".NS")], inicio, fin)
+
+
+class _Rota(ProveedorSintetico):
+    """La principal cuando cambia su formato: minimos por encima del cierre."""
+
+    nombre = "rota"
+
+    def precios(self, tickers, inicio, fin):
+        df = super().precios(tickers, inicio, fin)
+        df["minimo"] = df["cierre"] * 2
+        return df
+
+
+class _Respaldo(ProveedorSintetico):
+    nombre = "respaldo"
+
+
+class _SinClave(ProveedorSintetico):
+    nombre = "sin_clave"
+
+    def disponible(self):
+        return False, "falta la clave de API"
+
+
+@pytest.fixture
+def fuentes_falsas(monkeypatch):
+    for clase in (_Caida, _Parcial, _Rota, _Respaldo, _SinClave):
+        monkeypatch.setitem(registro._FUENTES, clase.nombre, clase)
+
+
+def _con_reparto(cfg, respaldos: dict | None = None, **reparto):
+    datos = cfg.reglas.model_dump(mode="json")
+    datos["proveedor_datos"] = {
+        "nombre": "sintetico",
+        "fundamentales_anos_disponibles": 4,
+        **reparto,
+    }
+    return cfg.model_copy(
+        update={
+            "reglas": config_mod.Reglas.model_validate(datos),
+            "implementacion": cfg.implementacion.model_copy(
+                update={"respaldos": respaldos or {}}
+            ),
+        }
+    )
+
+
+def test_si_cae_la_principal_los_precios_salen_del_respaldo(cfg, fuentes_falsas):
+    """El caso que motiva el respaldo: cae Yahoo y no se queda nadie sin precio."""
+    otra = _con_reparto(cfg, {"precios": ["respaldo"]}, precios="caida")
+    e = Enrutador(otra)
+    tickers = ["ITX.MC", "AAPL", "RELIANCE.NS"]
+    df = e.precios(tickers, INI, FIN_)
+
+    assert set(df["ticker"]) == set(tickers)
+    assert (df["fuente"] == "respaldo").all()
+    assert e.fuentes_servidas == ["respaldo"]
+    texto = " ".join(e.incidencias)
+    assert "caida ha fallado" in texto and "respaldo" in texto
+
+
+def test_el_respaldo_solo_sirve_lo_que_falta(cfg, fuentes_falsas):
+    """Si cae un mercado, el respaldo cubre ese mercado y nada mas.
+
+    Y cada serie sale entera de una fuente: nunca se cosen dos proveedores.
+    """
+    otra = _con_reparto(cfg, {"precios": ["respaldo"]}, precios="parcial")
+    e = Enrutador(otra)
+    df = e.precios(["ITX.MC", "AAPL", "RELIANCE.NS", "TCS.NS"], INI, FIN_)
+
+    fuente_por_ticker = df.groupby("ticker")["fuente"].agg(set)
+    assert all(len(f) == 1 for f in fuente_por_ticker)
+    assert fuente_por_ticker["ITX.MC"] == {"parcial"}
+    assert fuente_por_ticker["RELIANCE.NS"] == {"respaldo"}
+    assert any("2 de 4" in i for i in e.incidencias)
+    assert not df.duplicated(subset=["ticker", "fecha"]).any()
+
+
+def test_un_lote_que_incumple_el_contrato_se_descarta_y_entra_el_respaldo(
+    cfg, fuentes_falsas
+):
+    otra = _con_reparto(cfg, {"precios": ["respaldo"]}, precios="rota")
+    e = Enrutador(otra)
+    df = e.precios(["ITX.MC"], INI, FIN_)
+    assert (df["fuente"] == "respaldo").all()
+    assert any("contrato" in i and "OHLC" in i for i in e.incidencias)
+
+
+def test_sin_respaldo_la_caida_sigue_siendo_un_error_ruidoso(cfg, fuentes_falsas):
+    otra = _con_reparto(cfg, precios="rota")
+    with pytest.raises(ErrorDatos, match="contrato"):
+        Enrutador(otra).precios(["ITX.MC"], INI, FIN_)
+
+    caida = _con_reparto(cfg, precios="caida")
+    with pytest.raises(ErrorDatos, match="Yahoo no responde"):
+        Enrutador(caida).precios(["ITX.MC"], INI, FIN_)
+
+
+def test_un_respaldo_sin_clave_avisa_pero_no_impide_arrancar(cfg, fuentes_falsas):
+    otra = _con_reparto(cfg, {"precios": ["sin_clave"]}, precios="caida")
+    e = Enrutador(otra)
+    assert e.comprobar_disponibilidad() == []
+    assert any("sin_clave" in a for a in e.respaldos_no_disponibles())
+    with pytest.raises(ErrorDatos, match="sin_clave no disponible"):
+        e.precios(["ITX.MC"], INI, FIN_)
+
+
+def test_las_divisas_tambien_tienen_respaldo(cfg, fuentes_falsas):
+    otra = _con_reparto(cfg, {"divisas": ["respaldo"]}, divisas="caida")
+    e = Enrutador(otra)
+    df = e.fx(["EUR", "USD", "INR"], INI, FIN_)
+    assert set(df["divisa"]) == {"USD", "INR"}
+    assert (df["fuente"] == "respaldo").all()
+
+
+def test_forzar_una_fuente_quita_los_respaldos(cfg):
+    """`--proveedor sintetico` no puede salir a EODHD a escondidas."""
+    assert cfg.implementacion.respaldos_de("precios") == ["eodhd"]
+    solo = cfg.con_fuente_unica("sintetico")
+    assert solo.implementacion.respaldos_de("precios") == []
+    assert Enrutador(solo).respaldos_no_disponibles() == []
+
+
+def test_el_cli_conserva_el_respaldo_con_una_fuente_real(cfg):
+    """`--proveedor yfinance` es el uso normal: ahi es donde hace falta."""
+    from estrategia.cli import _forzar_fuente
+
+    real = _forzar_fuente(cfg, "yfinance")
+    assert real.reglas.proveedor_datos.fuente_de("precios") == "yfinance"
+    assert real.implementacion.respaldos_de("precios") == ["eodhd"]
+    assert _forzar_fuente(cfg, "yfinance", sin_respaldo=True).implementacion.respaldos == {}
+    assert _forzar_fuente(cfg, "sintetico").implementacion.respaldos == {}
+
+
+def test_los_fundamentales_no_admiten_respaldo(cfg):
+    """Dos proveedores reexpresan distinto: mezclarlos cambiaria el ranking."""
+    datos = cfg.implementacion.model_dump(mode="json")
+    datos["respaldos"] = {"fundamentales": ["eodhd"]}
+    with pytest.raises(ValueError, match="solo admiten respaldo"):
+        config_mod.Implementacion.model_validate(datos)
+
+
+# -- EODHD como respaldo: traduccion y parseo, sin red ----------------------
+
+
+def test_eodhd_traduce_todo_lo_que_se_pide_de_precios(cfg):
+    """Valores, indices de regimen y ETF de referencia de los cinco mercados."""
+    assert simbolo_precio("ITX.MC", cfg) == "ITX.MC"
+    assert simbolo_precio("SAP.DE", cfg) == "SAP.XETRA"
+    assert simbolo_precio("EUNL.DE", cfg) == "EUNL.XETRA"
+    assert simbolo_precio("RELIANCE.NS", cfg) == "RELIANCE.NSE"
+    assert simbolo_precio("PETR4.SA", cfg) == "PETR4.SA"
+    assert simbolo_precio("AAPL", cfg) == "AAPL.US"
+    assert simbolo_precio("BRK.B", cfg) == "BRK.B.US"
+    for yahoo in cfg.reglas.tecnico.indices_regimen.values():
+        assert simbolo_precio(yahoo, cfg) == f"{yahoo[1:]}.INDX"
+    assert simbolo_fx("EURUSD=X") == "EURUSD.FOREX"
+
+
+def test_eodhd_admite_excepciones_de_simbolo(cfg):
+    impl = cfg.implementacion.model_copy(update={"simbolos_eodhd": {"^IBEX": "IBEX35.INDX"}})
+    otra = cfg.model_copy(update={"implementacion": impl})
+    assert simbolo_precio("^IBEX", otra) == "IBEX35.INDX"
+
+
+def _eod_crudo() -> list[dict]:
+    """Tres sesiones de `eod/`, con un dividendo entre la primera y la segunda."""
+    return [
+        {"date": "2024-03-01", "open": 40.0, "high": 41.0, "low": 39.5,
+         "close": 40.5, "adjusted_close": 39.69, "volume": 1000},
+        {"date": "2024-03-04", "open": 40.6, "high": 41.2, "low": 40.1,
+         "close": 41.0, "adjusted_close": 41.0, "volume": 1200},
+        {"date": "2024-03-05", "open": 41.0, "high": 41.5, "low": 40.8,
+         "close": 41.2, "adjusted_close": 41.2, "volume": 900},
+    ]
+
+
+def test_eodhd_ajusta_los_cuatro_precios_como_yahoo():
+    """El mismo `ajustar_ohlc`: el respaldo no puede mover los stops."""
+    df = parsear_eod(_eod_crudo())
+    primera = df.iloc[0]
+    factor = 39.69 / 40.5
+    assert primera["cierre"] == pytest.approx(39.69)
+    assert primera["minimo"] == pytest.approx(39.5 * factor)
+    assert primera["maximo"] == pytest.approx(41.0 * factor)
+    assert primera["cierre_bruto"] == pytest.approx(40.5)
+    assert df["fecha"].iloc[0] == dt.date(2024, 3, 1)
+
+
+def test_los_precios_de_eodhd_cumplen_el_contrato():
+    df = parsear_eod(_eod_crudo())
+    df.insert(1, "ticker", "ITX.MC")
+    inf = contrato.verificar_precios(df, "eodhd")
+    assert inf.cumple, [str(i) for i in inf.incumplimientos]
+
+
+def test_eodhd_descarta_cambios_a_cero():
+    """Un cambio de cero romperia la inversion del cruce."""
+    df = parsear_fx([
+        {"date": "2024-03-01", "close": 1.08},
+        {"date": "2024-03-02", "close": 0},
+        {"date": "2024-03-04", "close": "1.09"},
+    ])
+    assert list(df["tasa"]) == [1.08, 1.09]

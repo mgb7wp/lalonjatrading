@@ -47,6 +47,23 @@ codigos_eodhd:
   in: NSE
   br: SA
 
+# Excepciones a la traduccion automatica de tickers de precios a EODHD. La
+# regla general sale de los sufijos de reglas.yaml y de `codigos_eodhd`
+# (`SAP.DE` -> `SAP.XETRA`, `^IBEX` -> `IBEX.INDX`); aqui solo va lo que no la
+# cumpla, con el ticker de Yahoo a la izquierda.
+simbolos_eodhd: {}
+
+# Fuentes de respaldo, por orden, para cuando la principal falla. Los cinco
+# mercados cuelgan de yfinance: si Yahoo cae no cae un mercado, caen los cinco.
+# El enrutador pide al respaldo solo los tickers (o divisas) que la principal
+# no haya dado, y cada serie sale entera de una sola fuente: nunca se cose la
+# mitad de una serie de Yahoo con la otra mitad de EODHD.
+# Sin clave de EODHD el respaldo no esta disponible; se avisa al arrancar pero
+# no impide descargar.
+respaldos:
+  precios: [eodhd]
+  divisas: [eodhd]
+
 # Par de divisas con el que se convierte cada moneda a la base (EUR).
 # El codigo invierte el par cuando hace falta.
 divisas:
