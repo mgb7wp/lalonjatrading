@@ -1162,8 +1162,7 @@ def test_un_valor_sin_ni_un_precio_se_avisa_aunque_la_cobertura_sea_alta(bd_inge
         ).scalar()
         s.execute(
             text(
-                "DELETE FROM price WHERE security_id = "
-                "(SELECT id FROM security WHERE ticker = :t)"
+                "DELETE FROM price WHERE security_id = (SELECT id FROM security WHERE ticker = :t)"
             ),
             {"t": huerfano},
         )
