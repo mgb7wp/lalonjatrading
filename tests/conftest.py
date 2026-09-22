@@ -8,6 +8,7 @@ porque el mercado hizo algo raro no serviria para nada.
 from __future__ import annotations
 
 import datetime as dt
+from pathlib import Path
 
 import pandas as pd
 import pytest
@@ -16,13 +17,17 @@ from estrategia import config as config_mod
 from estrategia.datos.almacen import Instantanea
 from estrategia.datos.sintetico import ProveedorSintetico
 
+#: Copia fija de la configuracion para los tests. Asi, cambiar `config/` (el
+#: capital, los mercados o las comisiones de eToro) no rompe ningun test.
+DIR_CONFIG_PRUEBA = Path(__file__).resolve().parent / "config_prueba"
+
 INICIO = dt.date(2019, 1, 1)
 FIN = dt.date(2024, 12, 31)
 
 
 @pytest.fixture(scope="session")
 def cfg():
-    return config_mod.cargar()
+    return config_mod.cargar(DIR_CONFIG_PRUEBA)
 
 
 @pytest.fixture(scope="session")

@@ -1,0 +1,79 @@
+# Impuesto a la transaccion por pais.
+#
+# AVISO: los porcentajes y sobre todo las listas anuales son un PUNTO DE PARTIDA
+# sin verificar contra la fuente oficial. Antes de darle valor a un backtest hay
+# que contrastarlos, en especial la lista espanola, que la Agencia Tributaria
+# publica cada ano y cambia.
+#
+# `aplica_en` dice en que lado de la operacion se devenga: el ITF espanol y el
+# stamp duty britanico solo gravan la COMPRA; la tasa de la SEC estadounidense
+# solo la VENTA; la STT india grava ambas.
+#
+# `solo_lista_anual: true` significa que el impuesto solo afecta a los valores
+# de `lista_anual` para el ano de la operacion. Si el ano de la operacion no
+# esta en `lista_anual`, se usa el ano disponible mas cercano hacia atras y el
+# informe deja constancia de esa extrapolacion.
+
+paises:
+
+  es:
+    impuesto: "Impuesto sobre las Transacciones Financieras"
+    pct: 0.002                 # 0,2 %
+    aplica_en: [compra]
+    solo_lista_anual: true
+    # El ITF espanol existe desde el 16 de enero de 2021. Aplicarlo a un
+    # backtest que empieza antes sobreestima los costes de los primeros anos.
+    vigente_desde: "2021-01-16" 
+    # Sociedades espanolas con capitalizacion > 1.000 M EUR a 1 de diciembre del
+    # ano anterior. Ojo: ArcelorMittal (MTS.MC) cotiza en Madrid pero tiene
+    # domicilio luxemburgues, asi que NO esta sujeta. Ferrovial traslado su
+    # domicilio a Paises Bajos en 2023, de ahi que salga de la lista.
+    lista_anual:
+      2021:
+        [ITX.MC, IBE.MC, TEF.MC, REP.MC, AENA.MC, FER.MC, ELE.MC, NTGY.MC,
+         AMS.MC, GRF.MC, ACS.MC, CLNX.MC, RED.MC, ENG.MC, ANA.MC, LOG.MC,
+         ROVI.MC, VIS.MC, CIE.MC, FDR.MC, ACX.MC, IAG.MC, MEL.MC]
+      2022:
+        [ITX.MC, IBE.MC, TEF.MC, REP.MC, AENA.MC, FER.MC, ELE.MC, NTGY.MC,
+         AMS.MC, GRF.MC, ACS.MC, CLNX.MC, RED.MC, ENG.MC, ANA.MC, LOG.MC,
+         ROVI.MC, VIS.MC, CIE.MC, FDR.MC, ACX.MC, IAG.MC, MEL.MC]
+      2023:
+        [ITX.MC, IBE.MC, TEF.MC, REP.MC, AENA.MC, FER.MC, ELE.MC, NTGY.MC,
+         AMS.MC, GRF.MC, ACS.MC, CLNX.MC, RED.MC, ENG.MC, ANA.MC, LOG.MC,
+         ROVI.MC, VIS.MC, CIE.MC, FDR.MC, ACX.MC, IAG.MC, MEL.MC]
+      2024:
+        [ITX.MC, IBE.MC, TEF.MC, REP.MC, AENA.MC, ELE.MC, NTGY.MC, AMS.MC,
+         GRF.MC, ACS.MC, CLNX.MC, RED.MC, ENG.MC, ANA.MC, LOG.MC, ROVI.MC,
+         VIS.MC, CIE.MC, FDR.MC, ACX.MC, IAG.MC, MEL.MC]
+      2025:
+        [ITX.MC, IBE.MC, TEF.MC, REP.MC, AENA.MC, ELE.MC, NTGY.MC, AMS.MC,
+         GRF.MC, ACS.MC, CLNX.MC, RED.MC, ENG.MC, ANA.MC, LOG.MC, ROVI.MC,
+         VIS.MC, CIE.MC, FDR.MC, ACX.MC, IAG.MC, MEL.MC]
+
+  us:
+    impuesto: "SEC Section 31 fee"
+    pct: 0.0000278             # tasa pequena, solo en ventas; se revisa cada ano
+    aplica_en: [venta]
+    solo_lista_anual: false
+
+  de:
+    impuesto: "ninguno"
+    pct: 0.0
+    aplica_en: []
+    solo_lista_anual: false
+
+  in:
+    impuesto: "Securities Transaction Tax"
+    pct: 0.001                 # 0,1 % en entrega, ambos lados
+    aplica_en: [compra, venta]
+    solo_lista_anual: false
+    vigente_desde: "2004-10-01" 
+
+  br:
+    impuesto: "ninguno"
+    pct: 0.0
+    # Las operaciones de renta variable en B3 no pagan un impuesto a la
+    # transaccion equiparable; los emolumentos de bolsa se tratan como coste de
+    # intermediacion, no como impuesto.
+    aplica_en: []
+    solo_lista_anual: false

@@ -135,6 +135,53 @@ def test_todo_mercado_necesita_su_indice_de_regimen(cfg):
 
 
 # --------------------------------------------------------------------------
+# Los tests tienen su propia configuracion (tarea A3)
+# --------------------------------------------------------------------------
+
+DIR_TESTS = Path(__file__).resolve().parent
+
+
+def test_los_tests_no_leen_la_configuracion_del_dueno(cfg):
+    """Cambiar `config/` para operar en eToro no debe romper ningun test."""
+    assert cfg.dir_config == DIR_TESTS / "config_prueba"
+    assert cfg.dir_config != config_mod.DIR_CONFIG_POR_DEFECTO
+    # Nadie se salta la copia fija cargando la configuracion por defecto.
+    for fichero in DIR_TESTS.glob("*.py"):
+        for nodo in ast.walk(ast.parse(fichero.read_text(encoding="utf-8"))):
+            if (
+                isinstance(nodo, ast.Call)
+                and isinstance(nodo.func, ast.Attribute)
+                and nodo.func.attr == "cargar"
+                and not nodo.args
+                and not nodo.keywords
+            ):
+                pytest.fail(f"{fichero.name}:{nodo.lineno} carga config/ sin carpeta")
+
+
+def test_una_carpeta_de_configuracion_usa_sus_propios_impuestos(tmp_path):
+    """Los impuestos salen de la carpeta cargada, no de `config/` de la raiz."""
+    for fichero in (DIR_TESTS / "config_prueba").glob("*.yaml"):
+        (tmp_path / fichero.name).write_text(
+            fichero.read_text(encoding="utf-8"), encoding="utf-8"
+        )
+    reglas = tmp_path / "reglas.yaml"
+    reglas.write_text(
+        reglas.read_text(encoding="utf-8").replace(
+            "capital_inicial_eur: 10000", "capital_inicial_eur: 1000"
+        ),
+        encoding="utf-8",
+    )
+    impuestos = tmp_path / "impuestos_transaccion.yaml"
+    impuestos.write_text(
+        impuestos.read_text(encoding="utf-8").replace("pct: 0.002 ", "pct: 0.009 ", 1),
+        encoding="utf-8",
+    )
+    otra = config_mod.cargar(tmp_path)
+    assert otra.reglas.cartera.capital_inicial_eur == 1000
+    assert otra.impuestos.paises["es"].pct == 0.009
+
+
+# --------------------------------------------------------------------------
 # Calendario
 # --------------------------------------------------------------------------
 

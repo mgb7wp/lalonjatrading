@@ -515,9 +515,12 @@ def cargar(dir_config: Path | str | None = None) -> Config:
     # La ruta del fichero de impuestos la marca reglas.yaml, no el codigo.
     ruta_impuestos = Path(reglas.costes.impuestos_transaccion)
     if not ruta_impuestos.is_absolute():
-        # En reglas.yaml se escribe relativa a la raiz del proyecto.
-        candidata = RAIZ / ruta_impuestos
-        ruta_impuestos = candidata if candidata.is_file() else directorio / ruta_impuestos.name
+        # En reglas.yaml se escribe relativa a la raiz del proyecto. Si el
+        # fichero esta en la propia carpeta que se carga, manda ese: asi una
+        # carpeta de configuracion (la de los tests, por ejemplo) no acaba
+        # leyendo los impuestos de otra.
+        propia = directorio / ruta_impuestos.name
+        ruta_impuestos = propia if propia.is_file() else RAIZ / ruta_impuestos
 
     return Config(
         reglas=reglas,
