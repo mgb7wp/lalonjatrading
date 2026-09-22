@@ -155,3 +155,57 @@ def test_una_base_vacia_no_revienta(bd):
     inst = instantanea_desde_bd(bd)
     assert inst.precios.empty
     assert "vacia" in inst.origen
+
+
+# --- El regimen de mercado tiene que ser alcanzable desde la base ----------
+
+
+def test_la_instantanea_trae_la_serie_del_indice_de_regimen(bd, cfg):
+    """El fallo que la produccion ensenio el 22/09/2026.
+
+    La consulta de precios filtraba `asset_type <> 'index'`, asi que la serie
+    del indice no llegaba nunca a la instantanea y `regimen_de_mercado`
+    devolvia DESCONOCIDO para los cinco mercados, todos los dias, hiciera lo que
+    hiciera el mercado. Aguas abajo DESCONOCIDO se trata como adverso: el motor
+    emitia senales frenadas y no fallaba nada.
+
+    Los precios del indice SI estaban en la base —la ingesta los descarga junto
+    a los valores—, asi que no era un hueco de datos: era la lectura.
+
+    Se comprueba el regimen y no solo la serie porque es lo que de verdad usa
+    el motor; comprobar la serie sola dejaria pasar una regresion un paso mas
+    abajo.
+    """
+    from estrategia.senales import Regimen, regimen_de_mercado
+
+    indice = cfg.reglas.tecnico.indices_regimen["us"]
+    # Cuesta arriba a proposito: con una serie plana la media y el cierre
+    # coinciden y el regimen saldria indistinguible de un fallo.
+    _escribir_precios(bd, _precios(ticker=indice, n=260))
+
+    inst = instantanea_desde_bd(bd)
+    inst.preparar(cfg)
+    vista = inst.vista(dt.date(2024, 9, 17))
+
+    assert vista.serie(indice) is not None, "sin la serie no hay regimen posible"
+
+    regimen, detalle = regimen_de_mercado("us", dt.date(2024, 9, 17), vista, cfg)
+    assert regimen is not Regimen.DESCONOCIDO, detalle
+    assert "falta" not in detalle, detalle
+
+
+def test_los_indices_no_se_cuelan_en_el_universo_invertible(bd, cfg):
+    """La otra mitad, que es la que hace segura la de arriba.
+
+    Los indices entran en `precios` y NO pueden entrar en el universo: no se
+    puntuan, no se rankean y no se compran. Quien lo decide es la configuracion
+    y las etapas, no esta consulta, y este test lo fija.
+    """
+    indice = cfg.reglas.tecnico.indices_regimen["us"]
+    _escribir_precios(bd, _precios(ticker=indice, n=5))
+
+    inst = instantanea_desde_bd(bd)
+
+    assert indice in set(inst.precios["ticker"]), "en precios si"
+    assert indice not in inst.sectores, "en sectores no: un indice no tiene sector"
+    assert indice not in set(cfg.universo.tickers()), "y en el universo tampoco"

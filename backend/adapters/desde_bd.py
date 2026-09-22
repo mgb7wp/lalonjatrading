@@ -96,7 +96,19 @@ def instantanea_desde_bd(
                p.source            AS fuente
         FROM price p
         JOIN security s ON s.id = p.security_id
-        WHERE s.asset_type <> 'index'
+        -- CON los indices, a proposito. El regimen de mercado (§26) se calcula
+        -- sobre la serie del indice de cada mercado, asi que excluirlos aqui
+        -- dejaba `vista.serie('^IBEX')` en None y el regimen en DESCONOCIDO
+        -- para los cinco mercados, siempre, hiciera lo que hiciera el mercado.
+        -- Y DESCONOCIDO se trata aguas abajo como adverso, asi que el motor
+        -- emitia senales frenadas sin que nada fallara.
+        --
+        -- No entran en el universo invertible por venir aqui: quien decide eso
+        -- es `cfg.universo.tickers()`, y las etapas que puntuan y rankean
+        -- filtran `asset_type <> 'index'` por su cuenta. Es exactamente la
+        -- forma que ya tenia la instantanea de fichero, que si trae indices y
+        -- referencias en `precios` y solo los valores en `sectores`.
+        WHERE TRUE
           {donde_mercado} {donde_desde} {donde_hasta}
         ORDER BY s.ticker, p.date
         """,  # noqa: S608 - los filtros son literales de este modulo, no entrada
