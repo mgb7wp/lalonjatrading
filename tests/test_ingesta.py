@@ -464,6 +464,40 @@ def test_la_frescura_ignora_las_publicaciones_futuras(bd_ingesta, cfg):
     assert futuras >= 1, "y si las hay, tiene que avisar"
 
 
+def test_la_frescura_de_los_fundamentales_pregunta_por_el_MERCADO(bd_ingesta, cfg):
+    """La fila de `data_freshness` tiene que decir la fuente de ESE mercado.
+
+    Los fundamentales son el unico tipo que se reparte por mercado, y la ingesta
+    pedia el nombre en global: `/health/data` publicaba 'yfinance' para EE. UU.
+    y Brasil mientras el API servia la SEC y la CVM, con `pit_origin` capturado.
+
+    Se espia la llamada en lugar de mirar la fila porque aqui se ingiere con el
+    proveedor sintetico, donde todas las fuentes se llaman igual y la fila
+    saldria bien con las dos implementaciones. Lo que discrimina es CON QUE se
+    pregunta: con el codigo anterior no llega ni un `mercado`.
+    """
+    import sqlalchemy as sa
+    from estrategia.datos.enrutador import Enrutador
+
+    from workers.pipeline import ingesta
+
+    cfg_uno = cfg.con_fuente_unica("sintetico")
+    enrutador = Enrutador(cfg_uno)
+    original = enrutador.nombre_de
+    preguntas: list[tuple] = []
+
+    def espia(tipo, mercado=None):
+        preguntas.append((tipo, mercado))
+        return original(tipo, mercado)
+
+    enrutador.nombre_de = espia
+    with sa.orm.Session(bd_ingesta) as s:
+        ingesta.ejecutar(s, cfg_uno, enrutador, mercados=["es"], anos=2)
+
+    de_fundamentales = {m for tipo, m in preguntas if tipo == "fundamentales"}
+    assert de_fundamentales == {"es"}, f"se pregunto en global: {preguntas}"
+
+
 def test_los_fundamentales_no_se_marcan_rancios_con_la_vara_de_los_precios(bd_ingesta, cfg):
     """Se publican una o cuatro veces al ano; medirlos en dias los marca siempre.
 

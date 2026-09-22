@@ -74,8 +74,21 @@ class Enrutador:
 
     # -- resolucion --------------------------------------------------------
 
-    def nombre_de(self, tipo: str) -> str:
-        return self._por_tipo[tipo]
+    def nombre_de(self, tipo: str, mercado: str | None = None) -> str:
+        """El nombre de la fuente de un tipo de dato, en un mercado si se dice.
+
+        Sin `mercado` devuelve el reparto global, y eso para los fundamentales
+        es una respuesta equivocada: son el unico tipo que se reparte por
+        mercado —la SEC solo cubre EE. UU. y la CVM solo Brasil—, asi que
+        preguntar en global contestaba 'yfinance' para los cinco. El panel de
+        `/health/data` lo estuvo publicando asi: decia que los fundamentales de
+        EE. UU. venian de yfinance mientras el API servia los de la SEC, con
+        `pit_origin = captured`. El sitio que existe para saber de donde sale
+        cada cifra era el que peor la contaba.
+        """
+        if mercado is None:
+            return self._por_tipo[tipo]
+        return self._cfg.reglas.proveedor_datos.fuente_de(tipo, mercado)
 
     @property
     def reparto(self) -> dict[str, str]:

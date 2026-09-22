@@ -195,6 +195,30 @@ def test_una_fuente_sin_precios_no_puede_ser_dueña_de_los_precios(cfg):
         Enrutador(otra).fuente("precios")
 
 
+def test_el_nombre_de_la_fuente_de_fundamentales_es_el_del_mercado(cfg):
+    """Preguntar en global por los fundamentales da una respuesta equivocada.
+
+    Son el unico tipo que se reparte por mercado —la SEC solo cubre EE. UU. y
+    la CVM solo Brasil—, asi que el reparto global contesta 'yfinance' para los
+    cinco. `/health/data` lo publicaba asi: decia que los fundamentales de
+    EE. UU. venian de yfinance mientras el API servia los de la SEC con
+    `pit_origin = captured`.
+
+    Se lee del `reglas.yaml` de verdad y no de uno inventado: si manana alguien
+    cambia el reparto y se olvida del panel, esto lo dice.
+    """
+    e = Enrutador(cfg)
+    assert e.nombre_de("fundamentales", "us") == "sec"
+    assert e.nombre_de("fundamentales", "br") == "cvm"
+    # Sin fuente propia se cae al atajo global, que es un hecho que se publica
+    # por mercado, no un error: esos tres van con fechas estimadas.
+    assert e.nombre_de("fundamentales", "es") == e.nombre_de("fundamentales")
+    assert e.nombre_de("fundamentales", "us") != e.nombre_de("fundamentales")
+
+    # Los precios no se reparten: preguntar por mercado no cambia la respuesta.
+    assert e.nombre_de("precios", "us") == e.nombre_de("precios")
+
+
 def test_el_enrutador_estampa_la_procedencia(cfg, instantanea):
     """Sin procedencia por fila, mezclar fuentes hace el backtest irrastreable."""
     e = Enrutador(cfg.con_fuente_unica("sintetico"))

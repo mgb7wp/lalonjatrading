@@ -445,7 +445,7 @@ def ejecutar(
                     r.avisos.append(f"{proporcion:.0%} point-in-time real")
                 _comprobar(
                     sesion,
-                    fuente=enrutador.nombre_de("fundamentales"),
+                    fuente=enrutador.nombre_de("fundamentales", mercado_id),
                     conjunto="fundamentales",
                     mercado=mercado_id,
                     nombre="point_in_time",
@@ -484,7 +484,7 @@ def ejecutar(
                 r.avisos.append(f"{futuras} filas con publicacion futura")
             _comprobar(
                 sesion,
-                fuente=enrutador.nombre_de("fundamentales"),
+                fuente=enrutador.nombre_de("fundamentales", mercado_id),
                 conjunto="fundamentales",
                 mercado=mercado_id,
                 nombre="publicacion_futura",
@@ -502,7 +502,7 @@ def ejecutar(
                 "fundamentales",
                 mercado_id,
                 ultima,
-                enrutador.nombre_de("fundamentales"),
+                enrutador.nombre_de("fundamentales", mercado_id),
                 cubiertos,
                 len(tickers),
                 hoy,
