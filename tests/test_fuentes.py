@@ -20,6 +20,7 @@ from estrategia import fundamental as fundamental_mod
 from estrategia.datos import contrato, registro
 from estrategia.datos.enrutador import Enrutador
 from estrategia.datos.eodhd_proveedor import (
+    VARIABLE_CLAVE,
     parsear_fundamentales,
     parsear_sector,
     ticker_eodhd,
@@ -195,8 +196,10 @@ def test_el_enrutador_estampa_la_procedencia(cfg, instantanea):
     assert (df["fuente"] == "sintetico").all()
 
 
-def test_el_enrutador_avisa_de_una_clave_que_falta(cfg):
+def test_el_enrutador_avisa_de_una_clave_que_falta(cfg, monkeypatch):
     """Que falte una clave debe verse al arrancar, no a media descarga."""
+    # Si el ordenador tiene la clave puesta, el test no puede ver que falta.
+    monkeypatch.delenv(VARIABLE_CLAVE, raising=False)
     datos = cfg.reglas.model_dump(mode="json")
     datos["proveedor_datos"] = {
         "nombre": "sintetico",
