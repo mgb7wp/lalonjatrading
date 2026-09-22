@@ -67,13 +67,14 @@ def asignar(
     `fx_decision` trae el cambio divisa->base del dia anterior, que es el que se
     usa para decidir y dimensionar.
 
-    `pendientes` son las ordenes ya decididas y aun sin ejecutar, normalmente
-    de otros mercados que revisaron antes en la misma semana. Ocupan hueco,
-    cuentan para los topes de sector y de mercado y tienen su efectivo
-    apartado. Sin ellas, cada mercado veia los mismos huecos libres y entre
-    todos podian pasarse de `max_posiciones`: con datos sinteticos, EE. UU.,
-    India y Brasil emitieron cinco ordenes para dos huecos y la cartera llego a
-    nueve posiciones con un maximo de ocho.
+    `candidatas` es la lista conjunta de todos los mercados del corte: el
+    backtest asigna una sola vez por corte semanal (ver `backtest.py`).
+
+    `pendientes` son las ordenes ya decididas y aun sin ejecutar, que con la
+    asignacion conjunta solo quedan si un mercado estuvo cerrado y su orden de
+    un corte anterior sigue en vuelo. Ocupan hueco, cuentan para los topes de
+    sector y de mercado y tienen su efectivo apartado. Sin ellas, la cartera
+    llego a nueve posiciones con un maximo de ocho.
     """
     reglas = cfg.reglas.cartera
     ordenes: list[Orden] = []

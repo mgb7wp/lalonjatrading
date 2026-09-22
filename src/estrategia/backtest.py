@@ -18,7 +18,25 @@ Orden dentro de cada dia, para cada mercado que tenga sesion:
    se estaria usando el cierre de hoy para decidir si hoy se toco el stop, que
    es anticipacion pura y mejora todos los backtests en silencio.
 6. **Revision semanal**, si esta sesion es la que aporta la decision de la
-   semana para ese mercado.
+   semana para ese mercado: salidas por regla y **recogida** de candidatas.
+   Aqui todavia no se compra nada.
+
+Y al final del dia, fuera del bucle de mercados:
+
+7. **Asignacion conjunta** de los cortes cuya ultima sesion de decision es hoy.
+   Las candidatas de los cinco mercados, cada una calculada con la vista de su
+   propia sesion de decision, se puntuan y ordenan juntas y se reparten los
+   huecos una sola vez. Asi el orden lo marca la puntuacion y no el orden de
+   los mercados en la configuracion: antes cada mercado asignaba por su cuenta
+   al revisar, y como el viernes los cinco deciden el mismo dia y el bucle los
+   recorre en el orden del YAML, Espana elegia huecos primero todas las
+   semanas. Es factible porque todas las decisiones de un corte son
+   anteriores a cualquiera de sus ejecuciones (la decision cierra en o antes
+   del corte, la ejecucion abre despues), y el motor lo comprueba.
+
+   **Cambia los resultados** respecto a backtests anteriores a este cambio: el
+   reparto de huecos entre mercados es otro, y las cohortes de percentiles
+   pueden recurrir al bloque con los demas mercados, que antes no veian.
 
 Las salidas se procesan antes que las entradas para que un hueco liberado hoy
 se pueda usar en la asignacion de la semana siguiente. Un hueco que se libera el
@@ -28,7 +46,7 @@ conservador que reabrir la lista a media semana.
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from datetime import date
 
 import pandas as pd
@@ -123,14 +141,14 @@ def ejecutar(
     # Se precalcula, por corte semanal, que sesion decide y cual ejecuta en cada
     # mercado. Asi el bucle diario solo consulta un diccionario.
     ejecuciones: dict[tuple[str, date], pd.Timestamp] = {}
-    for corte in cal.cortes_semanales:
-        for mercado_id in cal.mercados():
-            d = cal.sesion_de_decision(mercado_id, corte)
-            e = cal.sesion_de_ejecucion(mercado_id, corte)
-            if d is None or e is None or d < inicio_efectivo or e > fin:
-                continue
-            decisiones.setdefault(d, []).append((mercado_id, corte))
-            ejecuciones[(mercado_id, d)] = pd.Timestamp(e)
+    cortes_que_asignan = _cortes_que_asignan(cal, inicio_efectivo, fin)
+    for cortes in cortes_que_asignan.values():
+        for corte, por_mercado in cortes:
+            for mercado_id, (d, e) in por_mercado.items():
+                decisiones.setdefault(d, []).append((mercado_id, corte))
+                ejecuciones[(mercado_id, d)] = pd.Timestamp(e)
+    # Lo que cada mercado aporta a la asignacion conjunta de su corte.
+    recogidas: dict[pd.Timestamp, _Recogida] = {}
 
     for dia in cal.union_sesiones:
         if dia < inicio or dia > fin:
@@ -224,9 +242,18 @@ def ejecutar(
                 if mid != mercado_id:
                     continue
                 _revisar(
-                    dia, mercado_id, corte, vista, cal, cartera, cfg, mapa,
-                    pendientes_compra, pendientes_venta, ejecuciones, eventos, fin,
+                    dia, mercado_id, corte, vista, cartera, cfg, mapa,
+                    pendientes_venta, ejecuciones, eventos,
+                    recogidas.setdefault(corte, _Recogida()),
                 )
+
+        # 7. Asignacion conjunta de los cortes que ya tienen todas sus
+        # decisiones.
+        for corte, _ in cortes_que_asignan.get(dia, []):
+            _asignar_corte(
+                dia, recogidas.pop(corte, _Recogida()), vista, cal, cartera, cfg,
+                pendientes_compra, ejecuciones, eventos,
+            )
 
         curva.append(_valorar(dia, cartera, vista, cfg))
 
@@ -275,22 +302,74 @@ def _inicio_con_calentamiento(inicio: date, cfg: Config) -> date:
     return inicio + timedelta(days=dias)
 
 
+@dataclass
+class _Recogida:
+    """Lo que los mercados de un corte aportan a su asignacion conjunta.
+
+    Cada entrada se calcula con la vista de la sesion de decision de su
+    mercado, asi que juntarlas no anticipa nada: todas son anteriores al corte.
+    """
+
+    comprables: dict = field(default_factory=dict)
+    sectores: dict[str, str] = field(default_factory=dict)
+    cohorte: dict = field(default_factory=dict)
+    fx: dict[str, float] = field(default_factory=dict)
+    regimen: dict[str, bool] = field(default_factory=dict)
+    decision: dict[str, date] = field(default_factory=dict)
+
+
+def _cortes_que_asignan(
+    cal: Calendarios, inicio_efectivo: date, fin: date
+) -> dict[date, list[tuple[pd.Timestamp, dict[str, tuple[date, date]]]]]:
+    """Para cada dia, los cortes cuya ultima sesion de decision es ese dia.
+
+    Devuelve, por corte, la sesion de decision y la de ejecucion de cada
+    mercado que participa. Comprueba de paso la condicion que hace posible
+    asignar al final: la ultima decision de un corte tiene que ser anterior a
+    su primera ejecucion. Si no lo fuera, un mercado ejecutaria antes de que
+    se hubiera asignado, y la orden se perderia sin avisar.
+    """
+    salida: dict[date, list] = {}
+    for corte in cal.cortes_semanales:
+        por_mercado: dict[str, tuple[date, date]] = {}
+        for mercado_id in cal.mercados():
+            d = cal.sesion_de_decision(mercado_id, corte)
+            e = cal.sesion_de_ejecucion(mercado_id, corte)
+            if d is None or e is None or d < inicio_efectivo or e > fin:
+                continue
+            por_mercado[mercado_id] = (d, e)
+        if not por_mercado:
+            continue
+        ultima = max(d for d, _ in por_mercado.values())
+        primera_ejecucion = min(e for _, e in por_mercado.values())
+        if ultima >= primera_ejecucion:
+            raise ErrorDatos(
+                f"el corte {corte} tiene una decision el {ultima} y una "
+                f"ejecucion el {primera_ejecucion}: no se puede asignar de forma "
+                f"conjunta sin ejecutar antes de decidir"
+            )
+        salida.setdefault(ultima, []).append((corte, por_mercado))
+    return salida
+
+
 def _revisar(
     dia: date,
     mercado_id: str,
     corte,
     vista,
-    cal: Calendarios,
     cartera: Cartera,
     cfg: Config,
     mapa: MapaSectores,
-    pendientes_compra: dict,
     pendientes_venta: dict,
     ejecuciones: dict,
     eventos: list[Evento],
-    fin: date,
+    recogida: _Recogida,
 ) -> None:
-    """Revision semanal de un mercado: salidas por regla y nuevas compras."""
+    """Revision semanal de un mercado: salidas por regla y recogida de candidatas.
+
+    No compra: deja en `recogida` lo necesario para que `_asignar_corte`
+    reparta los huecos entre todos los mercados del corte a la vez.
+    """
     ejecucion = ejecuciones.get((mercado_id, dia))
     if ejecucion is None:
         return
@@ -319,14 +398,15 @@ def _revisar(
                 Evento(dia, "salida_programada", mercado_id, ticker, str(salida.motivo))
             )
 
+    recogida.decision[mercado_id] = dia
     regimen = tecnico_mod.regimen_por_mercado(dia, vista, cfg)
-    if not regimen.get(mercado_id, False):
+    recogida.regimen[mercado_id] = bool(regimen.get(mercado_id, False))
+    if not recogida.regimen[mercado_id]:
         eventos.append(Evento(dia, "regimen_apagado", mercado_id))
         return
 
     # Senales tecnicas de los elegibles de este mercado.
     comprables: dict = {}
-    sectores: dict[str, str] = {}
     for ticker, eleg in del_mercado.items():
         if not eleg.elegible or cartera.tiene(ticker):
             continue
@@ -334,15 +414,25 @@ def _revisar(
         if senal is None or not senal.comprable:
             continue
         comprables[ticker] = senal
-        sectores[ticker] = eleg.sector
+        recogida.sectores[ticker] = eleg.sector
 
     if not comprables:
         return
 
-    # Puntuacion fundamental sobre la cohorte elegible del mercado.
-    puntuaciones: dict = {}
+    divisa = cfg.reglas.mercado(mercado_id).divisa
+    try:
+        recogida.fx[divisa] = vista.fx_decision(
+            divisa, dia, cfg.reglas.datos.fx_decision_dia_anterior,
+            cfg.reglas.cartera.divisa_base,
+        )
+    except Exception:
+        return
+    recogida.comprables.update(comprables)
+
+    # Cohorte fundamental: todos los elegibles del mercado, no solo los
+    # comprables. Se puntua despues, junto con los demas mercados, para que
+    # un mercado con poca gente pueda recurrir a su bloque.
     if cfg.reglas.fundamental.activo:
-        cohorte: dict = {}
         for ticker, eleg in del_mercado.items():
             if not eleg.elegible:
                 continue
@@ -355,49 +445,72 @@ def _revisar(
                 senal_valor.cierre if senal_valor else None,
             )
             if ratios is not None:
-                cohorte[ticker] = (ratios, mercado_id, eleg.sector)
-        puntuaciones = fundamental_mod.puntuar(cohorte, cfg)
+                recogida.cohorte[ticker] = (ratios, mercado_id, eleg.sector)
+
+
+def _asignar_corte(
+    dia: date,
+    recogida: _Recogida,
+    vista,
+    cal: Calendarios,
+    cartera: Cartera,
+    cfg: Config,
+    pendientes_compra: dict,
+    ejecuciones: dict,
+    eventos: list[Evento],
+) -> None:
+    """Puntua, ordena y reparte los huecos de un corte entre todos sus mercados."""
+    if not recogida.comprables:
+        return
+
+    puntuaciones: dict = {}
+    if cfg.reglas.fundamental.activo:
+        puntuaciones = fundamental_mod.puntuar(recogida.cohorte, cfg)
 
     candidatas = seleccion_mod.ordenar_candidatas(
-        dia, comprables, puntuaciones, sectores, cfg
+        dia, recogida.comprables, puntuaciones, recogida.sectores, cfg
     )
+    # Cada candidata conserva la fecha en que decidio su mercado.
+    candidatas = [
+        replace(c, fecha_decision=recogida.decision.get(c.mercado, dia))
+        for c in candidatas
+    ]
     if not candidatas:
         return
 
-    divisa = cfg.reglas.mercado(mercado_id).divisa
-    try:
-        cambio = vista.fx_decision(
-            divisa, dia, cfg.reglas.datos.fx_decision_dia_anterior,
-            cfg.reglas.cartera.divisa_base,
-        )
-    except Exception:
-        return
+    # El capital se valora hoy, la ultima sesion de decision del corte: es
+    # posterior a las demas, pero sigue siendo anterior al corte.
+    capital = cartera.valor(_precios_base(cartera, vista, cfg, dia))
 
-    precios_base = _precios_base(cartera, vista, cfg, dia)
-    capital = cartera.valor(precios_base)
-
-    # Lo que otros mercados ya han decidido y aun no se ha ejecutado ocupa
-    # hueco: sin contarlo, entre todos se pasaban de `max_posiciones`.
+    # Lo decidido y aun sin ejecutar ocupa hueco. Con la asignacion conjunta
+    # normalmente no queda nada de cortes anteriores, pero si un mercado estuvo
+    # cerrado puede quedar una orden en vuelo.
     pendientes = [o for lista in pendientes_compra.values() for o in lista]
     asignacion = ordenes_mod.asignar(
-        dia, candidatas, cartera, regimen, {divisa: cambio}, capital, cfg,
+        dia, candidatas, cartera, recogida.regimen, recogida.fx, capital, cfg,
         pendientes=pendientes,
     )
     for orden in asignacion.ordenes:
+        decision = recogida.decision[orden.mercado]
+        fecha_ejecucion = ejecuciones[(orden.mercado, decision)].date()
+        clave = f"{orden.mercado}|{fecha_ejecucion.isoformat()}"
         pendientes_compra.setdefault(clave, []).append(orden)
         eventos.append(
-            Evento(dia, "orden", mercado_id, orden.ticker, detalles={
+            Evento(decision, "orden", orden.mercado, orden.ticker, detalles={
                 "acciones": orden.acciones, "rango": orden.rango_asignacion,
                 "puntuacion": round(orden.puntuacion_final, 2),
                 "riesgo_teorico_pct": orden.riesgo_teorico_pct,
                 "riesgo_efectivo_pct": round(orden.riesgo_efectivo_pct, 5),
                 "limitada_por_peso_maximo": orden.limitada_por_peso_maximo,
-                "sesiones_de_retraso": cal.sesiones_de_retraso(mercado_id, dia, fecha_ejecucion),
+                "sesiones_de_retraso": cal.sesiones_de_retraso(
+                    orden.mercado, decision, fecha_ejecucion
+                ),
             })
         )
     for r in asignacion.rechazos:
         eventos.append(
-            Evento(dia, "rechazo", r.mercado, r.ticker, str(r.motivo),
+            Evento(recogida.decision.get(r.mercado, dia), "rechazo", r.mercado,
+                   r.ticker, str(r.motivo),
                    {"rango": r.rango, "puntuacion": round(r.puntuacion_final, 2)})
         )
 

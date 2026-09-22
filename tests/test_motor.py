@@ -429,3 +429,106 @@ def test_tipos_no_importa_nada_del_paquete():
         n for n in ast.walk(arbol) if isinstance(n, ast.ImportFrom) and n.level > 0
     ]
     assert not relativas, "tipos.py no debe importar nada del propio paquete"
+
+
+# --------------------------------------------------------------------------
+# Asignacion conjunta entre mercados
+# --------------------------------------------------------------------------
+
+
+def _con_mercados_invertidos(cfg):
+    datos = cfg.reglas.model_dump(mode="json")
+    datos["universo"]["mercados"] = list(reversed(datos["universo"]["mercados"]))
+    return cfg.model_copy(update={"reglas": config_mod.Reglas.model_validate(datos)})
+
+
+def _compras(r):
+    ev = r.eventos_df
+    return sorted(
+        (e.fecha, e.ticker, e.acciones)
+        for e in ev[ev["tipo"] == "compra"].itertuples()
+    )
+
+
+def test_el_orden_de_los_mercados_en_la_configuracion_no_cambia_nada(cfg, instantanea):
+    """Los huecos los reparte la puntuacion, no el orden del YAML.
+
+    Antes cada mercado asignaba por su cuenta al revisar, y como el viernes
+    deciden todos el mismo dia y el bucle los recorre en el orden de la
+    configuracion, el primero (Espana) elegia huecos antes que los demas todas
+    las semanas. Con la asignacion conjunta, invertir el orden no puede cambiar
+    ni una compra.
+    """
+    invertida = _con_mercados_invertidos(cfg)
+    assert Calendarios(invertida, INICIO, FIN).mercados() == list(
+        reversed(Calendarios(cfg, INICIO, FIN).mercados())
+    )
+    fin = dt.date(2023, 12, 31)
+    normal = backtest_mod.ejecutar(instantanea, cfg, INICIO, fin)
+    al_reves = backtest_mod.ejecutar(instantanea, invertida, INICIO, fin)
+    ev = normal.eventos_df
+    # Para que el test diga algo, tiene que haber semanas con huecos disputados.
+    assert (ev["motivo"] == "sin_hueco").any()
+    assert _compras(normal) == _compras(al_reves)
+
+
+def test_con_un_solo_hueco_gana_la_mejor_puntuacion_de_cualquier_mercado(cfg):
+    """Dos mercados que deciden el mismo dia y un hueco: gana la mejor nota.
+
+    Sea cual sea el mercado que se recoja primero.
+    """
+    from estrategia.cartera import Cartera
+    from estrategia.tipos import SenalTecnica
+
+    reglas = cfg.reglas.model_copy(update={
+        "cartera": cfg.reglas.cartera.model_copy(update={"max_posiciones": 1}),
+        "fundamental": cfg.reglas.fundamental.model_copy(update={"activo": False}),
+    })
+    unico = cfg.model_copy(update={"reglas": reglas})
+    dia = dt.date(2023, 6, 16)
+
+    def senal(ticker, mercado, momentum):
+        return SenalTecnica(
+            ticker=ticker, mercado=mercado, fecha=dia, cierre=100.0,
+            media_corta=98.0, media_larga=95.0, momentum=momentum, atr=5.0,
+            historial_suficiente=True,
+        )
+
+    class _Cal:
+        def sesiones_de_retraso(self, *a):
+            return 1
+
+    ejec = dt.date(2023, 6, 19)
+    import pandas as pd
+
+    for orden_recogida in (["es", "us"], ["us", "es"]):
+        rec = backtest_mod._Recogida()
+        for mercado in orden_recogida:
+            ticker, momentum = {"es": ("ESP", 0.05), "us": ("USA", 0.40)}[mercado]
+            rec.comprables[ticker] = senal(ticker, mercado, momentum)
+            rec.sectores[ticker] = f"sector_{mercado}"
+            rec.regimen[mercado] = True
+            rec.decision[mercado] = dia
+            rec.fx[cfg.reglas.mercado(mercado).divisa] = 1.0
+        pendientes: dict = {}
+        eventos: list = []
+        backtest_mod._asignar_corte(
+            dia, rec, vista=None, cal=_Cal(), cartera=Cartera(efectivo=100_000.0),
+            cfg=unico, pendientes_compra=pendientes,
+            ejecuciones={(m, dia): pd.Timestamp(ejec) for m in ("es", "us")},
+            eventos=eventos,
+        )
+        compradas = [o.ticker for lista in pendientes.values() for o in lista]
+        assert compradas == ["USA"], orden_recogida
+        assert any(e.ticker == "ESP" and e.motivo == "sin_hueco" for e in eventos)
+
+
+def test_todas_las_decisiones_de_un_corte_preceden_a_sus_ejecuciones(cfg):
+    """La condicion que hace posible asignar al final, sobre los calendarios reales."""
+    cal = Calendarios(cfg, INICIO, FIN)
+    cortes = backtest_mod._cortes_que_asignan(cal, INICIO, FIN)
+    assert cortes
+    for dia, lista in cortes.items():
+        for _, por_mercado in lista:
+            assert max(d for d, _ in por_mercado.values()) == dia
+            assert all(dia < e for _, e in por_mercado.values())
