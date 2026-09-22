@@ -421,6 +421,50 @@ def test_se_respeta_el_tope_por_mercado(cfg):
     assert any(r.motivo == MotivoRechazo.TOPE_MERCADO for r in a.rechazos)
 
 
+def test_las_ordenes_pendientes_de_otro_mercado_ocupan_hueco(cfg):
+    """Regresion: cada mercado veia los mismos huecos libres.
+
+    EE. UU., India y Brasil revisan en sesiones distintas de la misma semana, y
+    las ordenes de los primeros aun no se han ejecutado cuando decide el
+    ultimo. Sin contarlas, entre todos llegaron a nueve posiciones con un
+    maximo de ocho.
+    """
+    cartera = Cartera(efectivo=100_000.0)
+    maximo = cfg.reglas.cartera.max_posiciones
+    previas = asignar(
+        dt.date(2023, 6, 16),
+        [_candidata(f"P{i}", m, f"s{i}", 90.0 - i)
+         for i, m in enumerate(["es", "de", "us", "in", "br"] * 2)][: maximo - 1],
+        cartera, {m: True for m in ("es", "de", "us", "in", "br")},
+        {"EUR": 1.0, "USD": 1.0, "INR": 1.0, "BRL": 1.0}, 100_000.0, cfg,
+    ).ordenes
+    assert len(previas) == maximo - 1
+
+    a = asignar(
+        dt.date(2023, 6, 16),
+        [_candidata("X", "br", "otro", 99.0), _candidata("Y", "br", "otro2", 98.0)],
+        cartera, {"br": True}, {"BRL": 1.0}, 100_000.0, cfg, pendientes=previas,
+    )
+    assert [o.ticker for o in a.ordenes] == ["X"]
+    assert any(r.ticker == "Y" and r.motivo in (
+        MotivoRechazo.SIN_HUECO, MotivoRechazo.TOPE_MERCADO) for r in a.rechazos)
+
+
+def test_las_ordenes_pendientes_cuentan_para_el_tope_de_mercado(cfg):
+    cartera = Cartera(efectivo=100_000.0)
+    tope = cfg.reglas.cartera.max_por_mercado
+    previas = asignar(
+        dt.date(2023, 6, 16), [_candidata(f"P{i}", "es", f"s{i}", 90.0) for i in range(tope)],
+        cartera, {"es": True}, {"EUR": 1.0}, 100_000.0, cfg,
+    ).ordenes
+    a = asignar(
+        dt.date(2023, 6, 16), [_candidata("X", "es", "otro", 99.0)],
+        cartera, {"es": True}, {"EUR": 1.0}, 100_000.0, cfg, pendientes=previas,
+    )
+    assert not a.ordenes
+    assert a.rechazos[0].motivo == MotivoRechazo.TOPE_MERCADO
+
+
 def test_el_regimen_apagado_bloquea_las_compras(cfg):
     cartera = Cartera(efectivo=100_000.0)
     candidatas = [_candidata("A", "es", "industrial", 90.0)]

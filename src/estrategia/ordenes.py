@@ -23,6 +23,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from datetime import date
+from typing import Iterable
 
 from . import riesgo as riesgo_mod
 from . import salidas as salidas_mod
@@ -59,22 +60,39 @@ def asignar(
     fx_decision: dict[str, float],
     capital_base: float,
     cfg: Config,
+    pendientes: Iterable[Orden] = (),
 ) -> Asignacion:
     """Reparte los huecos libres entre las candidatas, de mejor a peor.
 
     `fx_decision` trae el cambio divisa->base del dia anterior, que es el que se
     usa para decidir y dimensionar.
+
+    `pendientes` son las ordenes ya decididas y aun sin ejecutar, normalmente
+    de otros mercados que revisaron antes en la misma semana. Ocupan hueco,
+    cuentan para los topes de sector y de mercado y tienen su efectivo
+    apartado. Sin ellas, cada mercado veia los mismos huecos libres y entre
+    todos podian pasarse de `max_posiciones`: con datos sinteticos, EE. UU.,
+    India y Brasil emitieron cinco ordenes para dos huecos y la cartera llego a
+    nueve posiciones con un maximo de ocho.
     """
     reglas = cfg.reglas.cartera
     ordenes: list[Orden] = []
     rechazos: list[Rechazo] = []
+    pendientes = list(pendientes)
 
-    # Estado reservado: parte del estado real y se va consumiendo segun se
-    # asignan huecos, para que dos candidatas no se queden el mismo.
-    n_posiciones = cartera.n_posiciones
+    # Estado reservado: parte del estado real mas lo ya comprometido y se va
+    # consumiendo segun se asignan huecos, para que dos candidatas no se queden
+    # el mismo.
+    n_posiciones = cartera.n_posiciones + len(pendientes)
     por_sector = {s: cartera.n_en_sector(s) for s in {c.sector for c in candidatas}}
     por_mercado = {m: cartera.n_en_mercado(m) for m in {c.mercado for c in candidatas}}
-    efectivo = cartera.efectivo
+    for o in pendientes:
+        por_sector[o.sector] = por_sector.get(o.sector, cartera.n_en_sector(o.sector)) + 1
+        por_mercado[o.mercado] = (
+            por_mercado.get(o.mercado, cartera.n_en_mercado(o.mercado)) + 1
+        )
+    efectivo = cartera.efectivo - sum(o.reserva_base for o in pendientes)
+    ya_pedidos = {o.ticker for o in pendientes}
 
     for rango, cand in enumerate(candidatas, start=1):
 
@@ -84,7 +102,7 @@ def asignar(
                         cand.puntuacion_final)
             )
 
-        if cartera.tiene(cand.ticker):
+        if cartera.tiene(cand.ticker) or cand.ticker in ya_pedidos:
             rechazar(MotivoRechazo.YA_EN_CARTERA)
             continue
         if not regimen.get(cand.mercado, False):
@@ -143,6 +161,7 @@ def asignar(
                 riesgo_teorico_pct=tamano.riesgo_teorico_pct,
                 riesgo_efectivo_pct=tamano.riesgo_efectivo_pct,
                 limitada_por_peso_maximo=tamano.limitada_por_peso_maximo,
+                reserva_base=reserva,
             )
         )
         n_posiciones += 1

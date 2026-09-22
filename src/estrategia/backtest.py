@@ -376,8 +376,12 @@ def _revisar(
     precios_base = _precios_base(cartera, vista, cfg, dia)
     capital = cartera.valor(precios_base)
 
+    # Lo que otros mercados ya han decidido y aun no se ha ejecutado ocupa
+    # hueco: sin contarlo, entre todos se pasaban de `max_posiciones`.
+    pendientes = [o for lista in pendientes_compra.values() for o in lista]
     asignacion = ordenes_mod.asignar(
-        dia, candidatas, cartera, regimen, {divisa: cambio}, capital, cfg
+        dia, candidatas, cartera, regimen, {divisa: cambio}, capital, cfg,
+        pendientes=pendientes,
     )
     for orden in asignacion.ordenes:
         pendientes_compra.setdefault(clave, []).append(orden)

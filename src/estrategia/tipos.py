@@ -161,6 +161,9 @@ class Orden:
     riesgo_teorico_pct: float
     riesgo_efectivo_pct: float
     limitada_por_peso_maximo: bool
+    # Efectivo apartado al decidir, en divisa base. Las revisiones de los otros
+    # mercados lo descuentan mientras la orden siga sin ejecutar.
+    reserva_base: float = 0.0
 
 
 @dataclass(frozen=True, slots=True)
