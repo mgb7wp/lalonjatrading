@@ -10,6 +10,10 @@ un "cierre global": es la primera cosa que se rompe en una plataforma
 multi-mercado escrita como si solo existiera Nueva York. El reparto de horas
 vive en `planificador.py`, sacado de los calendarios de verdad.
 
+Puntuar es la excepcion y va aparte: una sola tarea al final del dia, con todo
+descargado, porque el ranking compara los cinco mercados y leerlo a media tarde
+no puede ensenar solo los que ya han cerrado. Ver `ejecutar_scores`.
+
 ## Lo que este fichero hacia antes
 
 `signal.pause()`. La dependencia de APScheduler estaba declarada y el comentario
@@ -101,6 +105,57 @@ def ejecutar_mercado(mercado_id: str, codigo_calendario: str) -> None:
         log.error("%s: %s etapas han fallado", mercado_id, len(fallos))
 
 
+def ejecutar_scores() -> None:
+    """Puntua el universo entero y emite las senales del dia.
+
+    ## Por que no va dentro de `ejecutar_mercado`
+
+    Porque el ranking de §25 compara los cinco mercados y lee los scores de UNA
+    fecha: puntuar tras cada cierre dejaria la tabla global incompleta once
+    horas al dia. Va una vez, al final, con todo descargado. La cohorte de
+    percentiles es `mercado x sector`, asi que puntuar junto o por separado da
+    exactamente el mismo numero; lo que cambia es que la tabla este entera.
+
+    ## Se puntua todo, tambien lo que hoy no ha negociado
+
+    Un festivo en Nueva York no puede borrar EE. UU. del ranking. Un mercado sin
+    sesion se puntua con su ultimo cierre conocido —que es lo que las etapas de
+    precios e indicadores ya hacen, `date <= fecha`— y repite el score de ayer.
+    Lo que si se comprueba es que haya negociado ALGUIEN: un 1 de enero no
+    escribe una fila por valor para no decir nada nuevo.
+
+    ## Senales despues de scores, en la misma sesion
+
+    `senales.ejecutar` busca la version del modelo que de verdad tiene scores de
+    esa fecha. Invertir el orden devuelve cero sin explicar por que.
+    """
+    from estrategia import config as core_config
+
+    from backend.db.session import _fabrica
+    from workers.pipeline import scores, senales
+    from workers.planificador import ha_negociado
+
+    hoy = dt.date.today()
+    cfg = core_config.cargar()
+    calendarios = dict(cfg.implementacion.calendarios)
+    abiertos = [m for m, codigo in sorted(calendarios.items()) if ha_negociado(codigo, hoy)]
+    if not abiertos:
+        log.info("ningun mercado ha negociado hoy; no se puntua")
+        return
+    log.info("puntuando el universo; hoy han negociado: %s", ", ".join(abiertos))
+
+    with _fabrica()() as sesion:
+        puntuados = scores.ejecutar(sesion, cfg, fecha=hoy)
+        emitidas = senales.ejecutar(sesion, cfg, fecha=hoy)
+
+    for modelo, n in puntuados.items():
+        log.info("scores/%s: %s filas", modelo, n)
+    if not puntuados:
+        log.error("no se ha puntuado ni un valor; el ranking se quedara en la fecha anterior")
+    for motivo, n in emitidas.items():
+        log.info("senales/%s: %s", motivo, n)
+
+
 def ejecutar_divisas() -> None:
     """Solo los tipos de cambio, despues de que el BCE publique."""
     from estrategia import config as core_config
@@ -145,11 +200,16 @@ def construir_planificador(scheduler, calendarios: dict[str, str]):
 
     from workers.planificador import construir
 
+    #: Las tareas que no son de un mercado concreto, por nombre. Un `if/else`
+    #: sobre `tarea.mercado` mandaba a divisas cualquier tarea global nueva, en
+    #: silencio y con el nombre correcto en el log.
+    globales = {"divisas": ejecutar_divisas, "scores": ejecutar_scores}
+
     for tarea in construir(calendarios):
         if tarea.mercado:
             funcion = _protegida(ejecutar_mercado, tarea.mercado, calendarios[tarea.mercado])
         else:
-            funcion = _protegida(ejecutar_divisas)
+            funcion = _protegida(globales[tarea.nombre])
         scheduler.add_job(
             funcion,
             CronTrigger(

@@ -23,6 +23,16 @@ descarga a la hora equivocada y nadie lo relaciona con esto.
 Se anade un margen tras el cierre porque el dato no esta publicado en el
 instante en que suena la campana.
 
+## Puntuar va una vez, y al final del dia
+
+La ingesta es por mercado porque cada uno cierra a su hora. Puntuar **no**: el
+ranking de §25 compara los cinco mercados entre si y lee los scores de UNA
+fecha. Si cada mercado se puntuara tras su propio cierre, entre las 10:30 UTC
+(la India) y las 21:30 UTC (Brasil) el ranking global ensenaria solo los
+mercados ya puntuados y los demas **desapareceran** de la tabla, no por falta de
+datos sino por el reloj. Por eso hay una sola tarea `scores`, despues del ultimo
+cierre del dia, que puntua y emite senales para el universo entero.
+
 ## Las divisas van aparte
 
 El BCE publica sus tipos de referencia a media tarde (CET). El primer mercado
@@ -56,6 +66,12 @@ MARGEN_TRAS_CIERRE_MIN = 30
 #: Hora (Europe/Madrid) de la descarga de divisas. El BCE publica sus tipos de
 #: referencia alrededor de las 16:00 CET; 16:45 deja margen sin esperar a manana.
 HORA_DIVISAS = (16, 45)
+
+#: Minutos tras el ULTIMO cierre del dia antes de puntuar. No son los 30 de la
+#: ingesta: puntuar necesita que la descarga de ese ultimo mercado haya
+#: terminado, no solo que haya empezado. Hora y media deja sitio de sobra para
+#: una descarga lenta sin empujar los scores al dia siguiente.
+MARGEN_SCORES_MIN = 90
 
 
 class Tarea:
@@ -104,6 +120,37 @@ def _sumar_minutos(hora: int, minuto: int, minutos: int) -> tuple[int, int]:
     return divmod(total, 60)
 
 
+def _en_utc(hora: int, minuto: int, zona: str, dia: dt.date) -> dt.datetime:
+    """El instante UTC de una hora local. Comparar '18:00' con '16:00' sin esto
+    diria que Brasil cierra antes que Nueva York."""
+    from zoneinfo import ZoneInfo
+
+    return dt.datetime.combine(dia, dt.time(hora, minuto), ZoneInfo(zona)).astimezone(dt.UTC)
+
+
+def ultimo_cierre(
+    calendarios: dict[str, str], referencia: dt.date | None = None
+) -> tuple[str, int, int, str]:
+    """El mercado que cierra el ultimo del dia, con su hora y su huso.
+
+    Se devuelve el huso del mercado y no UTC a proposito: la tarea se programa
+    en hora local para que el cambio al horario de verano la mueva sola, igual
+    que a las ingestas. Programarla en UTC la descolocaria una hora dos veces al
+    anio, y justo en la direccion peor —puntuar antes de que el ultimo mercado
+    haya descargado—.
+    """
+    referencia = referencia or dt.date.today()
+    # Ordenado para que un empate —en invierno Nueva York y Sao Paulo cierran
+    # a la misma hora UTC— se resuelva siempre igual y no segun el orden en que
+    # venga el diccionario.
+    cierres = {}
+    for mercado_id, codigo in sorted(calendarios.items()):
+        hora, minuto, zona = cierre_habitual(codigo, referencia)
+        cierres[mercado_id] = (hora, minuto, zona)
+    ultimo = max(cierres, key=lambda m: _en_utc(*cierres[m], referencia))
+    return (ultimo, *cierres[ultimo])
+
+
 def construir(calendarios: dict[str, str], referencia: dt.date | None = None) -> list[Tarea]:
     """Las tareas del dia: una por mercado, mas la de divisas.
 
@@ -131,6 +178,12 @@ def construir(calendarios: dict[str, str], referencia: dt.date | None = None) ->
             zona="Europe/Madrid",
         )
     )
+
+    # Una sola tarea para todo el universo, tras el ultimo cierre: ver el
+    # encabezado del modulo. `mercado` se queda a None porque no es de nadie.
+    _, hora, minuto, zona = ultimo_cierre(calendarios, referencia)
+    hora, minuto = _sumar_minutos(hora, minuto, MARGEN_SCORES_MIN)
+    tareas.append(Tarea(nombre="scores", hora=hora, minuto=minuto, zona=zona))
     return tareas
 
 
