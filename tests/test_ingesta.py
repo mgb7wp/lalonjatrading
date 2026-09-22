@@ -1133,3 +1133,57 @@ def test_el_historico_por_defecto_llega_a_los_quince_anios_que_pide_d7():
     from workers.pipeline.ingesta import ANOS_HISTORICO
 
     assert ANOS_HISTORICO >= MINIMO_ANIOS, "el historico descargado no puede quedarse corto de D-7"
+
+
+def test_un_valor_sin_ni_un_precio_se_avisa_aunque_la_cobertura_sea_alta(bd_ingesta, cfg):
+    """El caso de Tata Motors, 22/09/2026.
+
+    `TATAMOTORS.NS` devuelve 404 en la fuente desde una accion corporativa. La
+    India cubria 29 de 30 valores —el 97%, muy por encima del 80% de
+    COBERTURA_MINIMA—, asi que no saltaba ni un aviso: el valor salia sin
+    puntuar con su motivo escrito, que es lo correcto, y nadie se iba a enterar.
+
+    Un ticker que no ha tenido NUNCA un precio no es un dia malo del proveedor,
+    y por eso no se mide con la misma vara.
+    """
+    import sqlalchemy as sa
+
+    _ejecutar(bd_ingesta, cfg)
+
+    with sa.orm.Session(bd_ingesta) as s:
+        # Se borran los precios de UN valor, dejando los demas intactos: la
+        # cobertura sigue muy por encima del umbral y solo discrimina el aviso
+        # nuevo. Con el viejo, esto pasaria sin decir nada.
+        huerfano = s.execute(
+            text(
+                "SELECT s.ticker FROM security s WHERE s.market_id='es' "
+                "AND s.asset_type <> 'index' ORDER BY s.ticker LIMIT 1"
+            )
+        ).scalar()
+        s.execute(
+            text(
+                "DELETE FROM price WHERE security_id = "
+                "(SELECT id FROM security WHERE ticker = :t)"
+            ),
+            {"t": huerfano},
+        )
+        s.execute(text("DELETE FROM data_quality_check"))
+        s.commit()
+
+    # Se relanza con `forzar=False`: la etapa de precios se salta por
+    # idempotencia, y el aviso tiene que salir igual. Atado a la descarga,
+    # desapareceria justo el dia que no se descarga.
+    _ejecutar(bd_ingesta, cfg)
+
+    with sa.orm.Session(bd_ingesta) as s:
+        fila = s.execute(
+            text(
+                "SELECT status, detail, context FROM data_quality_check "
+                "WHERE check_name='valores_sin_ni_un_precio' AND market_id='es'"
+            )
+        ).first()
+
+    assert fila is not None, "la comprobacion tiene que registrarse siempre"
+    assert fila[0] == "warning", f"con un huerfano hay que avisar: {fila}"
+    assert huerfano in fila[1], "el aviso tiene que decir CUAL, no solo cuantos"
+    assert huerfano in fila[2]["tickers"]

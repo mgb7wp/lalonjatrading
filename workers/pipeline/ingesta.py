@@ -302,6 +302,32 @@ def _etapa(
     resultados.append(resultado)
 
 
+def _sin_ni_un_precio(sesion: Session, mercado_id: str) -> list[str]:
+    """Valores activos de un mercado que no tienen NI UNA fila de precio.
+
+    No es lo mismo que una cobertura baja, y por eso no se mide con la misma
+    vara. Que hoy falte un valor es un dia malo del proveedor; que un valor no
+    haya tenido nunca un precio es casi siempre un ticker muerto —una fusion, un
+    cambio de nombre, una escision— o una errata en el universo.
+
+    Lo destapo Tata Motors el 22/09/2026: `TATAMOTORS.NS` devuelve 404 en la
+    fuente desde una accion corporativa, y como la India cubria 29 de 30 valores
+    —el 97%, muy por encima del 80% de COBERTURA_MINIMA— no saltaba ningun
+    aviso. El valor salia sin puntuar con su motivo escrito, que es lo correcto
+    segun §12, pero nadie se iba a enterar nunca.
+    """
+    filas = sesion.execute(
+        text(
+            "SELECT s.ticker FROM security s "
+            "WHERE s.market_id = :m AND s.active AND s.asset_type <> 'index' "
+            "  AND NOT EXISTS (SELECT 1 FROM price p WHERE p.security_id = s.id) "
+            "ORDER BY s.ticker"
+        ),
+        {"m": mercado_id},
+    ).all()
+    return [f[0] for f in filas]
+
+
 def _cobertura(resultado: Resultado, devueltos: set[str], esperados: list[str]) -> int:
     cubiertos = len(devueltos & set(esperados))
     if esperados and cubiertos / len(esperados) < COBERTURA_MINIMA:
@@ -422,6 +448,28 @@ def ejecutar(
                     r.filas,
                     descargado=hoy,
                 )
+
+        # Se comprueba fuera del `with` de precios y en los DOS caminos —haya
+        # descargado o se haya saltado por idempotencia— porque un ticker muerto
+        # sigue muerto el dia que no se descarga, y ese es justo el dia en que
+        # un aviso atado a la descarga desapareceria.
+        huerfanos = _sin_ni_un_precio(sesion, mercado_id)
+        _comprobar(
+            sesion,
+            fuente=enrutador.nombre_de("precios"),
+            conjunto="precios",
+            mercado=mercado_id,
+            nombre="valores_sin_ni_un_precio",
+            estado=CheckStatus.PASSED.value if not huerfanos else CheckStatus.WARNING.value,
+            severidad=Severity.INFO.value if not huerfanos else Severity.WARNING.value,
+            detalle=(
+                ""
+                if not huerfanos
+                else f"{len(huerfanos)} valores sin una sola fila de precio "
+                f"({', '.join(huerfanos)}); probable ticker muerto o errata"
+            ),
+            contexto={"tickers": huerfanos, "n": len(huerfanos)},
+        )
 
         # --- fundamentales --------------------------------------------------
         if _ya_hecho(sesion, "fundamentales", dia, mercado_id) and not forzar:
