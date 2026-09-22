@@ -15,6 +15,16 @@
 # sector. El sector que manda es el del proveedor, mapeado en
 # config/implementacion.yaml.
 
+# Fuera por operaciones corporativas que Yahoo no ajusta (los detecta
+# `umbral_salto_sospechoso`, ver FUENTES.md). No se corrigen con un factor
+# estimado a mano, que seria inventar datos; vuelven si la fuente los ajusta:
+# - TMPV.NS, antes TATAMOTORS.NS: la escision de octubre de 2025 aparece como
+#   una caida del 40 % en un dia, tambien en el cierre ajustado.
+# - JBSS32.SA, BDR que sustituye a JBSS3 desde que JBS cotiza en Nueva York:
+#   el cambio de ratio de junio de 2025 aparece como una subida del 100 %.
+# - UGPA3.SA (Ultrapar): todo el historico anterior al 28-06-2021 esta
+#   dividido por ~2,19 sin ningun split ese dia; sale un +119 % en una sesion.
+
 mercados:
 
   es:
@@ -122,7 +132,6 @@ mercados:
     - {ticker: "DRREDDY.NS",    nombre: "Dr. Reddy's",           sector_declarado: salud}
     - {ticker: "CIPLA.NS",      nombre: "Cipla",                 sector_declarado: salud}
     - {ticker: "MARUTI.NS",     nombre: "Maruti Suzuki",         sector_declarado: consumo_discrecional}
-    - {ticker: "TATAMOTORS.NS", nombre: "Tata Motors",           sector_declarado: consumo_discrecional}
     - {ticker: "TITAN.NS",      nombre: "Titan Company",         sector_declarado: consumo_discrecional}
     - {ticker: "ASIANPAINT.NS", nombre: "Asian Paints",          sector_declarado: materiales}
     - {ticker: "ULTRACEMCO.NS", nombre: "UltraTech Cement",      sector_declarado: materiales}
@@ -141,22 +150,24 @@ mercados:
     - {ticker: "PETR4.SA",  nombre: "Petrobras",              sector_declarado: energia}
     - {ticker: "PRIO3.SA",  nombre: "PRIO",                   sector_declarado: energia}
     - {ticker: "CSAN3.SA",  nombre: "Cosan",                  sector_declarado: energia}
-    - {ticker: "UGPA3.SA",  nombre: "Ultrapar",               sector_declarado: energia}
     - {ticker: "VALE3.SA",  nombre: "Vale",                   sector_declarado: materiales}
     - {ticker: "SUZB3.SA",  nombre: "Suzano",                 sector_declarado: materiales}
     - {ticker: "GGBR4.SA",  nombre: "Gerdau",                 sector_declarado: materiales}
     - {ticker: "CSNA3.SA",  nombre: "CSN",                    sector_declarado: materiales}
     - {ticker: "KLBN11.SA", nombre: "Klabin",                 sector_declarado: materiales}
     - {ticker: "ABEV3.SA",  nombre: "Ambev",                  sector_declarado: consumo_basico}
-    - {ticker: "BRFS3.SA",  nombre: "BRF",                    sector_declarado: consumo_basico}
-    - {ticker: "JBSS3.SA",  nombre: "JBS",                    sector_declarado: consumo_basico}
+    # BRF y Marfrig se fusionaron en 2025 como MBRF. El historico de MBRF3 es el
+    # de Marfrig (MRFG3), asi que antes de la fusion esto es Marfrig, no BRF.
+    - {ticker: "MBRF3.SA",  nombre: "MBRF (Marfrig + BRF)",   sector_declarado: consumo_basico}
     - {ticker: "RADL3.SA",  nombre: "Raia Drogasil",          sector_declarado: consumo_basico}
     - {ticker: "WEGE3.SA",  nombre: "WEG",                    sector_declarado: industrial}
-    - {ticker: "EMBR3.SA",  nombre: "Embraer",                sector_declarado: industrial}
+    - {ticker: "EMBJ3.SA",  nombre: "Embraer",                sector_declarado: industrial}   # antes EMBR3
     - {ticker: "RENT3.SA",  nombre: "Localiza",               sector_declarado: industrial}
-    - {ticker: "ELET3.SA",  nombre: "Eletrobras",             sector_declarado: electricas}
+    - {ticker: "AXIA3.SA",  nombre: "Axia Energia (Eletrobras)", sector_declarado: electricas}   # antes ELET3
     - {ticker: "EQTL3.SA",  nombre: "Equatorial Energia",     sector_declarado: electricas}
-    - {ticker: "CPLE6.SA",  nombre: "Copel",                  sector_declarado: electricas}
+    # Copel paso al Novo Mercado y sus preferentes (CPLE6) se convirtieron en
+    # ordinarias; CPLE3 es la que queda, con historico desde 2000.
+    - {ticker: "CPLE3.SA",  nombre: "Copel",                  sector_declarado: electricas}
     - {ticker: "CMIG4.SA",  nombre: "Cemig",                  sector_declarado: electricas}
     - {ticker: "SBSP3.SA",  nombre: "Sabesp",                 sector_declarado: electricas}
     - {ticker: "LREN3.SA",  nombre: "Lojas Renner",           sector_declarado: consumo_discrecional}

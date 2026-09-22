@@ -64,6 +64,15 @@ respaldos:
   precios: [eodhd]
   divisas: [eodhd]
 
+# Variacion diaria del cierre ajustado a partir de la cual `datos` y
+# `diagnostico` senalan una sesion para revisarla a mano. Simetrica en escala
+# logaritmica: 0.5 marca subidas de mas del 50 % y caidas de mas del 33 %.
+# No excluye nada: un desplome real tras resultados tambien salta. Sirve para
+# cazar operaciones corporativas que la fuente no ha ajustado (escisiones,
+# cambios de ratio de un BDR), que en un backtest son stops falsos o momentum
+# inventado.
+umbral_salto_sospechoso: 0.5
+
 # Par de divisas con el que se convierte cada moneda a la base (EUR).
 # El codigo invierte el par cuando hace falta.
 divisas:

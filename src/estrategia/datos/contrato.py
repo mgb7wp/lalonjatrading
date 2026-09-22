@@ -21,7 +21,9 @@ los datos, y no depende de que quien escriba el adaptador se acuerde.
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+import math
 
+import numpy as np
 import pandas as pd
 
 from ..errores import ErrorDatos
@@ -236,3 +238,39 @@ def verificar_fx(df: pd.DataFrame, fuente: str) -> Informe:
         falla("fechas repetidas para una misma divisa", f"{duplicadas} filas")
 
     return inf
+
+
+# --------------------------------------------------------------------------
+# Saltos sospechosos: aviso, no incumplimiento
+# --------------------------------------------------------------------------
+
+
+def saltos_sospechosos(df: pd.DataFrame, umbral: float) -> pd.DataFrame:
+    """Sesiones cuyo cierre ajustado salta mas de `umbral` respecto a la anterior.
+
+    No forma parte del contrato porque no se puede distinguir solo con los
+    precios un desplome real (una empresa que se hunde un 40 % tras resultados)
+    de una operacion corporativa que la fuente no ha ajustado. Pero la segunda
+    existe y es venenosa: con datos reales de Yahoo aparecieron tres en un
+    universo de 140 valores —la escision de Tata Motors como una caida del
+    40 %, el cambio de ratio del BDR de JBS como una subida del 100 % y un
+    tramo del historico de Ultrapar dividido por 2,19 sin motivo—, y ninguna
+    salta en el contrato. En un backtest son un stop falso o un momentum
+    inventado. Esto las pone delante de alguien para que decida.
+
+    El umbral es simetrico en escala logaritmica: 0,5 marca subidas de mas del
+    50 % y caidas de mas del 33 %, que se deshacen la una a la otra.
+
+    Devuelve `ticker`, `fecha`, `anterior`, `cierre` y `variacion`.
+    """
+    columnas = ["ticker", "fecha", "anterior", "cierre", "variacion"]
+    if df.empty or not {"ticker", "fecha", "cierre"} <= set(df.columns):
+        return pd.DataFrame(columns=columnas)
+    orden = df.sort_values(["ticker", "fecha"])
+    anterior = orden.groupby("ticker")["cierre"].shift(1)
+    razon = (orden["cierre"] / anterior).where(lambda r: r > 0)
+    marcadas = np.log(razon).abs() > math.log1p(umbral)
+    salida = orden.loc[marcadas, ["ticker", "fecha", "cierre"]].copy()
+    salida.insert(2, "anterior", anterior[marcadas])
+    salida["variacion"] = razon[marcadas] - 1.0
+    return salida[columnas].reset_index(drop=True)

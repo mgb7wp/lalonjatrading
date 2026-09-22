@@ -125,6 +125,30 @@ fundamentales también salen de Yahoo, así que si Yahoo cae del todo `datos` y
 `foto` siguen fallando en los fundamentales. Eso se arregla pasando
 `fundamentales: eodhd` al reparto, no con un respaldo.
 
+## Saltos sospechosos
+
+El contrato no ve un tipo de error que sí rompe el backtest: una operación
+corporativa que la fuente no ha ajustado. La primera descarga real con Yahoo
+encontró tres en un universo de 140 valores:
+
+| Valor | Sesión | Salto | Qué es |
+|---|---|---|---|
+| `TMPV.NS` (antes `TATAMOTORS.NS`) | 14-10-2025 | −40 % | escisión de la división de vehículos comerciales |
+| `JBSS32.SA` (BDR que sustituye a `JBSS3`) | 09-06-2025 | +100 % | cambio de ratio del BDR |
+| `UGPA3.SA` (Ultrapar) | 28-06-2021 | +119 % | histórico anterior dividido por ~2,19, sin split ese día |
+
+Los tres salen también en el cierre ajustado. En un backtest son un stop falso
+o un momentum inventado, y ninguno incumple nada del contrato.
+
+`datos` y `diagnostico` marcan cada sesión cuyo cierre ajustado se mueve más de
+`umbral_salto_sospechoso` (`implementacion.yaml`, 0,5: subidas de más del 50 %
+o caídas de más del 33 %). Es un aviso y no un error, porque con los precios
+solos no se distingue un artefacto de un desplome real: en la misma descarga
+saltan la caída de Hapvida tras resultados o la de Grifols tras el informe de
+Gotham, que son de verdad. Lo decide una persona: si es un artefacto, el valor
+sale del universo. Los tres de la tabla ya están fuera; no se corrigen con un
+factor estimado a mano, que sería inventar datos.
+
 ## Cómo se añade una fuente
 
 Cinco pasos, y ninguno toca el motor.

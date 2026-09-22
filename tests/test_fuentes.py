@@ -670,3 +670,39 @@ def test_eodhd_descarta_cambios_a_cero():
         {"date": "2024-03-04", "close": "1.09"},
     ])
     assert list(df["tasa"]) == [1.08, 1.09]
+
+
+# --------------------------------------------------------------------------
+# Saltos sospechosos
+# --------------------------------------------------------------------------
+
+
+def _serie(ticker: str, cierres: list[float]) -> pd.DataFrame:
+    fechas = [dt.date(2025, 10, 1) + dt.timedelta(days=i) for i in range(len(cierres))]
+    return serie_precios(ticker, fechas, cierres)
+
+
+def test_una_escision_sin_ajustar_salta():
+    """El caso real de Tata Motors: -40 % en una sesion, tambien en el ajustado."""
+    df = _serie("TMPV.NS", [680.0, 679.0, 660.8, 395.5, 390.9])
+    saltos = contrato.saltos_sospechosos(df, 0.5)
+    assert list(saltos["ticker"]) == ["TMPV.NS"]
+    assert saltos["fecha"].iloc[0] == dt.date(2025, 10, 4)
+    assert saltos["variacion"].iloc[0] == pytest.approx(395.5 / 660.8 - 1)
+
+
+def test_un_cambio_de_ratio_sin_ajustar_salta():
+    """El caso real del BDR de JBS: +100 % en una sesion."""
+    saltos = contrato.saltos_sospechosos(_serie("JBSS32.SA", [38.3, 39.0, 78.2, 76.3]), 0.5)
+    assert len(saltos) == 1 and saltos["variacion"].iloc[0] == pytest.approx(78.2 / 39.0 - 1)
+
+
+def test_los_movimientos_normales_no_saltan():
+    """Ni un -30 % ni un +45 %: con umbral 0,5 hace falta +50 % o -33 %."""
+    assert contrato.saltos_sospechosos(_serie("X", [10.0, 7.0, 10.15, 10.0]), 0.5).empty
+
+
+def test_el_salto_no_se_mide_entre_dos_tickers_distintos():
+    """El ultimo cierre de un valor no es el anterior del siguiente."""
+    df = pd.concat([_serie("A", [10.0, 10.1]), _serie("B", [100.0, 101.0])])
+    assert contrato.saltos_sospechosos(df, 0.5).empty

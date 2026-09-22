@@ -349,6 +349,7 @@ class Implementacion(_Base):
     codigos_eodhd: dict[str, str] = Field(default_factory=dict)
     simbolos_eodhd: dict[str, str] = Field(default_factory=dict)
     respaldos: dict[str, list[str]] = Field(default_factory=dict)
+    umbral_salto_sospechoso: float = Field(gt=0)
     referencias: dict[str, ReferenciaCfg]
     divisas: dict[str, str | None]
     sectores: dict[str, str]

@@ -24,6 +24,7 @@ import pandas as pd
 from . import fundamental as fundamental_mod
 from .config import Config
 from .constantes import SECTOR_DESCONOCIDO
+from .datos import contrato
 from .datos.enrutador import Enrutador
 from .sectores import MapaSectores
 
@@ -52,6 +53,9 @@ class FilaDiagnostico:
     ev_calculable: bool = False
     motivo_sin_ev: str | None = None
     problemas: list[str] = field(default_factory=list)
+    # Sesiones con un salto de precio que puede ser una operacion corporativa
+    # sin ajustar. No cuenta como problema: un desplome real tambien salta.
+    saltos: list[tuple[date, float]] = field(default_factory=list)
 
     @property
     def utilizable(self) -> bool:
@@ -86,6 +90,13 @@ def ejecutar(
     fundamentales = enrutador.fundamentales(universo, inicio, fin)
     sectores = enrutador.sectores(universo)
 
+    saltos = contrato.saltos_sospechosos(
+        precios, cfg.implementacion.umbral_salto_sospechoso
+    )
+    saltos_por_ticker: dict[str, list[tuple[date, float]]] = {}
+    for s in saltos.itertuples():
+        saltos_por_ticker.setdefault(s.ticker, []).append((s.fecha, s.variacion))
+
     por_ticker_p = (
         {t: g for t, g in precios.groupby("ticker")} if not precios.empty else {}
     )
@@ -99,6 +110,7 @@ def ejecutar(
     for ticker in universo:
         mercado = cfg.universo.mercado_de_ticker.get(ticker, "?")
         fila = FilaDiagnostico(ticker=ticker, mercado=mercado)
+        fila.saltos = saltos_por_ticker.get(ticker, [])
 
         serie = por_ticker_p.get(ticker)
         if serie is None or serie.empty:
@@ -233,6 +245,24 @@ def a_texto(filas: list[FilaDiagnostico], cfg: Config, detalle: bool = False) ->
             elif titulo.startswith("Divisa"):
                 extra = f" -> reporta en {f.divisa_reporte}, cotiza en {f.divisa_cotizacion}"
             lineas.append(f"- {f.ticker} ({f.mercado}){extra}")
+        lineas.append("")
+
+    con_saltos = [f for f in filas if f.saltos]
+    if con_saltos:
+        umbral = cfg.implementacion.umbral_salto_sospechoso
+        lineas += [
+            f"## Saltos de precio para revisar ({len(con_saltos)})",
+            "",
+            f"Sesiones en que el cierre ajustado se mueve mas de un {umbral:.0%} "
+            f"(o cae mas de un {1 - 1 / (1 + umbral):.0%}). Pueden ser reales; si "
+            f"no lo son, es una escision, un contrasplit o un cambio de ratio que "
+            f"la fuente no ha ajustado, y en el backtest sera un stop falso o un "
+            f"momentum inventado. Si es un artefacto, saca el valor del universo.",
+            "",
+        ]
+        for f in con_saltos:
+            detalle = ", ".join(f"{d} {v:+.0%}" for d, v in f.saltos)
+            lineas.append(f"- {f.ticker} ({f.mercado}): {detalle}")
         lineas.append("")
 
     # Incluye los que se salvaron por el respaldo: el mapeo sigue sin conocer

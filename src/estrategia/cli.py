@@ -26,6 +26,7 @@ from . import informe_html as informe_html_mod
 from . import metricas as metricas_mod
 from . import universo as universo_mod
 from . import validacion as validacion_mod
+from .datos import contrato
 from .datos.almacen import Instantanea
 from .datos.enrutador import Enrutador
 from .errores import ErrorEstrategia
@@ -95,6 +96,17 @@ def _descargar(
 
     for incidencia in enrutador.incidencias:
         print(f"  incidencia -> {incidencia}", file=sys.stderr)
+    # Cada semana, no solo el dia que alguien se acuerde del diagnostico: una
+    # escision sin ajustar que entre hoy es un stop falso el lunes.
+    saltos = contrato.saltos_sospechosos(
+        precios, cfg.implementacion.umbral_salto_sospechoso
+    )
+    for s in saltos.itertuples():
+        print(
+            f"  revisar -> {s.ticker} el {s.fecha}: {s.variacion:+.0%} en una "
+            f"sesion; si no es un movimiento real, es una operacion sin ajustar",
+            file=sys.stderr,
+        )
 
     # El origen refleja las fuentes que de verdad han servido datos, no una
     # sola ni el reparto sobre el papel: si los precios vienen de una y los
