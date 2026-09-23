@@ -23,7 +23,7 @@
 - **Cambios de regla o de parámetro:** cualquier cambio que altere resultados necesita:
   - una fila en el registro de cambios de `ESTRATEGIA.md`;
   - su explicación en `SUPUESTOS.md` si es una interpretación.
-- **Periodo de validación:** no ejecutes `backtest --periodo validacion` ni lo mires por otra vía sin permiso explícito del dueño. Cada consulta lo gasta.
+- **Periodo de validación:** no ejecutes `backtest --periodo validacion` ni `--periodo todo` (que lo incluye), ni lo mires por otra vía, sin permiso explícito del dueño. Cada consulta lo gasta. Empieza en `validacion.fecha_corte`, que es fija.
 - **Anticipación:** los tests de `tests/test_anti_sesgo.py` son condición de entrada. Si uno falla, ningún resultado vale.
 - **Capas:** respeta el orden de importaciones que comprueba `tests/test_motor.py`.
 - **Datos sintéticos:** nunca publiques en `sitio/` un informe hecho con datos sintéticos.

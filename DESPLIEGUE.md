@@ -63,7 +63,7 @@ nombre `app-trading`. Si eliges otro nombre, cámbialo también en
 ### Primer despliegue a mano
 
 ```bash
-estrategia informe --periodo todo --formato html   # genera sitio/
+estrategia informe --formato html   # genera sitio/, solo con el periodo de diseño
 wrangler pages deploy sitio --project-name=app-trading
 ```
 

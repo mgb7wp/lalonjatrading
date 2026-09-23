@@ -315,13 +315,16 @@ def cmd_backtest(args, cfg) -> None:
     inst = _cargar_instantanea(args, cfg)
     division = validacion_mod.dividir(inst, cfg)
 
-    if args.periodo == "validacion":
+    if division.toca_validacion(args.periodo):
+        # "todo" incluye la validacion entera: tambien gasta una consulta.
         registro = validacion_mod.RegistroConsultas(RUTA_CONSULTAS)
-        n = registro.anotar("backtest --periodo validacion")
+        n = registro.anotar(f"{args.comando} --periodo {args.periodo}")
         print(
-            f"AVISO: has abierto el periodo de validacion. Van {n} consultas.\n"
+            f"AVISO: has abierto el periodo de validacion ({division.corte} a "
+            f"{division.fin}). Van {n} consultas.\n"
             f"Cada una lo acerca a ser un periodo de diseno mas.\n"
         )
+    if args.periodo == "validacion":
         inicio, fin = division.validacion
     elif args.periodo == "diseno":
         inicio, fin = division.diseno
@@ -462,7 +465,7 @@ def construir_parser() -> argparse.ArgumentParser:
     b = sub.add_parser("backtest", help="corre el backtest")
     b.add_argument(
         "--periodo", choices=["diseno", "validacion", "todo"], default="diseno",
-        help="'validacion' abre el periodo reservado y anota la consulta",
+        help="'validacion' y 'todo' abren el periodo reservado y anotan la consulta",
     )
     b.add_argument("--formato", choices=["md", "html", "ambos"], default="md")
     b.set_defaults(func=cmd_backtest)
@@ -480,7 +483,12 @@ def construir_parser() -> argparse.ArgumentParser:
     v.set_defaults(func=cmd_validar)
 
     i = sub.add_parser("informe", help="alias de backtest, guarda el informe")
-    i.add_argument("--periodo", choices=["diseno", "validacion", "todo"], default="todo")
+    # Por defecto solo el diseno: el informe se genera y se publica cada semana,
+    # y si mostrara la validacion la gastaria sin que nadie lo pidiera.
+    i.add_argument(
+        "--periodo", choices=["diseno", "validacion", "todo"], default="diseno",
+        help="'validacion' y 'todo' abren el periodo reservado y anotan la consulta",
+    )
     i.add_argument("--formato", choices=["md", "html", "ambos"], default="ambos")
     i.set_defaults(func=cmd_informe)
 

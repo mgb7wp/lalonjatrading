@@ -9,6 +9,7 @@ reparto de `reglas.yaml` a la carpeta de la cache y al sitio publicable.
 from __future__ import annotations
 
 import shutil
+from datetime import date, timedelta
 from pathlib import Path
 
 import pytest
@@ -54,7 +55,12 @@ def config_sintetica(tmp_path):
     reglas = destino / "reglas.yaml"
     texto = reglas.read_text(encoding="utf-8")
     assert "nombre: yfinance" in texto
-    reglas.write_text(texto.replace("nombre: yfinance", "nombre: sintetico", 1), encoding="utf-8")
+    texto = texto.replace("nombre: yfinance", "nombre: sintetico", 1)
+    # Estos tests descargan solo los dos ultimos anos: el corte tiene que caer
+    # dentro de ellos.
+    corte = date.today() - timedelta(days=365)
+    texto = texto.replace("fecha_corte: 2023-03-13", f"fecha_corte: {corte.isoformat()}", 1)
+    reglas.write_text(texto, encoding="utf-8")
     return destino
 
 

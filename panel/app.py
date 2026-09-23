@@ -60,6 +60,33 @@ def correr(proveedor: str, periodo: str, _cfg, _inst):
     return informe_mod.construir(r, _cfg, _inst, consultas_validacion=consultas)
 
 
+def abrir_validacion(proveedor: str, periodo: str) -> bool:
+    """Deja ver el periodo de validacion solo si se pide a proposito, y anota
+    la consulta una vez por sesion.
+
+    Streamlit reejecuta el script entero con cada clic: anotar cada ejecucion
+    inflaria el contador, y no anotar nada dejaba mirar la validacion sin que
+    quedara rastro. Por eso hay un boton, y lo abierto se recuerda en la sesion.
+    """
+    clave = f"validacion_abierta:{proveedor}:{periodo}"
+    registro = validacion_mod.RegistroConsultas(RUTA_CONSULTAS)
+    if st.session_state.get(clave):
+        st.warning(
+            f"Periodo de validacion abierto en esta sesion. Van {registro.n} "
+            f"consultas anotadas."
+        )
+        return True
+    st.warning(
+        f"'{periodo}' incluye el periodo de validacion ({division.corte} a "
+        f"{division.fin}). Van {registro.n} consultas anotadas; cada una lo "
+        f"acerca un poco mas a ser un segundo periodo de diseno."
+    )
+    if st.button("Abrir el periodo de validacion y anotar la consulta"):
+        registro.anotar_una_vez(st.session_state, clave, f"panel --periodo {periodo}")
+        return True
+    return False
+
+
 def barra_sintetico(inf) -> None:
     if inf.sintetico:
         st.error(
@@ -119,7 +146,7 @@ st.sidebar.caption(
     f"Descarga: {inst.fecha_descarga or 'desconocida'}  \n"
     f"Origen: {inst.origen}  \n"
     f"Rango: {division.inicio} a {division.fin}  \n"
-    f"Corte diseno/validacion: {division.corte}"
+    f"Corte diseno/validacion: {division.corte} (fijo, `validacion.fecha_corte`)"
 )
 
 vista = st.sidebar.radio(
@@ -186,35 +213,29 @@ elif vista == "Senales":
     st.title("Senales de la ultima revision")
     st.caption(
         "Salen del mismo motor que las produce en el backtest, no de un camino "
-        "paralelo: si divergieran, el panel estaria mintiendo."
+        "paralelo: si divergieran, el panel estaria mintiendo. Para decidir hacen "
+        "falta los datos de hoy, que caen en el periodo de validacion; por eso "
+        "aqui solo se ensena la ultima revision y nada de como le fue al sistema: "
+        "ni historial de ordenes, ni curva, ni resultados."
     )
     inf = correr(proveedor, "todo", cfg, inst)
     barra_sintetico(inf)
 
     ev = inf.eventos
-    if ev.empty:
-        st.info("No hay eventos.")
+    ordenes = ev[ev["tipo"] == "orden"] if not ev.empty else ev
+    if ordenes.empty:
+        st.info("No hay ordenes en la ultima revision.")
     else:
-        ordenes = ev[ev["tipo"] == "orden"]
-        if ordenes.empty:
-            st.info("No se genero ninguna orden en el periodo.")
-        else:
-            ultima = ordenes["fecha"].max()
-            st.subheader(f"Ordenes del {ultima}")
-            st.dataframe(ordenes[ordenes["fecha"] == ultima], use_container_width=True)
+        ultima = ordenes["fecha"].max()
+        st.subheader(f"Ordenes del {ultima}")
+        st.dataframe(ordenes[ordenes["fecha"] == ultima], use_container_width=True)
 
-            st.subheader("Historial de ordenes")
-            st.dataframe(ordenes.tail(200), use_container_width=True)
-
-        st.subheader("Candidatas del top 3 que se quedaron fuera")
-        st.caption(
-            "Contesta a «por que no se compro la mejor de la semana» y deja ver "
-            "si un limite de cartera esta costando dinero de forma sistematica."
-        )
-        if inf.rechazos_top.empty:
-            st.info("Ninguna candidata del top 3 fue rechazada.")
+        rechazos = ev[(ev["tipo"] == "rechazo") & (ev["fecha"] == ultima)]
+        st.subheader("Candidatas de esa revision que se quedaron fuera")
+        if rechazos.empty:
+            st.info("Ninguna candidata de esa revision fue rechazada.")
         else:
-            st.dataframe(inf.rechazos_top, use_container_width=True)
+            st.dataframe(rechazos, use_container_width=True)
 
 # --------------------------------------------------------------------------
 # Backtest
@@ -225,14 +246,10 @@ elif vista == "Backtest":
     periodo = st.radio(
         "Periodo", ["diseno", "todo", "validacion"], horizontal=True,
         help="El periodo de validacion deja de ser una prueba independiente si "
-             "se consulta muchas veces.",
+             "se consulta muchas veces. 'todo' tambien lo incluye.",
     )
-    if periodo == "validacion":
-        n = validacion_mod.RegistroConsultas(RUTA_CONSULTAS).n
-        st.warning(
-            f"Estas mirando el periodo reservado. Van {n} consultas anotadas. "
-            f"Cada una lo acerca un poco mas a ser un segundo periodo de diseno."
-        )
+    if division.toca_validacion(periodo) and not abrir_validacion(proveedor, periodo):
+        st.stop()
 
     inf = correr(proveedor, periodo, cfg, inst)
     barra_sintetico(inf)

@@ -164,6 +164,12 @@ metricas:
 
 validacion:
   fraccion_diseno: 0.70
+  # AÑADIDO v0.4.8: la fecha de corte entre diseño y validación queda fija.
+  # Con la fracción sola, el corte avanzaba cada semana con los datos nuevos
+  # y lo que ayer era validación pasaba a ser diseño. Esta fecha con los datos sintéticos de los tests (2019-2024) deja el 70 %
+  # del histórico para el diseño.
+  # No se mueve: si hubiera que moverla, va al registro de cambios.
+  fecha_corte: 2023-03-13
   sensibilidad_pct: 0.25
   min_operaciones: 100
   min_operaciones_por_mercado: 15

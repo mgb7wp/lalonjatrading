@@ -219,6 +219,31 @@ en caja. `costes_base` sigue siendo el coste total, deslizamiento incluido
 (aparte en `deslizamiento_base`), porque es lo que cuesta operar y es lo que
 mide `coste_pct_posicion`.
 
+## Periodo de validacion
+
+**La fecha de corte es fija** (`validacion.fecha_corte`, v0.4.8). El documento
+define el diseno como la fraccion inicial `fraccion_diseno` del historico. Con
+la fraccion sola, el corte avanzaba cada semana al llegar datos nuevos, y lo que
+ayer era validacion pasaba a ser diseno sin que nadie lo decidiera. La fecha se
+eligio para que, con los ocho anos que se descargan, el diseno sea ese 70 %; a
+partir de ahi los datos nuevos solo alargan la validacion. Moverla es un cambio
+de regla y va al registro.
+
+**Mirar "todo" es mirar la validacion** (v0.4.8), y anota la consulta igual que
+pedir la validacion sola. El informe que se genera y se publica cada semana
+muestra por defecto solo el periodo de diseno.
+
+**El panel pide confirmacion y anota una vez por sesion** (v0.4.8). Streamlit
+reejecuta el script con cada clic; anotar cada ejecucion inflaria el contador y
+no anotar nada dejaba mirar sin rastro. La vista de senales ensena solo la
+ultima revision, sin historial de ordenes.
+
+**Operar no gasta la validacion.** Para decidir las ordenes de la semana hacen
+falta los datos de hoy, que caen en el periodo de validacion. Usarlos para
+decidir no es consultarlos: lo que gasta la validacion es mirar como le fue al
+sistema (curva, resultados, historial de operaciones), y eso solo se ensena con
+la consulta anotada.
+
 ## Metricas
 
 **El Sharpe se calcula sobre rentabilidades semanales** por defecto

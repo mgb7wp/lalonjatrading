@@ -46,7 +46,7 @@ estrategia --proveedor yfinance validar
 estrategia --proveedor yfinance diagnostico --anos 8 --detalle
 
 # 7. Informe HTML publicable, en sitio/
-estrategia informe --periodo todo --formato ambos
+estrategia informe --formato ambos   # solo el periodo de diseño
 
 # 8. Panel interactivo
 streamlit run panel/app.py

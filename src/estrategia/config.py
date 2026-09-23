@@ -273,6 +273,10 @@ class MetricasCfg(_Base):
 
 class ValidacionCfg(_Base):
     fraccion_diseno: float = Field(gt=0, lt=1)
+    #: Donde acaba el diseno y empieza la validacion. Es una fecha fija: con la
+    #: fraccion sola, el corte avanzaba cada semana con los datos nuevos y lo
+    #: que ayer era validacion pasaba a ser diseno sin que nadie lo decidiera.
+    fecha_corte: date
     sensibilidad_pct: float = Field(gt=0)
     min_operaciones: int = Field(ge=0)
     min_operaciones_por_mercado: int = Field(ge=0)
