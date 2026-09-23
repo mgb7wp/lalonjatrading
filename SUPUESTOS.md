@@ -175,7 +175,13 @@ un hallazgo honesto, no algo que convenga esconder redondeando a una accion.
 
 **Un sector que el mapeo no reconoce rechaza el valor.** Fallar hacia el lado
 prudente importa: un sector sin traducir podria colar un banco en una cartera
-que por diseno no quiere bancos.
+que por diseno no quiere bancos. Aunque el valor tenga `sector_declarado` en
+universo.yaml (v0.4.7): ese respaldo solo se usa cuando el proveedor NO devuelve
+sector. Si devuelve uno que el mapeo no conoce, taparlo con lo que alguien
+escribio a mano dejaria sin revisar justo la traduccion que falta. El
+diagnostico imprime la linea de YAML que hay que pegar en `sectores`: con la
+categoria que declaran los valores afectados si todos coinciden, y comentada si
+no, para decidir a mano.
 
 **La elegibilidad del universo se evalua a fecha.** Calcularla una sola vez con
 todo el historico seria anticipacion y supervivencia a la vez.

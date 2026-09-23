@@ -41,9 +41,9 @@ class FilaDiagnostico:
     sector_proveedor: str | None = None
     sector_traducido: str = SECTOR_DESCONOCIDO
     sector_mapeado: bool = False
-    # El sector se salvo por el respaldo de universo.yaml y no por el mapeo. No
-    # es un fallo, pero si deuda de configuracion: el proveedor esta devolviendo
-    # algo que nadie ha traducido.
+    # El proveedor no devolvio sector y se uso el `sector_declarado` de
+    # universo.yaml. No es un fallo, pero conviene saberlo: esa clasificacion
+    # la ha escrito alguien a mano y nadie la contrasta.
     sector_por_respaldo: bool = False
     ejercicios: int = 0
     fechas_publicacion_reales: int = 0
@@ -114,13 +114,10 @@ def ejecutar(
                 fila.problemas.append(f"precios desfasados (ultimo {fila.ultima})")
 
         fila.sector_proveedor = sectores.get(ticker)
-        directo = cfg.implementacion.sector(fila.sector_proveedor)
         clasificacion = mapa.clasificar(ticker, fila.sector_proveedor)
         fila.sector_traducido = clasificacion.sector
         fila.sector_mapeado = clasificacion.sector != SECTOR_DESCONOCIDO
-        fila.sector_por_respaldo = (
-            fila.sector_mapeado and directo == SECTOR_DESCONOCIDO
-        )
+        fila.sector_por_respaldo = fila.sector_mapeado and not fila.sector_proveedor
         if not fila.sector_mapeado:
             fila.problemas.append(
                 f"sector sin mapear: {fila.sector_proveedor!r}"
@@ -261,6 +258,56 @@ def comprobar_auxiliares(
     return filas + fx_filas
 
 
+def yaml_sectores(filas: list[FilaDiagnostico], cfg: Config) -> list[str]:
+    """Las lineas que hay que anadir a `sectores` en implementacion.yaml.
+
+    Un sector que el proveedor devuelve y el mapeo no conoce deja FUERA a sus
+    valores (no se recurre al `sector_declarado`, que podria tapar un banco).
+    Para arreglarlo basta con pegar estas lineas, revisadas:
+
+    - Si todos los valores afectados tienen el mismo `sector_declarado`, se
+      propone esa categoria en una linea lista para pegar.
+    - Si no coinciden, la linea sale comentada, con lo que declara cada valor:
+      hay que decidir a mano, y una linea comentada no cambia nada si se pega
+      sin mirar.
+    """
+    sin_mapear: dict[str, list[str]] = {}
+    for f in filas:
+        if not f.sector_mapeado and f.sector_proveedor:
+            sin_mapear.setdefault(f.sector_proveedor, []).append(f.ticker)
+    if not sin_mapear:
+        return []
+
+    lineas = [
+        "## Que anadir a implementacion.yaml",
+        "",
+        f"{sum(len(t) for t in sin_mapear.values())} valores se quedan fuera porque "
+        f"la fuente devuelve un sector que el mapeo no conoce. Revisa cada linea "
+        f"y pegala dentro de `sectores:` en config/implementacion.yaml:",
+        "",
+        "```yaml",
+        "sectores:",
+    ]
+    valores = cfg.universo.valores_por_ticker
+    for sector, tickers in sorted(sin_mapear.items()):
+        declarados = {
+            t: valores[t].sector_declarado if t in valores else SECTOR_DESCONOCIDO
+            for t in sorted(tickers)
+        }
+        distintos = set(declarados.values()) - {SECTOR_DESCONOCIDO}
+        if len(distintos) == 1 and SECTOR_DESCONOCIDO not in declarados.values():
+            propuesta = distintos.pop()
+            lineas.append(
+                f'  "{sector}": {propuesta}   # revisa: es lo que declara '
+                f'universo.yaml para {", ".join(declarados)}'
+            )
+        else:
+            detalle = ", ".join(f"{t}={s}" for t, s in declarados.items())
+            lineas.append(f'  # "{sector}": ???   # decide tu: {detalle}')
+    lineas += ["```", ""]
+    return lineas
+
+
 def a_texto(
     filas: list[FilaDiagnostico],
     cfg: Config,
@@ -341,7 +388,7 @@ def a_texto(
         ),
         ("Menos de 4 ejercicios", lambda f: 0 < f.ejercicios < 4),
         (
-            "Sector salvado por el respaldo de universo.yaml",
+            "Sin sector del proveedor: se usa el de universo.yaml",
             lambda f: f.sector_por_respaldo,
         ),
     ):
@@ -354,28 +401,14 @@ def a_texto(
             extra = ""
             if titulo.startswith("Sector"):
                 extra = f" -> la fuente devuelve {f.sector_proveedor!r}"
+            elif titulo.startswith("Sin sector"):
+                extra = f" -> {f.sector_traducido}"
             elif titulo.startswith("Divisa"):
                 extra = f" -> reporta en {f.divisa_reporte}, cotiza en {f.divisa_cotizacion}"
             lineas.append(f"- {f.ticker} ({f.mercado}){extra}")
         lineas.append("")
 
-    # Incluye los que se salvaron por el respaldo: el mapeo sigue sin conocer
-    # ese sector, y el dia que un valor nuevo llegue sin `sector_declarado` se
-    # quedara fuera.
-    sin_mapear = {}
-    for f in filas:
-        if (not f.sector_mapeado or f.sector_por_respaldo) and f.sector_proveedor:
-            sin_mapear.setdefault(f.sector_proveedor, []).append(f.ticker)
-    if sin_mapear:
-        lineas += [
-            "## Que anadir a implementacion.yaml",
-            "",
-            "```yaml",
-            "sectores:",
-        ]
-        for sector, tickers in sorted(sin_mapear.items()):
-            lineas.append(f'  "{sector}": ???   # {len(tickers)} valores')
-        lineas += ["```", ""]
+    lineas += yaml_sectores(filas, cfg)
 
     # Cobertura de fechas de publicacion reales: es lo que separa un backtest
     # fundamental defendible de uno con las fechas inventadas.
