@@ -96,6 +96,12 @@ acciones en circulacion son las del ultimo balance; si hubo un split entre ese
 balance y la fecha de decision, el EV sale descuadrado hasta el balance
 siguiente.
 
+**Deuda neta de yfinance: la caja se resta una sola vez** (v0.4.6). Yahoo da a
+veces la deuda total y a veces solo la neta, que ya lleva la caja restada. Con la
+deuda total se resta la caja; con solo la neta, se toma tal cual. Se decide
+ejercicio a ejercicio. Si hay deuda total pero no caja, se toma la deuda total:
+sobrestima la deuda, que es el lado prudente.
+
 **Sin deuda neta no hay EV** (v0.4.4). Tomarla como cero haria parecer barata a
 una empresa endeudada solo porque al proveedor le falta el dato. La empresa ya
 no pasaba el filtro (deuda/EBITDA sin calcular), pero su EV entraba en la

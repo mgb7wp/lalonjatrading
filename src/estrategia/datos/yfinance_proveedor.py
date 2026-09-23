@@ -29,6 +29,7 @@ from __future__ import annotations
 import time
 from datetime import date, timedelta
 
+import numpy as np
 import pandas as pd
 
 from ..config import Config
@@ -47,8 +48,10 @@ def ajustar_ohlc(bruto: pd.DataFrame) -> pd.DataFrame:
         raise ErrorDatos(f"faltan columnas en los datos de precios: {sorted(faltan)}")
 
     df = bruto.copy()
-    cierre = df["Close"].replace(0.0, pd.NA)
-    factor = (df["Adj Close"] / cierre).astype(float).fillna(1.0)
+    # Con cierre 0 no hay factor: se deja sin ajustar. Se usa NaN y no `pd.NA`,
+    # que convertia la columna en objetos y hacia fallar la conversion a float.
+    cierre = df["Close"].astype(float).replace(0.0, np.nan)
+    factor = (df["Adj Close"].astype(float) / cierre).fillna(1.0)
     return pd.DataFrame(
         {
             "apertura": df["Open"].astype(float) * factor,
@@ -102,6 +105,32 @@ def _primera_fila(df: pd.DataFrame | None, *nombres: str) -> pd.Series | None:
         if nombre in df.index:
             return df.loc[nombre]
     return None
+
+
+def deuda_neta_de(balance: pd.DataFrame | None, columna) -> float | None:
+    """Deuda neta de un ejercicio: deuda total menos caja.
+
+    Yahoo da a veces la deuda total y a veces solo la deuda neta, que YA tiene
+    la caja restada. Antes las dos se trataban igual y a la neta se le volvia a
+    restar la caja: una empresa con mucha caja salia con menos deuda de la que
+    tenia, o con caja neta que no existia, y pasaba el filtro de deuda/EBITDA y
+    parecia mas barata.
+
+    Se decide ejercicio a ejercicio, porque en un mismo balance un ano puede
+    traer la deuda total y otro solo la neta. Si hay deuda total pero no caja,
+    se toma la deuda total: sobrestima la deuda, que es el lado prudente.
+    """
+    total = _valor(_primera_fila(balance, "Total Debt"), columna)
+    if total is not None:
+        caja = _valor(
+            _primera_fila(
+                balance, "Cash And Cash Equivalents",
+                "Cash Cash Equivalents And Short Term Investments",
+            ),
+            columna,
+        )
+        return total - (caja or 0.0)
+    return _valor(_primera_fila(balance, "Net Debt"), columna)
 
 
 class ProveedorYFinance(Proveedor):
@@ -300,10 +329,6 @@ class ProveedorYFinance(Proveedor):
             patrimonio_f = _primera_fila(
                 balance, "Stockholders Equity", "Total Equity Gross Minority Interest"
             )
-            deuda_f = _primera_fila(balance, "Total Debt", "Net Debt")
-            efectivo_f = _primera_fila(
-                balance, "Cash And Cash Equivalents", "Cash Cash Equivalents And Short Term Investments"
-            )
             flujo_f = _primera_fila(caja, "Free Cash Flow")
             # Acciones a cierre del periodo: es un dato del balance, o sea
             # puntual, no el numero de acciones de hoy. Con el se calcula el EV
@@ -331,16 +356,12 @@ class ProveedorYFinance(Proveedor):
                 ebitda = _valor(ebitda_f, columna)
                 neto = _valor(neto_f, columna)
                 patrimonio = _valor(patrimonio_f, columna)
-                deuda = _valor(deuda_f, columna)
-                efectivo = _valor(efectivo_f, columna)
                 flujo = _valor(flujo_f, columna)
 
                 if ventas is None or ebit is None:
                     continue
 
-                deuda_neta = None
-                if deuda is not None:
-                    deuda_neta = deuda - (efectivo or 0.0)
+                deuda_neta = deuda_neta_de(balance, columna)
 
                 filas.append(
                     {
