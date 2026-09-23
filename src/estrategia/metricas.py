@@ -127,14 +127,25 @@ def resumir(curva: pd.DataFrame, operaciones: pd.DataFrame, cfg: Config) -> Resu
 
 
 def por_ano(curva: pd.DataFrame, operaciones: pd.DataFrame) -> pd.DataFrame:
-    """Rentabilidad y numero de operaciones de cada ano natural."""
+    """Rentabilidad y numero de operaciones de cada ano natural.
+
+    Cada ano se mide desde el ultimo valor del ano anterior, no desde su
+    primera sesion: si no, lo que se gana o se pierde entre el cierre de
+    diciembre y la primera sesion de enero no cae en ningun ano, y los anos
+    encadenados no dan la rentabilidad total. El primer ano parte del valor
+    inicial de la curva.
+    """
     if curva.empty:
         return pd.DataFrame()
     c = curva.copy()
     c["ano"] = [f.year for f in c["fecha"]]
     filas = []
-    for ano, grupo in c.groupby("ano"):
+    base: float | None = None
+    for ano, grupo in c.groupby("ano", sort=True):
         v = grupo["valor"].to_numpy(dtype=float)
+        if base is not None:
+            v = np.concatenate([[base], v])
+        base = float(v[-1])
         ops = (
             operaciones[[f.year == ano for f in operaciones["fecha_salida"]]]
             if not operaciones.empty

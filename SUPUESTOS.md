@@ -207,7 +207,24 @@ la comparacion hacia atras.
 comparacion justa.
 
 **Las posiciones abiertas al final se cierran al ultimo cierre** y se marcan
-`abierta_al_final`, para que la curva este completa.
+`abierta_al_final`, para que la curva este completa. El ultimo punto de la curva
+es el de DESPUES de esa liquidacion, con los costes de salida pagados (v0.4.3):
+asi el capital final del resumen es la suma del inicial y de los resultados de
+todas las operaciones.
+
+**La rentabilidad de cada ano se mide desde el ultimo valor del ano anterior**
+(v0.4.3), y el primer ano desde el valor inicial. Medirla desde la primera
+sesion del ano dejaba fuera lo que pasaba entre el cierre de diciembre y la
+primera sesion de enero, y los anos encadenados no daban la rentabilidad total.
+
+**El calentamiento se cuenta desde el principio de los datos, no desde el del
+backtest** (v0.4.3). Las medias, el ATR, el regimen y el momentum necesitan
+unos trece meses de historia. Si el backtest empieza despues de tenerlos (el
+periodo de validacion, o cualquier `inicio` posterior al de los datos), se decide
+desde la primera semana con el historico anterior. Solo cuando no hay historia
+previa, como en el arranque del periodo de diseno, la cartera espera en liquidez;
+ese tramo sigue dentro de la curva y rebaja la rentabilidad anualizada, y la
+exposicion media lo deja ver.
 
 ## Datos
 

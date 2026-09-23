@@ -120,8 +120,12 @@ def ejecutar(
 
     # Calentamiento: no se decide hasta tener historico para la media larga, el
     # regimen, el ATR y el momentum. Empezar antes produciria senales calculadas
-    # sobre series a medias.
-    inicio_efectivo = _inicio_con_calentamiento(inicio, cfg)
+    # sobre series a medias. Se cuenta desde el principio de los DATOS, no desde
+    # el del backtest: si hay historico anterior a `inicio`, los indicadores ya
+    # estan maduros y se decide desde el primer dia. Si no, el periodo de
+    # validacion, que empieza donde acaba el de diseno, pasaria mas de un ano en
+    # liquidez esperando algo que ya tiene.
+    inicio_efectivo = max(inicio, _inicio_con_calentamiento(rango_ini, cfg))
 
     pendientes_compra: dict[str, list[Orden]] = {}
     pendientes_venta: dict[str, list[tuple[str, MotivoSalida]]] = {}
@@ -261,11 +265,20 @@ def ejecutar(
             serie = vista.serie(ticker)
             i = vista.posicion_hasta(ticker)
             precio = float(serie.cierre[i]) if serie is not None and i >= 0 else pos.precio_entrada_local
-            _cerrar(
+            ext = _cerrar(
                 cartera, ticker, fin, precio, vista, cfg,
                 MotivoSalida.ABIERTA_AL_FINAL, eventos,
                 cfg.reglas.mercado(pos.mercado).divisa,
             )
+            impuesto_extrapolado = impuesto_extrapolado or ext
+        # La curva termina DESPUES de liquidar: su ultimo punto es el efectivo
+        # que queda de verdad, con los costes de salida ya pagados. Asi el
+        # resumen y las operaciones cuentan la misma historia.
+        final = _valorar(fin, cartera, vista, cfg)
+        if curva and curva[-1]["fecha"] == fin:
+            curva[-1] = final
+        else:
+            curva.append(final)
 
     return Resultado(
         curva=pd.DataFrame(curva),
