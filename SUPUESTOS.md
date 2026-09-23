@@ -82,6 +82,30 @@ que al documento le importa.
 **Sin EV/EBIT utilizable, la valoracion puntua en el peor percentil, no en uno
 neutro.** No saber si una empresa esta barata no es lo mismo que estar barata.
 
+**Los huecos no cuentan en el tamano de la muestra del percentil** (v0.4.4). Una
+empresa sin el dato no esta en la foto contra la que se compara: si contara,
+todas las demas bajarian de percentil sin motivo. Sigue contando para decidir si
+el mercado tiene gente suficiente (`min_empresas_percentil`), que mide empresas
+elegibles, no datos.
+
+**El EV se calcula con el precio sin ajustar por dividendos** (`cierre_bruto`,
+v0.4.4). El ajustado rebaja los precios pasados en lo que se repartio despues, y
+con el la capitalizacion de hace anos saldria menor que la real. Limite conocido:
+el precio sin ajustar de los proveedores si viene ajustado por splits, y las
+acciones en circulacion son las del ultimo balance; si hubo un split entre ese
+balance y la fecha de decision, el EV sale descuadrado hasta el balance
+siguiente.
+
+**Sin deuda neta no hay EV** (v0.4.4). Tomarla como cero haria parecer barata a
+una empresa endeudada solo porque al proveedor le falta el dato. La empresa ya
+no pasaba el filtro (deuda/EBITDA sin calcular), pero su EV entraba en la
+cohorte y movia la valoracion de las demas.
+
+**El informe cuenta las compras puntuadas fuera de su mercado** (v0.4.4): cuantas
+se percentilaron contra el bloque y cuantas con una cohorte insuficiente, por
+mercado. Con la cohorte de todos los mercados a la vez (v0.4.1), el recurso al
+bloque ya actua de verdad.
+
 **Empates: desempate por ticker ascendente.** Sin un desempate explicito, dos
 ejecuciones del mismo backtest pueden dar carteras distintas segun como ordene
 pandas, y el resultado deja de ser reproducible.

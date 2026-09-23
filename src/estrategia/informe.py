@@ -111,6 +111,7 @@ def construir(
     avisos = _avisos_permanentes()
     avisos += _avisos_de_datos(resultado, cfg, instantanea, operaciones, referencias)
     avisos += _aviso_periodo_muerto(resultado, operaciones, cfg)
+    avisos += _aviso_cohortes(eventos, cfg)
     avisos += _avisos_de_suficiencia(operaciones, cfg)
     if consultas_validacion:
         avisos.append(
@@ -246,6 +247,44 @@ def _avisos_de_datos(
         )
 
     return avisos
+
+
+def _aviso_cohortes(eventos: pd.DataFrame, cfg: Config) -> list[Aviso]:
+    """Cuantas compras se puntuaron fuera de su mercado.
+
+    Cuando un mercado tiene menos de `fundamental.min_empresas_percentil`
+    empresas, su puntuacion se percentila contra el bloque (desarrollado o
+    emergente); si ni el bloque llega, la cohorte es insuficiente y la nota
+    significa poco. Las dos cosas cambian como se compara una empresa con las
+    de otros mercados, y quien lee el informe tiene que saber cuanto pesan.
+    """
+    if not cfg.reglas.fundamental.activo or eventos.empty or "cohorte" not in eventos:
+        return []
+    ordenes = eventos[eventos["tipo"] == "orden"]
+    if ordenes.empty:
+        return []
+    fuera = ordenes[ordenes["cohorte"] != "mercado"]
+    if fuera.empty:
+        return []
+
+    partes = []
+    for (mercado, cohorte), grupo in fuera.groupby(["mercado", "cohorte"], sort=True):
+        nombre = "contra el bloque" if cohorte == "bloque" else "con cohorte insuficiente"
+        partes.append(f"{mercado}: {len(grupo)} {nombre}")
+    insuficientes = int((fuera["cohorte"] == "insuficiente").sum())
+    return [
+        Aviso(
+            "cohortes_fuera_de_mercado",
+            f"{len(fuera)} de {len(ordenes)} compras se puntuaron fuera de su "
+            f"mercado, porque su mercado tenia menos de "
+            f"{cfg.reglas.fundamental.min_empresas_percentil} empresas con que "
+            f"compararlas ({'; '.join(partes)}). Contra el bloque, la nota compara "
+            f"con empresas de otros paises de su mismo grupo (desarrollados o "
+            f"emergentes). Con cohorte insuficiente, ni el bloque llegaba al "
+            f"minimo y el percentil significa poco.",
+            gravedad="importante" if insuficientes else "aviso",
+        )
+    ]
 
 
 def _aviso_periodo_muerto(

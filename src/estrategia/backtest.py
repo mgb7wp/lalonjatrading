@@ -362,7 +362,7 @@ def _revisar(
         if senal is None:
             continue
         aprueba = fundamental_mod.sigue_aprobando(
-            ticker, pos.sector, dia, vista, cfg, senal.cierre
+            ticker, pos.sector, dia, vista, cfg, _cierre_bruto(vista, ticker)
         )
         salida = salidas_mod.evaluar_salida_semanal(
             pos, senal.cierre, senal.media_larga, aprueba, cfg
@@ -383,12 +383,10 @@ def _revisar(
     # cartera tambien cuentan: forman parte de la cohorte del percentil de
     # momentum, y la nota de una candidata no debe depender de lo que se tenga.
     # Al repartir se descartan con `ya_en_cartera`.
-    senales: dict = {}
     for ticker, eleg in del_mercado.items():
         if not eleg.elegible:
             continue
         senal = tecnico_mod.senal(ticker, mercado_id, dia, vista, cfg)
-        senales[ticker] = senal
         if senal is None or not senal.comprable:
             continue
         ronda.comprables[ticker] = senal
@@ -403,11 +401,10 @@ def _revisar(
                 continue
             # El precio de la fecha de decision entra en el calculo del EV: la
             # valoracion tiene que moverse con el precio, no quedarse congelada
-            # entre publicaciones de resultados.
-            senal_valor = senales.get(ticker)
+            # entre publicaciones de resultados. Es el precio sin ajustar.
             ratios = fundamental_mod.ratios_de(
                 ticker, vista.fundamentales(ticker), cfg, dia,
-                senal_valor.cierre if senal_valor else None,
+                _cierre_bruto(vista, ticker),
             )
             if ratios is not None:
                 ronda.cohorte[ticker] = (ratios, mercado_id, eleg.sector)
@@ -481,6 +478,8 @@ def _repartir(
                 "riesgo_efectivo_pct": round(orden.riesgo_efectivo_pct, 5),
                 "limitada_por_peso_maximo": orden.limitada_por_peso_maximo,
                 "sesiones_de_retraso": cal.sesiones_de_retraso(mercado_id, decision, ejecucion),
+                "cohorte": str(orden.cohorte_usada),
+                "n_cohorte": orden.n_cohorte,
             })
         )
     for r in asignacion.rechazos:
@@ -582,6 +581,21 @@ def _cerrar(
         })
     )
     return costes.impuesto_extrapolado
+
+
+def _cierre_bruto(vista, ticker: str) -> float | None:
+    """Ultimo cierre SIN ajustar por dividendos, el que sirve para el EV.
+
+    El ajustado (`cierre`) es el de las senales: mide bien la rentabilidad, pero
+    rebaja los precios pasados y con el la capitalizacion saldria menor que la
+    que el mercado pagaba ese dia.
+    """
+    serie = vista.serie(ticker)
+    i = vista.posicion_hasta(ticker)
+    if serie is None or i < 0:
+        return None
+    valor = float(serie.cierre_bruto[i])
+    return valor if valor > 0 else None
 
 
 def _precios_base(cartera: Cartera, vista, cfg: Config, dia: date) -> dict[str, float]:

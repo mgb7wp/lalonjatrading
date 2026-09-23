@@ -146,8 +146,10 @@ def ejecutar(
             if ultimo is not None:
                 fila.divisa_reporte = ultimo.get("divisa_reporte")
                 fila.divisa_cotizacion = ultimo.get("divisa_cotizacion")
+                # El EV va con el precio sin ajustar por dividendos, como en el
+                # backtest.
                 precio = (
-                    float(serie.iloc[-1]["cierre"])
+                    float(serie.iloc[-1]["cierre_bruto"])
                     if serie is not None and not serie.empty
                     else None
                 )

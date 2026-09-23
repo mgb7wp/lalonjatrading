@@ -161,6 +161,10 @@ class Orden:
     riesgo_teorico_pct: float
     riesgo_efectivo_pct: float
     limitada_por_peso_maximo: bool
+    #: Contra quien se percentilo la puntuacion fundamental. El informe cuenta
+    #: cuantas compras se puntuaron contra el bloque o con una cohorte pequena.
+    cohorte_usada: CohorteUsada = CohorteUsada.MERCADO
+    n_cohorte: int = 0
 
 
 @dataclass(frozen=True, slots=True)
