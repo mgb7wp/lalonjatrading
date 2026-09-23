@@ -526,7 +526,8 @@ def _abrir(
         stop_dinamico_local=salidas_mod.stop_dinamico_bruto(
             precio_pagado, orden.atr_entrada, cfg
         ),
-        coste_entrada_base=costes.comision + costes.impuesto + costes.deslizamiento,
+        coste_entrada_base=costes.total,
+        deslizamiento_entrada_base=costes.deslizamiento,
         riesgo_teorico_pct=orden.riesgo_teorico_pct,
         riesgo_efectivo_pct=orden.riesgo_efectivo_pct,
         ultimo_cierre_local=float(sesion["cierre"]),
@@ -558,8 +559,8 @@ def _cerrar(
     ingreso = pos.acciones * precio_cobrado * cambio - costes.comision - costes.impuesto
 
     operacion = cartera.cerrar(
-        ticker, dia, precio_cobrado, cambio, ingreso,
-        costes.comision + costes.impuesto + costes.deslizamiento, motivo,
+        ticker, dia, precio_cobrado, cambio, ingreso, costes.total, motivo,
+        deslizamiento_salida_base=costes.deslizamiento,
     )
     eventos.append(
         Evento(dia, "venta", pos.mercado, ticker, str(motivo), {

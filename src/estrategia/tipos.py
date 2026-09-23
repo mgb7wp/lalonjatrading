@@ -190,6 +190,9 @@ class Posicion:
     riesgo_efectivo_pct: float
     sesiones_sin_datos: int = 0
     ultimo_cierre_local: float = 0.0
+    #: Parte de `coste_entrada_base` que es deslizamiento. Ya va dentro de
+    #: `precio_entrada_base`, asi que no se vuelve a restar del resultado.
+    deslizamiento_entrada_base: float = 0.0
 
     @property
     def stop_efectivo_local(self) -> float:
@@ -236,6 +239,10 @@ class Operacion:
     resultado_base: float
     riesgo_teorico_pct: float
     riesgo_efectivo_pct: float
+    #: Deslizamiento de ida y vuelta. Esta incluido en `costes_base`, que es el
+    #: coste total de la operacion, pero no se resta de `resultado_base`: ya va
+    #: dentro de los precios de entrada y salida.
+    deslizamiento_base: float = 0.0
 
     @property
     def ganadora(self) -> bool:

@@ -67,12 +67,22 @@ class Cartera:
         ingreso_base: float,
         costes_salida_base: float,
         motivo: MotivoSalida,
+        deslizamiento_salida_base: float = 0.0,
     ) -> Operacion:
+        """Cierra una posicion y deja anotada la operacion.
+
+        Los precios de entrada y salida son los realmente pagados y cobrados,
+        con el deslizamiento ya dentro. Por eso el resultado resta solo los
+        costes que no estan en el precio (comision e impuesto): restar tambien
+        el deslizamiento lo contaria dos veces. `costes_base` sigue siendo el
+        coste total, deslizamiento incluido, porque es lo que cuesta operar.
+        """
         pos = self.posiciones.pop(ticker)
         self.efectivo += ingreso_base
 
         precio_salida_base = precio_salida_local * fx_salida
         costes = pos.coste_entrada_base + costes_salida_base
+        deslizamiento = pos.deslizamiento_entrada_base + deslizamiento_salida_base
         bruto = pos.acciones * (precio_salida_base - pos.precio_entrada_base)
 
         operacion = Operacion(
@@ -91,9 +101,10 @@ class Cartera:
             fx_salida=fx_salida,
             motivo_salida=motivo,
             costes_base=costes,
-            resultado_base=bruto - costes,
+            resultado_base=bruto - (costes - deslizamiento),
             riesgo_teorico_pct=pos.riesgo_teorico_pct,
             riesgo_efectivo_pct=pos.riesgo_efectivo_pct,
+            deslizamiento_base=deslizamiento,
         )
         self.operaciones.append(operacion)
         return operacion

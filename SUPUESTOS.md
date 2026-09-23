@@ -175,6 +175,14 @@ posiciones pequenas pagan una fraccion alta en comisiones. Se mide y se reporta
 (`coste_pct_posicion`), pero no se rechaza ninguna candidata por eso: seria
 cambiar la estrategia, y el documento pide medir antes de tocar.
 
+**El deslizamiento va en el precio y se informa como coste, pero se resta una
+sola vez** (v0.4.2). Los precios de entrada y salida de cada operacion son los
+realmente pagados y cobrados, con el deslizamiento dentro. El resultado de la
+operacion resta solo comision e impuesto, y por construccion es lo que se movio
+en caja. `costes_base` sigue siendo el coste total, deslizamiento incluido
+(aparte en `deslizamiento_base`), porque es lo que cuesta operar y es lo que
+mide `coste_pct_posicion`.
+
 ## Metricas
 
 **El Sharpe se calcula sobre rentabilidades semanales** por defecto
