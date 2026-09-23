@@ -69,7 +69,13 @@ def volumen_medio_base(
     importes = serie.cierre_bruto[desde : i + 1] * serie.volumen[desde : i + 1]
     if importes.size == 0:
         return 0.0
-    return float(np.mean(importes) * cambio)
+    # Una sesion sin volumen cuenta como una sesion sin negociacion, no se
+    # ignora: con la media de NumPy, un solo hueco volvia NaN todo el promedio,
+    # y como `NaN < minimo` es falso, el valor pasaba el filtro de liquidez sin
+    # que se supiera cuanto se negociaba.
+    importes = np.nan_to_num(importes, nan=0.0)
+    medio = float(np.mean(importes) * cambio)
+    return medio if np.isfinite(medio) else 0.0
 
 
 def evaluar(

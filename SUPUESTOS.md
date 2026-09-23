@@ -268,6 +268,35 @@ Arrastrar el ultimo cierre indefinidamente falsea el resultado.
 **El regimen se apaga si falta el indice o esta desfasado.** Equivocarse hacia
 el lado prudente cuesta operaciones no hechas; hacia el otro cuesta dinero.
 
+**Las filas malas de precios se reparan o se apartan, no tumban la descarga**
+(v0.4.5). Se apartan las que no se pueden arreglar sin inventar: sin cierre, con
+precios negativos o cero, y las de la sesion en curso. De una fecha repetida se
+queda la ultima fila que llego. Las que tienen cierre pero un OHLC incoherente se
+reparan: el maximo pasa a ser el mayor de los cuatro precios y el minimo el
+menor; si falta la apertura, el maximo o el minimo, se rellenan con el cierre.
+Todo se cuenta al descargar. La reparacion es prudente para los stops: con el
+minimo recalculado, un stop que el dato roto habria saltado sigue saltando.
+
+**La sesion del dia en curso no se usa** (v0.4.5). Mientras el mercado esta
+abierto, el "cierre" de hoy es el ultimo precio del momento. Se apartan los
+precios y cambios con fecha de hoy o posterior; el ultimo dato es el de ayer.
+
+**Un volumen que falta cuenta como una sesion sin negociacion** (v0.4.5). En la
+media de liquidez, un hueco suma cero en lugar de ignorarse. Antes un solo hueco
+volvia el promedio NaN, y como `NaN < minimo` es falso, el valor pasaba el
+filtro sin que se supiera cuanto se negociaba.
+
+**Faltar una divisa o tener el cambio congelado es un error al descargar**
+(`datos.fx_antiguedad_maxima_dias`, v0.4.5). El ultimo cambio de cada divisa no
+puede tener mas de esos dias; un tramo del historico sin cotizacion mas largo se
+avisa, pero no para la descarga: el backtest arrastra el ultimo cambio conocido.
+
+**Cada tipo de dato se descarga y se guarda por separado** (v0.4.5). Si fallan
+los fundamentales, las divisas o los sectores, los precios buenos se guardan y
+del tipo que fallo se conserva lo de la descarga anterior, si lo habia. El
+manifiesto lo anota (`incompletos`), el informe lo avisa y el comando termina con
+codigo 1 para que la tarea programada se entere. Sin precios no se toca nada.
+
 ## Inconsistencias del documento
 
 **Francia.** La prosa menciona el sufijo `.PA` para Francia, pero

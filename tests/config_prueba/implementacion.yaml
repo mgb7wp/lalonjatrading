@@ -47,6 +47,17 @@ codigos_eodhd:
   in: NSE
   br: SA
 
+# Como se habla con las fuentes por red. Yahoo limita por volumen y falla de
+# forma intermitente: cada peticion se reintenta `intentos` veces, esperando
+# `espera_inicial_s` segundos la primera vez y el doble en cada intento
+# siguiente, y entre valor y valor se hace una pausa para no provocar el
+# limite (error 429). Con 140 valores, 0,5 s de pausa suman poco mas de un
+# minuto.
+descargas:
+  intentos: 4
+  espera_inicial_s: 2.0
+  pausa_entre_peticiones_s: 0.5
+
 # Par de divisas con el que se convierte cada moneda a la base (EUR).
 # El codigo invierte el par cuando hace falta.
 divisas:

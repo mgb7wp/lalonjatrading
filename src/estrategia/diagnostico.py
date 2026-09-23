@@ -17,13 +17,14 @@ ve: si la columna de EV no se puede calcular para nadie, sale en primera linea.
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from datetime import date
+from datetime import date, timedelta
 
 import pandas as pd
 
 from . import fundamental as fundamental_mod
 from .config import Config
 from .constantes import SECTOR_DESCONOCIDO
+from .datos import contrato
 from .datos.enrutador import Enrutador
 from .sectores import MapaSectores
 
@@ -101,6 +102,8 @@ def ejecutar(
         fila = FilaDiagnostico(ticker=ticker, mercado=mercado)
 
         serie = por_ticker_p.get(ticker)
+        if serie is not None:
+            serie = serie.sort_values("fecha")
         if serie is None or serie.empty:
             fila.problemas.append("sin serie de precios")
         else:
@@ -127,7 +130,9 @@ def ejecutar(
         if fund is None or fund.empty:
             fila.problemas.append("sin fundamentales")
         else:
-            anuales = fund[fund["periodo"] == "anual"]
+            # Ordenados por fin de periodo: Yahoo los da del mas reciente al
+            # mas antiguo, y sin ordenar el "ultimo" era el mas viejo.
+            anuales = fund[fund["periodo"] == "anual"].sort_values("fin_periodo")
             fila.ejercicios = len(anuales)
             if "origen_fecha_publicacion" in anuales.columns:
                 fila.fechas_publicacion_reales = int(
@@ -169,7 +174,99 @@ def ejecutar(
     return filas
 
 
-def a_texto(filas: list[FilaDiagnostico], cfg: Config, detalle: bool = False) -> str:
+@dataclass
+class FilaAuxiliar:
+    """Un dato que no es un valor del universo pero sin el que no se opera:
+    el indice de regimen de un mercado, un ETF de referencia o una divisa."""
+
+    tipo: str  # "indice", "referencia" o "divisa"
+    nombre: str
+    ticker: str
+    filas: int = 0
+    ultima: date | None = None
+    problemas: list[str] = field(default_factory=list)
+    notas: list[str] = field(default_factory=list)
+
+    @property
+    def utilizable(self) -> bool:
+        return self.filas > 0 and not self.problemas
+
+
+def comprobar_auxiliares(
+    cfg: Config, inicio: date, fin: date, hoy: date | None = None
+) -> list[FilaAuxiliar]:
+    """Indices de regimen, ETF de referencia y divisas.
+
+    Sin el indice de un mercado, el regimen de ese mercado nunca se enciende y
+    no compra nada; sin una divisa, no se puede valorar ni dimensionar. Son
+    pocos datos y ninguno sale en la lista de valores, asi que se comprueban
+    aparte.
+    """
+    hoy = hoy or date.today()
+    enrutador = Enrutador(cfg, verificar=False, hoy=hoy)
+    filas: list[FilaAuxiliar] = []
+
+    for mercado, ticker in sorted(cfg.reglas.tecnico.indices_regimen.items()):
+        filas.append(FilaAuxiliar("indice", f"regimen {mercado}", ticker))
+    for nombre, ref in sorted(cfg.implementacion.referencias.items()):
+        filas.append(FilaAuxiliar("referencia", nombre, ref.ticker))
+
+    try:
+        precios = enrutador.precios([f.ticker for f in filas], inicio, fin)
+    except Exception as exc:  # noqa: BLE001 - se informa, no se revienta
+        precios = pd.DataFrame()
+        for f in filas:
+            f.problemas.append(f"fallo al descargar: {exc}")
+    limite_precio = fin - timedelta(days=30)
+    for f in filas:
+        serie = precios[precios["ticker"] == f.ticker] if not precios.empty else precios
+        if serie.empty:
+            if not f.problemas:
+                f.problemas.append("sin serie de precios")
+            continue
+        f.filas = len(serie)
+        f.ultima = max(serie["fecha"])
+        if f.ultima < limite_precio:
+            f.problemas.append(f"precios desfasados (ultimo {f.ultima})")
+
+    base = cfg.reglas.cartera.divisa_base
+    divisas = sorted(
+        ({m.divisa for m in cfg.reglas.universo.mercados}
+         | {r.divisa for r in cfg.implementacion.referencias.values()}) - {base}
+    )
+    fx_filas = [
+        FilaAuxiliar("divisa", d, cfg.implementacion.divisas.get(d) or "?") for d in divisas
+    ]
+    try:
+        fx = enrutador.fx(divisas, inicio, fin)
+    except Exception as exc:  # noqa: BLE001
+        fx = pd.DataFrame()
+        for f in fx_filas:
+            f.problemas.append(f"fallo al descargar: {exc}")
+    limite = cfg.reglas.datos.fx_antiguedad_maxima_dias
+    referencia = min(fin, hoy - timedelta(days=1))
+    for f in fx_filas:
+        serie = fx[fx["divisa"] == f.nombre] if not fx.empty else fx
+        if serie.empty:
+            if not f.problemas:
+                f.problemas.append("sin tipo de cambio")
+            continue
+        f.filas = len(serie)
+        f.ultima = max(pd.to_datetime(serie["fecha"]).dt.date)
+        if (referencia - f.ultima).days > limite:
+            f.problemas.append(
+                f"cambio con mas de {limite} dias de antiguedad (ultimo {f.ultima})"
+            )
+        f.notas += contrato.huecos_fx(serie, limite)
+    return filas + fx_filas
+
+
+def a_texto(
+    filas: list[FilaDiagnostico],
+    cfg: Config,
+    detalle: bool = False,
+    auxiliares: list[FilaAuxiliar] | None = None,
+) -> str:
     """Resumen legible, con lo que hay que arreglar en primer lugar."""
     total = len(filas)
     ok = [f for f in filas if f.utilizable]
@@ -179,6 +276,31 @@ def a_texto(filas: list[FilaDiagnostico], cfg: Config, detalle: bool = False) ->
         f"Valores utilizables: {len(ok)} de {total}",
         "",
     ]
+
+    if auxiliares is not None:
+        malos = [a for a in auxiliares if not a.utilizable]
+        lineas.append("## Indices, referencias y divisas")
+        lineas.append("")
+        if not malos:
+            lineas.append(
+                f"Los {len(auxiliares)} datos auxiliares llegan completos y al dia."
+            )
+        else:
+            lineas.append(
+                f"**{len(malos)} de {len(auxiliares)} fallan.** Sin el indice de un "
+                f"mercado no se enciende su regimen y no compra nada; sin una "
+                f"divisa no se puede valorar ni dimensionar."
+            )
+        lineas.append("")
+        for a in auxiliares:
+            estado = "OK" if a.utilizable else "; ".join(a.problemas)
+            lineas.append(
+                f"- {a.tipo} {a.nombre} ({a.ticker}): {estado}"
+                + (f", ultimo {a.ultima}" if a.ultima and a.utilizable else "")
+            )
+            for nota in a.notas:
+                lineas.append(f"  - {nota}")
+        lineas.append("")
 
     enrutador = Enrutador(cfg, verificar=False)
     lineas.append("## Reparto de fuentes")

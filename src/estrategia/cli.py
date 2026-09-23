@@ -18,6 +18,8 @@ import sys
 from datetime import date, timedelta
 from pathlib import Path
 
+import pandas as pd
+
 from . import backtest as backtest_mod
 from . import config as config_mod
 from . import diagnostico as diagnostico_mod
@@ -70,6 +72,13 @@ def _opcion_proveedor(args) -> str:
 
 
 def _descargar(cfg, nombre_proveedor: str | None, inicio: date, fin: date) -> Instantanea:
+    """Descarga cada tipo de dato por separado.
+
+    Un tipo que falla no arrastra a los demas: se anota en
+    `Instantanea.incompletos`, se deja vacio y quien guarde decide si conserva
+    el de la descarga anterior. Las filas que se han tenido que reparar o
+    apartar se imprimen como avisos.
+    """
     enrutador = _enrutador(cfg, nombre_proveedor)
 
     problemas = enrutador.comprobar_disponibilidad()
@@ -89,21 +98,60 @@ def _descargar(cfg, nombre_proveedor: str | None, inicio: date, fin: date) -> In
         | {r.divisa for r in cfg.implementacion.referencias.values()}
     )
 
-    print(f"Descargando precios de {len(tickers)} valores + indices y referencias...")
-    precios = enrutador.precios(tickers + indices + referencias, inicio, fin)
-    print(f"Descargando fundamentales de {len(tickers)} valores...")
-    fundamentales = enrutador.fundamentales(tickers, inicio, fin)
-    print("Descargando tipos de cambio...")
-    fx = enrutador.fx(divisas, inicio, fin)
-    print("Leyendo sectores...")
-    sectores = enrutador.sectores(tickers)
+    incompletos: list[str] = []
+
+    def paso(tipo: str, mensaje: str, descarga, vacio):
+        print(mensaje)
+        try:
+            return descarga()
+        except Exception as exc:  # noqa: BLE001 - frontera con la red
+            incompletos.append(tipo)
+            print(f"  FALLO en {tipo}: {exc}", file=sys.stderr)
+            return vacio
+
+    precios = paso(
+        "precios",
+        f"Descargando precios de {len(tickers)} valores + indices y referencias...",
+        lambda: enrutador.precios(tickers + indices + referencias, inicio, fin),
+        pd.DataFrame(),
+    )
+    fundamentales = paso(
+        "fundamentales", f"Descargando fundamentales de {len(tickers)} valores...",
+        lambda: enrutador.fundamentales(tickers, inicio, fin), pd.DataFrame(),
+    )
+    fx = paso(
+        "fx", "Descargando tipos de cambio...",
+        lambda: enrutador.fx(divisas, inicio, fin), pd.DataFrame(),
+    )
+    sectores = paso(
+        "sectores", "Leyendo sectores...", lambda: enrutador.sectores(tickers), {},
+    )
+    for aviso in enrutador.avisos:
+        print(f"  aviso: {aviso}")
 
     # El origen refleja el reparto real, no una sola fuente: si los precios
     # vienen de una y los fundamentales de otra, el informe tiene que decirlo.
     return Instantanea(
         precios=precios, fundamentales=fundamentales, fx=fx, sectores=sectores,
-        fecha_descarga=date.today(), origen=enrutador.origen,
+        fecha_descarga=date.today(), origen=enrutador.origen, incompletos=incompletos,
     )
+
+
+def _informar_incompletos(inst: Instantanea, destino: Path, conservados: bool) -> None:
+    """Explica que falta y termina con codigo 1, para que la tarea programada
+    se entere de que la descarga no fue completa."""
+    if not inst.incompletos:
+        return
+    que = ", ".join(inst.incompletos)
+    if conservados:
+        detalle = (
+            "se conservan los de la descarga anterior donde los habia; donde no, "
+            "quedan vacios"
+        )
+    else:
+        detalle = "quedan vacios en esta copia"
+    print(f"\nDESCARGA INCOMPLETA: ha fallado {que}; {detalle} ({destino}).", file=sys.stderr)
+    raise SystemExit(1)
 
 
 def _cargar_instantanea(args, cfg) -> Instantanea:
@@ -129,11 +177,20 @@ def cmd_datos(args, cfg) -> None:
     inicio = fin - timedelta(days=int(args.anos * 365.25))
     inst = _descargar(cfg, args.proveedor, inicio, fin)
     destino = DIR_CACHE / inst.origen
-    inst.guardar(destino)
+    if "precios" in inst.incompletos:
+        # Sin precios no hay nada que guardar: se deja la cache como estaba.
+        print(
+            f"\nNo se han podido descargar los precios; la cache de {destino} "
+            f"no se ha tocado.",
+            file=sys.stderr,
+        )
+        raise SystemExit(1)
+    inst.guardar(destino, conservar=set(inst.incompletos))
     print(
         f"Guardado en {destino}: {len(inst.precios)} filas de precios, "
         f"{len(inst.fundamentales)} de fundamentales, {len(inst.fx)} de divisas."
     )
+    _informar_incompletos(inst, destino, conservados=True)
 
 
 def cmd_foto(args, cfg) -> None:
@@ -168,6 +225,9 @@ def cmd_foto(args, cfg) -> None:
         if temporal.is_dir():
             shutil.rmtree(temporal, ignore_errors=True)
     print(f"Foto de {ano}-S{semana:02d} guardada en {destino}.")
+    # Una foto con huecos se guarda igual —lo que si llego vale— pero queda
+    # marcada como incompleta en su manifiesto.
+    _informar_incompletos(inst, destino, conservados=False)
 
 
 def cmd_universo(args, cfg) -> None:
@@ -230,7 +290,10 @@ def cmd_diagnostico(args, cfg) -> None:
         cfg = cfg.con_fuente_unica(args.proveedor)
 
     filas = diagnostico_mod.ejecutar(cfg, inicio, fin)
-    texto = diagnostico_mod.a_texto(filas, cfg, detalle=args.detalle)
+    auxiliares = diagnostico_mod.comprobar_auxiliares(cfg, inicio, fin)
+    texto = diagnostico_mod.a_texto(
+        filas, cfg, detalle=args.detalle, auxiliares=auxiliares
+    )
     print(texto)
 
     DIR_RESULTADOS.mkdir(parents=True, exist_ok=True)
@@ -238,6 +301,9 @@ def cmd_diagnostico(args, cfg) -> None:
     ruta.write_text(texto, encoding="utf-8")
     print(f"\nGuardado en {ruta}")
 
+    if any(not a.utilizable for a in auxiliares):
+        # Sin un indice o una divisa, un mercado entero queda inservible.
+        raise SystemExit(1)
     utilizables = sum(1 for f in filas if f.utilizable)
     if utilizables < len(filas):
         # Codigo de salida distinto de cero para que CI se entere, pero sin

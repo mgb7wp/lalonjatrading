@@ -128,6 +128,7 @@ class DatosCfg(_Base):
     guardar_foto_fx: str
     sesiones_sin_datos_cierre_forzoso: int = Field(gt=0)
     fx_decision_dia_anterior: bool
+    fx_antiguedad_maxima_dias: int = Field(gt=0)
 
     def retraso(self, mercado: str, periodo: Literal["trimestral", "anual"]) -> int:
         """Dias que se suponen entre el cierre del periodo y su publicacion.
@@ -336,8 +337,17 @@ class ReferenciaCfg(_Base):
     divisa: str
 
 
+class DescargasCfg(_Base):
+    """Como se habla con las fuentes por red: reintentos y pausas."""
+
+    intentos: int = Field(ge=1)
+    espera_inicial_s: float = Field(ge=0)
+    pausa_entre_peticiones_s: float = Field(ge=0)
+
+
 class Implementacion(_Base):
     calendarios: dict[str, str]
+    descargas: DescargasCfg
     codigos_eodhd: dict[str, str] = Field(default_factory=dict)
     referencias: dict[str, ReferenciaCfg]
     divisas: dict[str, str | None]

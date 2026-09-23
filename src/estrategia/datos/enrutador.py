@@ -29,7 +29,7 @@ hace aqui dos cosas que no se pueden dejar a la buena voluntad de cada adaptador
 
 from __future__ import annotations
 
-from datetime import date
+from datetime import date, timedelta
 
 import pandas as pd
 
@@ -42,10 +42,19 @@ from .proveedor import TIPOS_DE_DATO, Capacidades, Fuente
 class Enrutador:
     """Reparte cada peticion a la fuente que corresponde."""
 
-    def __init__(self, cfg: Config, verificar: bool = True) -> None:
+    def __init__(
+        self, cfg: Config, verificar: bool = True, hoy: date | None = None
+    ) -> None:
         self._cfg = cfg
         self._verificar = verificar
+        # La sesion de hoy todavia no ha cerrado: su "cierre" es el ultimo
+        # precio del momento. Se aparta siempre; `hoy` se puede fijar en los
+        # tests.
+        self._hoy = hoy or date.today()
         self._instancias: dict[str, Fuente] = {}
+        #: Lo que se ha tenido que reparar o apartar en esta descarga. No son
+        #: errores: el CLI lo imprime y la descarga sigue.
+        self.avisos: list[str] = []
         self._por_tipo: dict[str, str] = {
             tipo: cfg.reglas.proveedor_datos.fuente_de(tipo) for tipo in TIPOS_DE_DATO
         }
@@ -118,7 +127,10 @@ class Enrutador:
     def precios(self, tickers: list[str], inicio: date, fin: date) -> pd.DataFrame:
         fuente = self.fuente("precios")
         df = fuente.precios(tickers, inicio, fin)
+        self._recoger_avisos(fuente)
         df = _estampar(df, fuente.nombre)
+        df, limpieza = contrato.limpiar_precios(df, self._hoy)
+        self.avisos += limpieza.avisos(fuente.nombre)
         if self._verificar:
             contrato.verificar_precios(df, fuente.nombre).exigir()
         return df
@@ -126,6 +138,7 @@ class Enrutador:
     def fundamentales(self, tickers: list[str], inicio: date, fin: date) -> pd.DataFrame:
         fuente = self.fuente("fundamentales")
         df = fuente.fundamentales(tickers, inicio, fin)
+        self._recoger_avisos(fuente)
         df = _estampar(df, fuente.nombre)
         if self._verificar:
             contrato.verificar_fundamentales(df, fuente.nombre).exigir()
@@ -134,13 +147,35 @@ class Enrutador:
     def fx(self, divisas: list[str], inicio: date, fin: date) -> pd.DataFrame:
         fuente = self.fuente("divisas")
         df = fuente.fx(divisas, inicio, fin)
+        self._recoger_avisos(fuente)
         df = _estampar(df, fuente.nombre)
+        df, limpieza = contrato.limpiar_fx(df, self._hoy)
+        self.avisos += limpieza.avisos(fuente.nombre, "divisas")
+        limite = self._cfg.reglas.datos.fx_antiguedad_maxima_dias
+        self.avisos += contrato.huecos_fx(df, limite)
         if self._verificar:
-            contrato.verificar_fx(df, fuente.nombre).exigir()
+            base = self._cfg.reglas.cartera.divisa_base
+            contrato.verificar_fx(
+                df, fuente.nombre,
+                esperadas=[d for d in divisas if d != base],
+                # El ultimo cambio posible es el de ayer: el de hoy se aparta.
+                hasta=min(fin, self._hoy - timedelta(days=1)),
+                antiguedad_maxima_dias=limite,
+            ).exigir()
         return df
 
     def sectores(self, tickers: list[str]) -> dict[str, str | None]:
-        return self.fuente("sectores").sectores(tickers)
+        fuente = self.fuente("sectores")
+        salida = fuente.sectores(tickers)
+        self._recoger_avisos(fuente)
+        return salida
+
+    def _recoger_avisos(self, fuente: Fuente) -> None:
+        """Pasa a `self.avisos` lo que la fuente haya anotado, sin repetirlo."""
+        pendientes = getattr(fuente, "avisos", None)
+        if pendientes:
+            self.avisos += pendientes
+            pendientes.clear()
 
 
 def _estampar(df: pd.DataFrame, nombre: str) -> pd.DataFrame:

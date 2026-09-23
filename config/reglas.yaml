@@ -66,6 +66,11 @@ datos:
   # tarde, así que decidir con el de hoy es usar un dato que aún no existe.
   # Se decide y se dimensiona con el de D-1; se valora con el de D.
   fx_decision_dia_anterior: true
+  # AÑADIDO v0.4.5: un tipo de cambio que deja de actualizarse arrastra
+  # semanas de valoraciones con un cambio congelado. Al descargar, el último
+  # cambio de cada divisa no puede tener más días que estos, y los tramos del
+  # histórico sin cotización más largos se avisan.
+  fx_antiguedad_maxima_dias: 7
 
 fundamental:
   minimos:

@@ -168,6 +168,19 @@ def _avisos_de_datos(
         )
     )
 
+    incompletos = getattr(instantanea, "incompletos", [])
+    if incompletos:
+        avisos.append(
+            Aviso(
+                "descarga_incompleta",
+                f"La ultima descarga no pudo traer: {', '.join(incompletos)}. Lo "
+                f"que haya de esos datos es de una descarga anterior, o no hay "
+                f"nada. Vuelve a ejecutar `estrategia datos` antes de fiarte de "
+                f"este informe.",
+                gravedad="importante",
+            )
+        )
+
     # Fundamentales reconstruidos, no capturados en su momento.
     fund = instantanea.fundamentales
     if not fund.empty and "origen_pit" in fund.columns:
