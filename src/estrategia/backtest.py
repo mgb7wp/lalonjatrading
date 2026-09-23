@@ -18,7 +18,14 @@ Orden dentro de cada dia, para cada mercado que tenga sesion:
    se estaria usando el cierre de hoy para decidir si hoy se toco el stop, que
    es anticipacion pura y mejora todos los backtests en silencio.
 6. **Revision semanal**, si esta sesion es la que aporta la decision de la
-   semana para ese mercado.
+   semana para ese mercado: salidas por regla y candidatas del mercado.
+
+Al terminar el dia en que decide el ultimo mercado de la semana, se **reparten
+los huecos una sola vez** entre las candidatas de todos los mercados, ordenadas
+en una lista global. Repartirlos mercado a mercado dejaria que cada uno viera la
+cartera como si los demas no hubieran reservado nada: se podrian superar los
+topes de posiciones, sector y efectivo, y entraria antes el mercado que va
+primero en la lista, no la mejor candidata.
 
 Las salidas se procesan antes que las entradas para que un hueco liberado hoy
 se pueda usar en la asignacion de la semana siguiente. Un hueco que se libera el
@@ -121,9 +128,12 @@ def ejecutar(
     decisiones: dict[date, list[tuple[str, pd.Timestamp]]] = {}
 
     # Se precalcula, por corte semanal, que sesion decide y cual ejecuta en cada
-    # mercado. Asi el bucle diario solo consulta un diccionario.
+    # mercado, y que dia se reparten los huecos: el de la ultima decision de la
+    # semana. Asi el bucle diario solo consulta diccionarios.
     ejecuciones: dict[tuple[str, date], pd.Timestamp] = {}
+    repartos: dict[date, list[pd.Timestamp]] = {}
     for corte in cal.cortes_semanales:
+        ultima: date | None = None
         for mercado_id in cal.mercados():
             d = cal.sesion_de_decision(mercado_id, corte)
             e = cal.sesion_de_ejecucion(mercado_id, corte)
@@ -131,6 +141,10 @@ def ejecutar(
                 continue
             decisiones.setdefault(d, []).append((mercado_id, corte))
             ejecuciones[(mercado_id, d)] = pd.Timestamp(e)
+            ultima = d if ultima is None else max(ultima, d)
+        if ultima is not None:
+            repartos.setdefault(ultima, []).append(corte)
+    rondas: dict[pd.Timestamp, _Ronda] = {}
 
     for dia in cal.union_sesiones:
         if dia < inicio or dia > fin:
@@ -219,14 +233,22 @@ def ejecutar(
                     salidas_mod.actualizar_trinquete(pos, float(sesion["cierre"]), atr, cfg)
                 )
 
-            # 6. Revision semanal.
+            # 6. Revision semanal del mercado: salidas y candidatas.
             for mid, corte in decisiones.get(dia, []):
                 if mid != mercado_id:
                     continue
                 _revisar(
-                    dia, mercado_id, corte, vista, cal, cartera, cfg, mapa,
-                    pendientes_compra, pendientes_venta, ejecuciones, eventos, fin,
+                    dia, mercado_id, vista, cartera, cfg, mapa,
+                    pendientes_venta, ejecuciones, eventos,
+                    rondas.setdefault(corte, _Ronda()),
                 )
+
+        # 7. Reparto global de huecos, cuando ya han decidido todos los mercados
+        #    de la semana.
+        for corte in repartos.get(dia, []):
+            ronda = rondas.pop(corte, None)
+            if ronda is not None:
+                _repartir(dia, ronda, vista, cal, cartera, cfg, pendientes_compra, eventos)
 
         curva.append(_valorar(dia, cartera, vista, cfg))
 
@@ -275,22 +297,41 @@ def _inicio_con_calentamiento(inicio: date, cfg: Config) -> date:
     return inicio + timedelta(days=dias)
 
 
+@dataclass
+class _Ronda:
+    """Lo que cada mercado aporta a la revision de una semana.
+
+    Se va llenando en la sesion de decision de cada mercado y se reparte de una
+    vez cuando ha decidido el ultimo. Las senales, los ratios y el cambio se
+    calculan en la sesion de cada mercado, con sus datos de ese dia.
+    """
+
+    comprables: dict = field(default_factory=dict)
+    sectores: dict[str, str] = field(default_factory=dict)
+    cohorte: dict = field(default_factory=dict)
+    regimen: dict[str, bool] = field(default_factory=dict)
+    fx: dict[str, float] = field(default_factory=dict)
+    decision: dict[str, date] = field(default_factory=dict)
+    ejecucion: dict[str, date] = field(default_factory=dict)
+
+
 def _revisar(
     dia: date,
     mercado_id: str,
-    corte,
     vista,
-    cal: Calendarios,
     cartera: Cartera,
     cfg: Config,
     mapa: MapaSectores,
-    pendientes_compra: dict,
     pendientes_venta: dict,
     ejecuciones: dict,
     eventos: list[Evento],
-    fin: date,
+    ronda: _Ronda,
 ) -> None:
-    """Revision semanal de un mercado: salidas por regla y nuevas compras."""
+    """Revision semanal de un mercado: salidas por regla y candidatas.
+
+    Las compras no se deciden aqui: las candidatas se guardan en la ronda de la
+    semana y se reparten junto con las de los demas mercados en `_repartir`.
+    """
     ejecucion = ejecuciones.get((mercado_id, dia))
     if ejecucion is None:
         return
@@ -320,67 +361,105 @@ def _revisar(
             )
 
     regimen = tecnico_mod.regimen_por_mercado(dia, vista, cfg)
-    if not regimen.get(mercado_id, False):
+    ronda.regimen[mercado_id] = bool(regimen.get(mercado_id, False))
+    if not ronda.regimen[mercado_id]:
         eventos.append(Evento(dia, "regimen_apagado", mercado_id))
         return
 
-    # Senales tecnicas de los elegibles de este mercado.
-    comprables: dict = {}
-    sectores: dict[str, str] = {}
+    # Senales tecnicas de los elegibles de este mercado. Las que ya estan en
+    # cartera tambien cuentan: forman parte de la cohorte del percentil de
+    # momentum, y la nota de una candidata no debe depender de lo que se tenga.
+    # Al repartir se descartan con `ya_en_cartera`.
+    senales: dict = {}
     for ticker, eleg in del_mercado.items():
-        if not eleg.elegible or cartera.tiene(ticker):
+        if not eleg.elegible:
             continue
         senal = tecnico_mod.senal(ticker, mercado_id, dia, vista, cfg)
+        senales[ticker] = senal
         if senal is None or not senal.comprable:
             continue
-        comprables[ticker] = senal
-        sectores[ticker] = eleg.sector
+        ronda.comprables[ticker] = senal
+        ronda.sectores[ticker] = eleg.sector
 
-    if not comprables:
-        return
-
-    # Puntuacion fundamental sobre la cohorte elegible del mercado.
-    puntuaciones: dict = {}
+    # Ratios fundamentales de la cohorte elegible del mercado. Se puntuan al
+    # repartir, con las de todos los mercados, para que el recurso al bloque
+    # tenga con quien comparar.
     if cfg.reglas.fundamental.activo:
-        cohorte: dict = {}
         for ticker, eleg in del_mercado.items():
             if not eleg.elegible:
                 continue
             # El precio de la fecha de decision entra en el calculo del EV: la
             # valoracion tiene que moverse con el precio, no quedarse congelada
             # entre publicaciones de resultados.
-            senal_valor = tecnico_mod.senal(ticker, mercado_id, dia, vista, cfg)
+            senal_valor = senales.get(ticker)
             ratios = fundamental_mod.ratios_de(
                 ticker, vista.fundamentales(ticker), cfg, dia,
                 senal_valor.cierre if senal_valor else None,
             )
             if ratios is not None:
-                cohorte[ticker] = (ratios, mercado_id, eleg.sector)
-        puntuaciones = fundamental_mod.puntuar(cohorte, cfg)
-
-    candidatas = seleccion_mod.ordenar_candidatas(
-        dia, comprables, puntuaciones, sectores, cfg
-    )
-    if not candidatas:
-        return
+                ronda.cohorte[ticker] = (ratios, mercado_id, eleg.sector)
 
     divisa = cfg.reglas.mercado(mercado_id).divisa
     try:
-        cambio = vista.fx_decision(
+        ronda.fx[divisa] = vista.fx_decision(
             divisa, dia, cfg.reglas.datos.fx_decision_dia_anterior,
             cfg.reglas.cartera.divisa_base,
         )
     except Exception:
+        # Sin cambio no se puede dimensionar: sus candidatas se rechazan al
+        # repartir con `sin_precio_ejecucion`, y queda constancia.
+        pass
+
+    ronda.decision[mercado_id] = dia
+    ronda.ejecucion[mercado_id] = fecha_ejecucion
+
+
+def _repartir(
+    dia: date,
+    ronda: _Ronda,
+    vista,
+    cal: Calendarios,
+    cartera: Cartera,
+    cfg: Config,
+    pendientes_compra: dict,
+    eventos: list[Evento],
+) -> None:
+    """Reparto de huecos de la semana, una sola vez para todos los mercados.
+
+    Las candidatas de todos los mercados se ordenan en una lista global y se
+    asignan de mejor a peor contra un unico estado reservado de la cartera: los
+    topes de posiciones, sector y mercado y el efectivo se consumen una sola vez.
+    """
+    if not ronda.comprables:
+        return
+
+    puntuaciones: dict = {}
+    if cfg.reglas.fundamental.activo:
+        puntuaciones = fundamental_mod.puntuar(ronda.cohorte, cfg)
+
+    candidatas = seleccion_mod.ordenar_candidatas(
+        dia, ronda.comprables, puntuaciones, ronda.sectores, cfg
+    )
+    # Las que ya estan en cartera solo servian de cohorte para los percentiles.
+    # Se quitan antes de asignar para que no llenen el registro de rechazos
+    # todas las semanas ni ocupen puestos del ranking.
+    candidatas = [c for c in candidatas if not cartera.tiene(c.ticker)]
+    if not candidatas:
         return
 
     precios_base = _precios_base(cartera, vista, cfg, dia)
     capital = cartera.valor(precios_base)
 
     asignacion = ordenes_mod.asignar(
-        dia, candidatas, cartera, regimen, {divisa: cambio}, capital, cfg
+        dia, candidatas, cartera, ronda.regimen, ronda.fx, capital, cfg
     )
     for orden in asignacion.ordenes:
-        pendientes_compra.setdefault(clave, []).append(orden)
+        mercado_id = orden.mercado
+        decision = ronda.decision[mercado_id]
+        ejecucion = ronda.ejecucion[mercado_id]
+        pendientes_compra.setdefault(
+            f"{mercado_id}|{ejecucion.isoformat()}", []
+        ).append(orden)
         eventos.append(
             Evento(dia, "orden", mercado_id, orden.ticker, detalles={
                 "acciones": orden.acciones, "rango": orden.rango_asignacion,
@@ -388,7 +467,7 @@ def _revisar(
                 "riesgo_teorico_pct": orden.riesgo_teorico_pct,
                 "riesgo_efectivo_pct": round(orden.riesgo_efectivo_pct, 5),
                 "limitada_por_peso_maximo": orden.limitada_por_peso_maximo,
-                "sesiones_de_retraso": cal.sesiones_de_retraso(mercado_id, dia, fecha_ejecucion),
+                "sesiones_de_retraso": cal.sesiones_de_retraso(mercado_id, decision, ejecucion),
             })
         )
     for r in asignacion.rechazos:

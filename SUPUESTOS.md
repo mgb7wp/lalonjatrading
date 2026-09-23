@@ -117,6 +117,24 @@ el momento del fill haria que el mercado que abre antes (India, 04:00 UTC) se
 quedara siempre con los huecos antes que Europa o EE. UU.: un sesgo de huso
 horario, no una decision de estrategia.
 
+**El reparto es uno solo por semana, para todos los mercados** (v0.4.1). Cada
+mercado calcula sus salidas, sus senales y sus ratios en su propia sesion de
+decision, con sus datos de ese dia. Al terminar el dia en que decide el ultimo
+mercado de la semana, las candidatas de todos se ordenan en una lista global y
+los huecos se reparten una vez, contra un unico estado reservado de la cartera
+(posiciones, sector, mercado y efectivo). El patrimonio que sirve para
+dimensionar es el de ese momento. Repartir mercado a mercado dejaba que cada uno
+viera la cartera como si los demas no hubieran reservado nada.
+
+**Las posiciones ya en cartera cuentan en la cohorte del percentil de
+momentum**, igual que ya contaban en la de los ratios fundamentales, y luego se
+quitan de la lista antes de repartir. Si no contaran, la nota de una candidata
+dependeria de lo que se tiene en cartera: comprar la mejor de un mercado subiria
+el percentil de las demas la semana siguiente sin que nada hubiera cambiado en
+el mercado. Al quitarlas antes de repartir, el puesto del ranking que se anota
+es el de las comprables de verdad y el registro de rechazos no se llena cada
+semana de `ya_en_cartera`.
+
 **Orden de comprobacion**, que es lo que hace el resultado reproducible: ya en
 cartera, regimen, tope de posiciones, tope de sector, tope de mercado, tamano
 cero, efectivo. Si dos motivos pudieran aplicarse, siempre gana el primero.
