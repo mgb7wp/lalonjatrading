@@ -22,6 +22,7 @@ import numpy as np
 
 from .config import Config
 from .datos.almacen import VistaPuntual
+from .errores import ErrorDatos
 from .sectores import MapaSectores
 from .tipos import MotivoRechazo
 
@@ -63,7 +64,9 @@ def volumen_medio_base(
     # el resultado menos que el ruido del propio umbral.
     try:
         cambio = vista.fx(divisa, fecha, cfg.reglas.cartera.divisa_base)
-    except Exception:
+    except ErrorDatos:
+        # Sin cambio no se puede medir la liquidez en divisa base: el valor no
+        # entra. Solo errores de datos; uno de anticipacion tiene que saltar.
         return 0.0
 
     importes = serie.cierre_bruto[desde : i + 1] * serie.volumen[desde : i + 1]

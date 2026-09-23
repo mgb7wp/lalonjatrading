@@ -124,7 +124,10 @@ def asignar(
 
         # Se reserva con un margen para comision y deslizamiento; el importe
         # exacto se conocera en la apertura y puede variar.
-        reserva = tamano.nominal_base * 1.01 + cfg.reglas.costes.comision_fija_eur
+        reserva = (
+            tamano.nominal_base * (1.0 + reglas.margen_reserva_pct)
+            + cfg.reglas.costes.comision_fija_eur
+        )
         if reserva > efectivo:
             rechazar(MotivoRechazo.EFECTIVO_INSUFICIENTE)
             continue

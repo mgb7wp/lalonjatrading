@@ -474,26 +474,26 @@ def a_html(informe: Informe, titulo: str = "Estrategia mixta") -> str:
 
     if informe.sintetico:
         partes.append(
-            '<div class="sintetico"><strong>DATOS SINTETICOS: no son resultados '
-            "reales.</strong><br>Esta pagina se ha generado con el proveedor de "
+            '<div class="sintetico"><strong>DATOS SINTÉTICOS: no son resultados '
+            "reales.</strong><br>Esta página se ha generado con el proveedor de "
             "datos inventados, que sirve para comprobar que el motor hace lo que "
-            "dice. No describe ningun mercado.</div>"
+            "dice. No describe ningún mercado.</div>"
         )
 
     # El descargo va arriba, no enterrado al final: la pagina es publica.
     partes.append(
         '<div class="descargo"><strong>Esto no es asesoramiento financiero.</strong> '
         "Es un sistema propio, publicado para dejar constancia de lo que decidio y "
-        "cuando. Los parametros son un punto de partida razonable, no valores "
-        "optimizados, y un backtest comprueba que el codigo hace lo que dice, no "
-        "predice nada. Los avisos del final no son letra pequena: explican por que "
+        "cuando. Los parámetros son un punto de partida razonable, no valores "
+        "optimizados, y un backtest comprueba que el código hace lo que dice, no "
+        "predice nada. Los avisos del final no son letra pequeña: explican por qué "
         "estas cifras dicen menos de lo que parece.</div>"
     )
 
     partes.append(f"<h1>{_e(titulo)}</h1>")
     partes.append(
         f'<p class="sub">Periodo {_e(meta["inicio"])} a {_e(meta["fin"])} '
-        f"({r.anos:.1f} anos) · Fuentes: {_e(meta['origen'])} · "
+        f"({r.anos:.1f} años) · Fuentes: {_e(meta['origen'])} · "
         f"Descarga {_e(meta['fecha_descarga'])} · "
         f"Filtro fundamental {'activo' if meta.get('fundamental_activo') else 'DESACTIVADO'}"
         "</p>"
@@ -509,11 +509,11 @@ def a_html(informe: Informe, titulo: str = "Estrategia mixta") -> str:
 
     tarjetas = [
         ("Rentabilidad total", _pct(r.rentabilidad_total)),
-        ("Drawdown maximo", _pct(r.drawdown_maximo, signo=False)),
+        ("Drawdown máximo", _pct(r.drawdown_maximo, signo=False)),
         (f"Sharpe ({r.periodicidad_sharpe})", f"{r.sharpe:.2f}"),
         ("Ganadoras", _pct(r.pct_ganadoras, signo=False)),
         ("Operaciones", f"{r.n_operaciones}"),
-        ("Exposicion media", _pct(r.exposicion_media, signo=False)),
+        ("Exposición media", _pct(r.exposicion_media, signo=False)),
     ]
     partes.append(
         '<div class="rejilla-tarjetas">'
@@ -527,15 +527,15 @@ def a_html(informe: Informe, titulo: str = "Estrategia mixta") -> str:
 
     partes.append("<h2>Curva de capital</h2>")
     partes.append(
-        f'<p class="sub">Las referencias estan invertidas al 100% todo el tiempo '
-        f"y la estrategia no: su exposicion media fue del "
+        f'<p class="sub">Las referencias están invertidas al 100% todo el tiempo '
+        f"y la estrategia no: su exposición media fue del "
         f"{r.exposicion_media:.0%}. Comparar las curvas sin tener eso delante no "
-        f"seria una comparacion justa.</p>"
+        f"sería una comparación justa.</p>"
     )
     partes.append(f'<div class="tarjeta">{curva_svg(informe)}</div>')
 
     if not informe.por_ano.empty:
-        partes.append("<h2>Por ano</h2>")
+        partes.append("<h2>Por año</h2>")
         datos = informe.por_ano
         partes.append(
             '<div class="tarjeta">'
@@ -543,7 +543,7 @@ def a_html(informe: Informe, titulo: str = "Estrategia mixta") -> str:
                 [str(int(a)) for a in datos["ano"]],
                 [float(v) for v in datos["rentabilidad"]],
                 lambda v: f"{v:+.1%}",
-                "Rentabilidad de cada ano",
+                "Rentabilidad de cada año",
             )
             + "</div>"
         )
@@ -551,7 +551,7 @@ def a_html(informe: Informe, titulo: str = "Estrategia mixta") -> str:
             _tabla(
                 datos,
                 {
-                    "ano": ("Ano", _f_ano),
+                    "ano": ("Año", _f_ano),
                     "rentabilidad": ("Rentabilidad", _f_pct_signo),
                     "drawdown_maximo": ("Drawdown", _f_pct),
                     "n_operaciones": ("Operaciones", _f_entero),
@@ -618,7 +618,7 @@ def a_html(informe: Informe, titulo: str = "Estrategia mixta") -> str:
                 f'<div class="dato"><span class="etq">{_e(e)}</span>'
                 f'<span class="val">{_e(v)}</span></div>'
                 for e, v in (
-                    ("Riesgo teorico", _pct(u.riesgo_teorico_medio, signo=False)),
+                    ("Riesgo teórico", _pct(u.riesgo_teorico_medio, signo=False)),
                     ("Riesgo efectivo", _pct(u.riesgo_efectivo_medio, signo=False)),
                     ("Topadas por peso", _pct(u.pct_limitadas_por_peso, signo=False)),
                 )
@@ -627,17 +627,17 @@ def a_html(informe: Informe, titulo: str = "Estrategia mixta") -> str:
         )
         if u.pct_limitadas_por_peso > 0.5:
             partes.append(
-                "<p>En la mayoria de las ordenes manda <code>cartera.peso_maximo</code>, "
+                "<p>En la mayoria de las órdenes manda <code>cartera.peso_maximo</code>, "
                 "no <code>riesgo.por_operacion</code>. Si la sensibilidad de ese "
-                "segundo parametro sale plana, no es que la estrategia sea robusta: "
-                "es que el parametro no estaba actuando.</p>"
+                "segundo parámetro sale plana, no es que la estrategia sea robusta: "
+                "es que el parámetro no estaba actuando.</p>"
             )
 
     if not informe.rechazos_top.empty:
         partes.append("<h2>Candidatas del top 3 que se quedaron fuera</h2>")
         partes.append(
-            '<p class="sub">Contesta a por que no se compro la mejor de la semana, '
-            "y deja ver si un limite de cartera esta costando dinero de forma "
+            '<p class="sub">Contesta a por qué no se compró la mejor de la semana, '
+            "y deja ver si un límite de cartera está costando dinero de forma "
             "sistematica.</p>"
         )
         partes.append(
@@ -669,8 +669,8 @@ def a_html(informe: Informe, titulo: str = "Estrategia mixta") -> str:
         f'<div class="pie">Generado el {date.today().isoformat()} · '
         f"Capital inicial {_e(_eur(float(meta['capital_inicial'])))} · "
         f"Divisa base {_e(meta['divisa_base'])}<br>"
-        "La especificacion de la estrategia y el codigo que produce esta pagina "
-        "estan en el repositorio del proyecto.</div>"
+        "La especificación de la estrategia y el código que produce esta página "
+        "están en el repositorio del proyecto.</div>"
     )
 
     return (

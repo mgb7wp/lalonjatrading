@@ -214,9 +214,11 @@ def cmd_foto(args, cfg) -> None:
     import shutil
     import tempfile
 
+    # La carpeta se crea antes del temporal: en una copia recien clonada
+    # `datos/` no existe, y `mkdtemp` dentro de ella fallaba.
+    DIR_FOTOS.mkdir(parents=True, exist_ok=True)
     temporal = Path(tempfile.mkdtemp(prefix="foto-", dir=str(DIR_FOTOS.parent)))
     try:
-        DIR_FOTOS.mkdir(parents=True, exist_ok=True)
         inst.guardar(temporal)
         if destino.is_dir():
             shutil.rmtree(destino)
@@ -261,21 +263,26 @@ def cmd_senales(args, cfg) -> None:
     inicio = fin - timedelta(days=int(3 * 365.25))
     r = backtest_mod.ejecutar(inst, cfg, max(inicio, inst.rango_precios[0]), fin)
     ev = r.eventos_df
-    if ev.empty:
-        print("No hay eventos en el periodo.")
+    reparto = ev[ev["tipo"].isin(["orden", "rechazo"])] if not ev.empty else ev
+    if reparto.empty:
+        print("No hay ninguna revision con candidatas en el periodo.")
         return
-    ordenes = ev[ev["tipo"] == "orden"]
+    # La fecha de la ultima revision es la de su reparto, que anota a la vez
+    # las ordenes y los rechazos. Antes los rechazos se filtraban por la fecha
+    # del ultimo evento de cualquier tipo (una venta del martes, por ejemplo),
+    # y `--detalle` casi nunca ensenaba nada.
+    ultima = reparto["fecha"].max()
+    ordenes = reparto[(reparto["tipo"] == "orden") & (reparto["fecha"] == ultima)]
     if ordenes.empty:
-        print("La ultima revision no genero ordenes.")
+        print(f"La revision del {ultima} no genero ordenes.")
     else:
-        ultima = ordenes["fecha"].max()
         print(f"Ordenes de la revision del {ultima}:\n")
-        print(ordenes[ordenes["fecha"] == ultima].to_string(index=False))
+        print(ordenes.to_string(index=False))
 
-    rech = ev[(ev["tipo"] == "rechazo") & (ev["fecha"] == ev["fecha"].max())]
+    rech = reparto[(reparto["tipo"] == "rechazo") & (reparto["fecha"] == ultima)]
     if not rech.empty and args.detalle:
-        print("\nRechazos de esa fecha:\n")
-        print(rech.to_string(index=False))
+        print("\nRechazos de esa revision:\n")
+        print(rech.dropna(axis=1, how="all").to_string(index=False))
 
 
 def cmd_diagnostico(args, cfg) -> None:

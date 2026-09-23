@@ -380,7 +380,7 @@ def test_el_informe_marca_los_datos_sinteticos(cfg, instantanea):
     assert inf.sintetico
     from estrategia.informe import a_markdown
 
-    assert "DATOS SINTETICOS" in a_markdown(inf)
+    assert "DATOS SINTÉTICOS" in a_markdown(inf)
 
 
 # --------------------------------------------------------------------------

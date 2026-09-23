@@ -299,6 +299,11 @@ reexpresiones no son neutras. Cada fila lleva `origen_pit` (`capturado` o
 `reconstruido`) y el informe publica el porcentaje reconstruido, que en un
 backtest de la version 1 es practicamente el 100%.
 
+**Una venta programada sin precio ese dia se aplaza a la siguiente sesion** del
+mercado (v0.4.9), y queda anotada como `venta_aplazada`. La decision de vender
+sigue en pie; antes se perdia sin rastro y la posicion seguia abierta hasta que
+saltara el stop.
+
 **Cierre forzoso tras `sesiones_sin_datos_cierre_forzoso` sesiones sin precio.**
 Arrastrar el ultimo cierre indefinidamente falsea el resultado.
 

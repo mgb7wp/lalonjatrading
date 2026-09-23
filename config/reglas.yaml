@@ -12,6 +12,10 @@ cartera:
   max_por_sector: 3
   max_por_mercado: 3           # evita concentrar riesgo cambiario/liquidez en un solo país
   peso_maximo: 0.15
+  # AÑADIDO v0.4.9: al decidir, cada compra reserva su nominal más este margen
+  # (y la comisión fija) para cubrir la comisión porcentual y el deslizamiento,
+  # que solo se conocen en la apertura.
+  margen_reserva_pct: 0.01
 
 universo:
   mercados:
@@ -71,6 +75,10 @@ datos:
   # cambio de cada divisa no puede tener más días que estos, y los tramos del
   # histórico sin cotización más largos se avisan.
   fx_antiguedad_maxima_dias: 7
+  # AÑADIDO v0.4.9: si el último precio de un valor o de un índice es más
+  # viejo que esto el día de decidir, no se decide sobre él (el valor no da
+  # señal y el régimen de ese mercado se apaga).
+  dias_maximos_sin_precio: 10
 
 fundamental:
   minimos:
@@ -119,6 +127,11 @@ tecnico:
   momentum_meses: 12
   momentum_excluir_meses: 1
   atr_periodo: 14
+  # AÑADIDO v0.4.9: "media de 200 sesiones" son 200 sesiones de verdad. Esas
+  # sesiones tienen que caber en sesiones x factor + días naturales; si no, la
+  # serie tiene demasiados agujeros y no hay historial suficiente.
+  holgura_historial_factor: 1.5
+  holgura_historial_dias: 30
 
 seleccion:
   pesos:
@@ -161,15 +174,22 @@ panel:
 metricas:
   tasa_libre_riesgo_anual: 0.0
   periodicidad_sharpe: semanal
+  # AÑADIDO v0.4.9: el informe avisa del tramo inicial sin operaciones (sin
+  # datos fundamentales con que decidir) si ocupa al menos esta fracción.
+  fraccion_periodo_muerto_aviso: 0.10
 
 validacion:
   fraccion_diseno: 0.70
   # AÑADIDO v0.4.8: la fecha de corte entre diseño y validación queda fija.
   # Con la fracción sola, el corte avanzaba cada semana con los datos nuevos
-  # y lo que ayer era validación pasaba a ser diseño. Esta fecha con 8 años de datos descargados en septiembre de 2026 deja un
-  # 70 % del histórico (fraccion_diseno) para el diseño.
+  # y lo que ayer era validación pasaba a ser diseño. Esta fecha, con 8 años
+  # de datos descargados en septiembre de 2026, deja un 70 % del histórico
+  # (fraccion_diseno) para el diseño.
   # No se mueve: si hubiera que moverla, va al registro de cambios.
   fecha_corte: 2024-05-01
   sensibilidad_pct: 0.25
   min_operaciones: 100
   min_operaciones_por_mercado: 15
+  # AÑADIDO v0.4.9: a partir de estas consultas al periodo de validación, el
+  # aviso del informe pasa a importante.
+  consultas_para_alarma: 3

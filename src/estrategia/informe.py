@@ -71,19 +71,19 @@ def _avisos_permanentes() -> list[Aviso]:
     return [
         Aviso(
             "repatriacion",
-            "La rentabilidad en divisa base supone que la conversion y la salida "
+            "La rentabilidad en divisa base supone que la conversión y la salida "
             "de capital fueron siempre posibles al tipo de cambio de mercado. En "
             "algunos mercados emergentes eso no ha sido cierto historicamente: "
-            "ha habido controles de cambio y limites a la repatriacion en "
-            "momentos de estres, justo cuando mas habria importado.",
+            "ha habido controles de cambio y límites a la repatriación en "
+            "momentos de estrés, justo cuando más habría importado.",
             permanente=True,
         ),
         Aviso(
             "dividendos_brutos",
             "Los precios ajustados reinvierten los dividendos BRUTOS. Un inversor "
-            "en euros paga retencion en origen por los dividendos de EE. UU., "
-            "India y Brasil, que esta app no modela. La rentabilidad real seria "
-            "algo menor que la que aparece aqui.",
+            "en euros paga retención en origen por los dividendos de EE. UU., "
+            "India y Brasil, que esta app no modela. La rentabilidad real sería "
+            "algo menor que la que aparece aquí.",
             permanente=True,
         ),
     ]
@@ -117,11 +117,15 @@ def construir(
         avisos.append(
             Aviso(
                 "consultas_validacion",
-                f"El periodo de validacion se ha consultado {consultas_validacion} "
-                f"veces. Cada consulta lo acerca un poco mas a ser un periodo de "
-                f"diseno mas: si el numero es alto, lo que salga de ahi ya no es "
+                f"El periodo de validación se ha consultado {consultas_validacion} "
+                f"veces. Cada consulta lo acerca un poco más a ser un periodo de "
+                f"diseño más: si el número es alto, lo que salga de ahí ya no es "
                 f"una prueba independiente.",
-                gravedad="importante" if consultas_validacion > 3 else "aviso",
+                gravedad=(
+                    "importante"
+                    if consultas_validacion > cfg.reglas.validacion.consultas_para_alarma
+                    else "aviso"
+                ),
             )
         )
 
@@ -160,10 +164,10 @@ def _avisos_de_datos(
     avisos.append(
         Aviso(
             "supervivencia",
-            "El universo esta formado por empresas que cotizan hoy, asi que las "
-            "que quebraron o dejaron de cotizar no aparecen y el resultado esta "
-            "sesgado al alza. Afecta mas a los mercados emergentes, donde las "
-            "exclusiones y los deslistados son mas frecuentes.",
+            "El universo está formado por empresas que cotizan hoy, así que las "
+            "que quebraron o dejaron de cotizar no aparecen y el resultado está "
+            "sesgado al alza. Afecta más a los mercados emergentes, donde las "
+            "exclusiones y los deslistados son más frecuentes.",
             gravedad="importante",
         )
     )
@@ -173,7 +177,7 @@ def _avisos_de_datos(
         avisos.append(
             Aviso(
                 "descarga_incompleta",
-                f"La ultima descarga no pudo traer: {', '.join(incompletos)}. Lo "
+                f"La última descarga no pudo traer: {', '.join(incompletos)}. Lo "
                 f"que haya de esos datos es de una descarga anterior, o no hay "
                 f"nada. Vuelve a ejecutar `estrategia datos` antes de fiarte de "
                 f"este informe.",
@@ -190,8 +194,8 @@ def _avisos_de_datos(
                 Aviso(
                     "fundamentales_reconstruidos",
                     f"El {pct:.0%} de los datos fundamentales es RECONSTRUIDO: no "
-                    f"se capturo en su momento, se ha deducido despues a partir de "
-                    f"las cifras actuales. Esas cifras estan reexpresadas, y las "
+                    f"se capturó en su momento, se ha deducido después a partir de "
+                    f"las cifras actuales. Esas cifras están reexpresadas, y las "
                     f"reexpresiones no son neutras. El comando `estrategia foto` "
                     f"existe para ir acumulando datos capturados de verdad.",
                     gravedad="importante",
@@ -204,12 +208,12 @@ def _avisos_de_datos(
             Aviso(
                 "historico_fundamental_corto",
                 f"El proveedor solo da unos {anos} ejercicios de fundamentales. "
-                f"Con eso, el crecimiento de ventas a tres anos tiene practicamente "
-                f"una sola observacion por empresa y apenas varia durante el "
+                f"Con eso, el crecimiento de ventas a tres años tiene prácticamente "
+                f"una sola observación por empresa y apenas varía durante el "
                 f"backtest: el filtro fundamental es casi estatico. Para validar "
                 f"el motor (calendarios, stops, costes, divisas) sobre un "
-                f"historico largo, pon `fundamental.activo: false` y usa solo la "
-                f"pata tecnica.",
+                f"histórico largo, pon `fundamental.activo: false` y usa solo la "
+                f"pata técnica.",
                 gravedad="importante",
             )
         )
@@ -223,7 +227,7 @@ def _avisos_de_datos(
                 "sectores_sin_mapear",
                 f"Sectores que el proveedor devuelve y el mapeo no conoce: "
                 f"{detalle}. Esos valores se han quedado FUERA del universo. "
-                f"Anadelos a `sectores` en config/implementacion.yaml.",
+                f"Añádelos a `sectores` en config/implementacion.yaml.",
             )
         )
 
@@ -231,9 +235,9 @@ def _avisos_de_datos(
         avisos.append(
             Aviso(
                 "impuesto_extrapolado",
-                "Alguna operacion ha usado una lista anual de impuesto de "
-                "transaccion de un ano distinto al de la operacion, porque no "
-                "habia lista de ese ejercicio. Revisa config/impuestos_transaccion.yaml.",
+                "Alguna operación ha usado una lista anual de impuesto de "
+                "transacción de un año distinto al de la operación, porque no "
+                "había lista de ese ejercicio. Revisa config/impuestos_transaccion.yaml.",
             )
         )
 
@@ -243,7 +247,7 @@ def _avisos_de_datos(
             Aviso(
                 "referencias_ausentes",
                 f"No se ha podido construir la curva de estas referencias: "
-                f"{sorted(faltan)}. La comparacion con el mercado esta incompleta.",
+                f"{sorted(faltan)}. La comparación con el mercado está incompleta.",
             )
         )
 
@@ -252,10 +256,10 @@ def _avisos_de_datos(
         avisos.append(
             Aviso(
                 "exposicion",
-                f"La exposicion media ha sido del {exposicion:.0%}: el resto del "
-                f"tiempo el capital estuvo en liquidez. Las referencias estan "
-                f"invertidas al 100% siempre, asi que comparar las curvas sin "
-                f"tener esto delante no es una comparacion justa.",
+                f"La exposición media ha sido del {exposicion:.0%}: el resto del "
+                f"tiempo el capital estuvo en liquidez. Las referencias están "
+                f"invertidas al 100% siempre, así que comparar las curvas sin "
+                f"tener esto delante no es una comparación justa.",
             )
         )
 
@@ -292,9 +296,9 @@ def _aviso_cohortes(eventos: pd.DataFrame, cfg: Config) -> list[Aviso]:
             f"mercado, porque su mercado tenia menos de "
             f"{cfg.reglas.fundamental.min_empresas_percentil} empresas con que "
             f"compararlas ({'; '.join(partes)}). Contra el bloque, la nota compara "
-            f"con empresas de otros paises de su mismo grupo (desarrollados o "
+            f"con empresas de otros países de su mismo grupo (desarrollados o "
             f"emergentes). Con cohorte insuficiente, ni el bloque llegaba al "
-            f"minimo y el percentil significa poco.",
+            f"mínimo y el percentil significa poco.",
             gravedad="importante" if insuficientes else "aviso",
         )
     ]
@@ -322,20 +326,20 @@ def _aviso_periodo_muerto(
         return []
 
     fraccion = dias_muertos / total
-    if fraccion < 0.10:
+    if fraccion < cfg.reglas.metricas.fraccion_periodo_muerto_aviso:
         return []
 
     return [
         Aviso(
             "periodo_muerto_inicial",
-            f"La primera operacion no llega hasta {primera}: el "
-            f"{fraccion:.0%} del periodo ({dias_muertos} dias) transcurrio sin "
+            f"La primera operación no llega hasta {primera}: el "
+            f"{fraccion:.0%} del periodo ({dias_muertos} días) transcurrió sin "
             f"que ninguna empresa pudiera pasar el filtro fundamental, porque el "
-            f"crecimiento de ventas a tres anos necesita CUATRO ejercicios "
+            f"crecimiento de ventas a tres años necesita CUATRO ejercicios "
             f"publicados y el cuarto tarda en llegar. Ese tramo entra en la "
             f"rentabilidad anualizada como si la estrategia hubiera elegido estar "
-            f"en liquidez, y no es eso: es que no habia datos con que decidir. "
-            f"Para medir el motor sobre todo el historico, usa "
+            f"en liquidez, y no es eso: es que no había datos con que decidir. "
+            f"Para medir el motor sobre todo el histórico, usa "
             f"`fundamental.activo: false`.",
             gravedad="importante",
         )
@@ -352,7 +356,7 @@ def _avisos_de_suficiencia(operaciones: pd.DataFrame, cfg: Config) -> list[Aviso
         avisos.append(
             Aviso(
                 "pocas_operaciones",
-                f"Solo hay {n} operaciones y el minimo para concluir algo es "
+                f"Solo hay {n} operaciones y el mínimo para concluir algo es "
                 f"{val.min_operaciones}. No hay base para afirmar nada sobre esta "
                 f"estrategia con esta muestra.",
                 gravedad="importante",
@@ -371,7 +375,7 @@ def _avisos_de_suficiencia(operaciones: pd.DataFrame, cfg: Config) -> list[Aviso
             avisos.append(
                 Aviso(
                     "pocas_operaciones_por_mercado",
-                    f"Mercados por debajo del minimo de "
+                    f"Mercados por debajo del mínimo de "
                     f"{val.min_operaciones_por_mercado} operaciones ({detalle}). "
                     f"El desglose por mercado de esos casos no dice nada.",
                     gravedad="importante",
@@ -411,9 +415,9 @@ def a_markdown(informe: Informe) -> str:
 
     if informe.sintetico:
         lineas += [
-            "# DATOS SINTETICOS - NO SON RESULTADOS REALES",
+            "# DATOS SINTÉTICOS - NO SON RESULTADOS REALES",
             "",
-            "Este informe se ha generado con el proveedor de datos sinteticos.",
+            "Este informe se ha generado con el proveedor de datos sintéticos.",
             "Sirve para comprobar que el motor funciona, no para decidir nada.",
             "",
         ]
@@ -422,7 +426,7 @@ def a_markdown(informe: Informe) -> str:
         "# Informe de la estrategia",
         "",
         f"Periodo: {informe.meta['inicio']} a {informe.meta['fin']} "
-        f"({r.anos:.1f} anos) | Origen de los datos: {informe.meta['origen']} "
+        f"({r.anos:.1f} años) | Origen de los datos: {informe.meta['origen']} "
         f"| Descarga: {informe.meta['fecha_descarga']}",
         f"Filtro fundamental: {'activo' if informe.meta['fundamental_activo'] else 'DESACTIVADO (solo pata tecnica)'}",
         "",
@@ -430,11 +434,11 @@ def a_markdown(informe: Informe) -> str:
         "",
         f"- Rentabilidad total: {r.rentabilidad_total:+.2%}",
         f"- Rentabilidad anualizada: {r.rentabilidad_anualizada:+.2%}",
-        f"- Drawdown maximo: {r.drawdown_maximo:.2%}",
+        f"- Drawdown máximo: {r.drawdown_maximo:.2%}",
         f"- Ratio de Sharpe ({r.periodicidad_sharpe}): {r.sharpe:.2f}",
         f"- Operaciones ganadoras: {r.pct_ganadoras:.1%}",
-        f"- Numero de operaciones: {r.n_operaciones}",
-        f"- Exposicion media: {r.exposicion_media:.1%}",
+        f"- Número de operaciones: {r.n_operaciones}",
+        f"- Exposición media: {r.exposicion_media:.1%}",
         "",
     ]
 
@@ -443,20 +447,20 @@ def a_markdown(informe: Informe) -> str:
         lineas += [
             "## Riesgo nominal frente a riesgo real",
             "",
-            f"- Riesgo teorico por operacion: {u.riesgo_teorico_medio:.2%}",
+            f"- Riesgo teórico por operación: {u.riesgo_teorico_medio:.2%}",
             f"- Riesgo efectivo medio: {u.riesgo_efectivo_medio:.2%}",
-            f"- Ordenes limitadas por `peso_maximo`: {u.pct_limitadas_por_peso:.0%}",
+            f"- Órdenes limitadas por `peso_maximo`: {u.pct_limitadas_por_peso:.0%}",
             "",
-            "Si el porcentaje de ordenes limitadas es alto, quien manda en el",
-            "tamano es `cartera.peso_maximo` y no `riesgo.por_operacion`. En ese",
+            "Si el porcentaje de órdenes limitadas es alto, quien manda en el",
+            "tamaño es `cartera.peso_maximo` y no `riesgo.por_operacion`. En ese",
             "caso, que la sensibilidad de `riesgo.por_operacion` salga plana no",
-            "significa que la estrategia sea robusta, sino que ese parametro no",
+            "significa que la estrategia sea robusta, sino que ese parámetro no",
             "estaba actuando.",
             "",
         ]
 
     for titulo, tabla in (
-        ("Por ano", informe.por_ano),
+        ("Por año", informe.por_ano),
         ("Por mercado", informe.por_mercado),
         ("Por bloque", informe.por_bloque),
     ):

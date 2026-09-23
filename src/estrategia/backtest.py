@@ -189,6 +189,19 @@ def ejecutar(
                     continue
                 sesion = vista.precio_en(ticker, dia)
                 if sesion is None:
+                    # Sin precio hoy no se puede vender a la apertura, pero la
+                    # decision sigue en pie: se pasa a la siguiente sesion del
+                    # mercado. Antes se perdia sin rastro y la posicion se
+                    # quedaba abierta hasta que saltara el stop.
+                    siguiente = cal.sesion_siguiente(mercado_id, dia)
+                    if siguiente is not None and siguiente <= fin:
+                        pendientes_venta.setdefault(
+                            f"{mercado_id}|{siguiente.isoformat()}", []
+                        ).append((ticker, motivo))
+                    eventos.append(
+                        Evento(dia, "venta_aplazada", mercado_id, ticker, str(motivo),
+                               {"a": str(siguiente) if siguiente else ""})
+                    )
                     continue
                 ext = _cerrar(
                     cartera, ticker, dia, float(sesion["apertura"]), vista, cfg,
@@ -415,10 +428,10 @@ def _revisar(
             divisa, dia, cfg.reglas.datos.fx_decision_dia_anterior,
             cfg.reglas.cartera.divisa_base,
         )
-    except Exception:
+    except ErrorDatos as exc:
         # Sin cambio no se puede dimensionar: sus candidatas se rechazan al
-        # repartir con `sin_precio_ejecucion`, y queda constancia.
-        pass
+        # repartir con `sin_precio_ejecucion`. Se anota por que.
+        eventos.append(Evento(dia, "sin_tipo_de_cambio", mercado_id, motivo=str(exc)))
 
     ronda.decision[mercado_id] = dia
     ronda.ejecucion[mercado_id] = fecha_ejecucion
@@ -613,7 +626,9 @@ def _precios_base(cartera: Cartera, vista, cfg: Config, dia: date) -> dict[str, 
             continue
         try:
             cambio = vista.fx(pos.divisa, dia, cfg.reglas.cartera.divisa_base)
-        except Exception:
+        except ErrorDatos:
+            # Sin cambio de ese dia se valora con el de la entrada. Solo pasa
+            # si faltan datos de divisas, y la descarga ya lo avisa (B6).
             cambio = pos.fx_entrada
         salida[ticker] = float(serie.cierre[i]) * cambio
     return salida

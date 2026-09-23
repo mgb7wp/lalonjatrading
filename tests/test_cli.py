@@ -154,6 +154,6 @@ def test_un_informe_sintetico_no_llega_al_sitio(carpetas, config_sintetica):
     resultados = carpetas / "datos" / "resultados"
     html = list(resultados.glob("informe_sintetico_*.html"))
     assert len(html) == 1
-    assert "DATOS SINTETICOS" in html[0].read_text(encoding="utf-8")
+    assert "DATOS SINTÉTICOS" in html[0].read_text(encoding="utf-8")
     assert list(resultados.glob("informe_sintetico_*.md"))
     assert (resultados / "curva_sintetico.parquet").is_file()

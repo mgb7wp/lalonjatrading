@@ -16,93 +16,10 @@ from __future__ import annotations
 from datetime import date, timedelta
 
 import numpy as np
-import pandas as pd
 
 from .config import Config
-from .constantes import MESES_POR_ANO
 from .datos.almacen import VistaPuntual
 from .tipos import SenalTecnica
-
-
-def media_movil(cierres: np.ndarray, ventana: int) -> float | None:
-    """Media simple de las ultimas `ventana` sesiones."""
-    if len(cierres) < ventana:
-        return None
-    return float(np.mean(cierres[-ventana:]))
-
-
-def atr_wilder(
-    maximos: np.ndarray, minimos: np.ndarray, cierres: np.ndarray, periodo: int
-) -> float | None:
-    """ATR con el suavizado de Wilder, que es el ATR de toda la vida.
-
-    Se siembra con la media simple de los primeros `periodo` rangos verdaderos
-    y a partir de ahi se suaviza. Una media simple movil del rango verdadero da
-    un numero parecido pero no igual, y el stop depende de esto, asi que la
-    definicion se fija y se comprueba contra un caso conocido.
-    """
-    n = len(cierres)
-    if n < periodo + 1:
-        return None
-
-    cierre_previo = cierres[:-1]
-    rango = np.maximum(
-        maximos[1:] - minimos[1:],
-        np.maximum(
-            np.abs(maximos[1:] - cierre_previo), np.abs(minimos[1:] - cierre_previo)
-        ),
-    )
-    if len(rango) < periodo:
-        return None
-
-    atr = float(np.mean(rango[:periodo]))
-    for tr in rango[periodo:]:
-        atr = (atr * (periodo - 1) + float(tr)) / periodo
-    return atr
-
-
-def momentum_12_1(
-    precios: pd.DataFrame, fecha: date, meses: int, excluir_meses: int
-) -> float | None:
-    """Rentabilidad de los ultimos `meses` sin contar los `excluir_meses` mas recientes.
-
-    Se salta el mes mas cercano porque a muy corto plazo el momentum tiende a
-    darse la vuelta, y ese efecto ensucia la senal de medio plazo que se busca.
-
-    Los extremos se resuelven "a la fecha": se toma el ultimo cierre disponible
-    en o antes del dia objetivo, de modo que un festivo no invalide el calculo.
-    """
-    if precios.empty:
-        return None
-
-    fin = _desplazar_meses(fecha, -excluir_meses)
-    inicio = _desplazar_meses(fecha, -meses)
-
-    p_fin = _cierre_a_fecha(precios, fin)
-    p_ini = _cierre_a_fecha(precios, inicio)
-    if p_fin is None or p_ini is None or p_ini <= 0:
-        return None
-    return p_fin / p_ini - 1.0
-
-
-def _desplazar_meses(f: date, meses: int) -> date:
-    total = f.year * MESES_POR_ANO + (f.month - 1) + meses
-    ano, mes = divmod(total, MESES_POR_ANO)
-    dia = min(f.day, _dias_del_mes(ano, mes + 1))
-    return date(ano, mes + 1, dia)
-
-
-def _dias_del_mes(ano: int, mes: int) -> int:
-    import calendar
-
-    return calendar.monthrange(ano, mes)[1]
-
-
-def _cierre_a_fecha(precios: pd.DataFrame, objetivo: date) -> float | None:
-    previos = precios[precios["fecha"] <= objetivo]
-    if previos.empty:
-        return None
-    return float(previos.iloc[-1]["cierre"])
 
 
 def senal(
@@ -128,7 +45,7 @@ def senal(
 
     # Si el ultimo dato es muy anterior a la fecha de decision, el valor ha
     # dejado de cotizar o le faltan datos; no se decide sobre eso.
-    if serie.fechas[i] < fecha - timedelta(days=10):
+    if serie.fechas[i] < fecha - timedelta(days=cfg.reglas.datos.dias_maximos_sin_precio):
         return None
 
     atr = _o_none(serie.atr[i])
@@ -142,7 +59,7 @@ def senal(
         m_larga is not None
         and atr is not None
         and mom is not None
-        and _sesiones_recientes(serie, i, fecha, tec.media_larga)
+        and _sesiones_recientes(serie, i, fecha, tec.media_larga, cfg)
     )
 
     return SenalTecnica(
@@ -163,15 +80,20 @@ def _o_none(v) -> float | None:
     return None if np.isnan(f) else f
 
 
-def _sesiones_recientes(serie, i: int, fecha: date, necesarias: int) -> bool:
+def _sesiones_recientes(
+    serie, i: int, fecha: date, necesarias: int, cfg: Config
+) -> bool:
     """Que las `necesarias` sesiones esten dentro de una ventana razonable.
 
-    Se admite hasta un 50% mas de dias naturales que de sesiones exigidas, lo
-    que da holgura para festivos sin dejar pasar series llenas de agujeros.
+    Se admiten `holgura_historial_factor` veces mas dias naturales que sesiones
+    exigidas, mas `holgura_historial_dias`: holgura para festivos sin dejar
+    pasar series llenas de agujeros.
     """
     if i + 1 < necesarias:
         return False
-    limite = fecha - timedelta(days=int(necesarias * 1.5) + 30)
+    tec = cfg.reglas.tecnico
+    dias = int(necesarias * tec.holgura_historial_factor) + tec.holgura_historial_dias
+    limite = fecha - timedelta(days=dias)
     return bool(serie.fechas[i + 1 - necesarias] >= limite)
 
 
@@ -192,7 +114,8 @@ def regimen_por_mercado(
             salida[mercado_id] = False
             continue
         i = vista.posicion_hasta(ticker_indice)
-        if i < 0 or serie.fechas[i] < fecha - timedelta(days=10):
+        maximo = timedelta(days=cfg.reglas.datos.dias_maximos_sin_precio)
+        if i < 0 or serie.fechas[i] < fecha - maximo:
             salida[mercado_id] = False
             continue
         media = _o_none(serie.ma_regimen[i])
