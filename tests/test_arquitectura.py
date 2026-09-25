@@ -62,7 +62,7 @@ def test_el_nucleo_se_importa_sin_base_de_datos():
     import estrategia.fundamental  # noqa: F401
     import estrategia.indicadores  # noqa: F401
 
-    cfg = config_mod.cargar()
+    cfg = config_mod.cargar(config_mod.DIR_CONFIG_POR_DEFECTO)
     assert cfg.reglas.universo.mercados
 
 

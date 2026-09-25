@@ -69,6 +69,9 @@ def main(argv: list[str] | None = None) -> int:
     cfg = core_config.cargar()
     if args.proveedor:
         cfg = cfg.con_fuente_unica(args.proveedor)
+    # A mano no se sabe si los mercados han cerrado, asi que la sesion de hoy
+    # se aparta (lo que hace el enrutador por defecto). La tarea programada de
+    # cada mercado, que si corre tras su cierre, la recoge esa misma tarde.
     enrutador = Enrutador(cfg)
 
     faltan = enrutador.comprobar_disponibilidad()

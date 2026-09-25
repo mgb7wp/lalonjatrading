@@ -124,7 +124,10 @@ def asignar(
 
         # Se reserva con un margen para comision y deslizamiento; el importe
         # exacto se conocera en la apertura y puede variar.
-        reserva = tamano.nominal_base * 1.01 + cfg.reglas.costes.comision_fija_eur
+        reserva = (
+            tamano.nominal_base * (1.0 + reglas.margen_reserva_pct)
+            + cfg.reglas.costes.comision_fija_eur
+        )
         if reserva > efectivo:
             rechazar(MotivoRechazo.EFECTIVO_INSUFICIENTE)
             continue
@@ -143,6 +146,8 @@ def asignar(
                 riesgo_teorico_pct=tamano.riesgo_teorico_pct,
                 riesgo_efectivo_pct=tamano.riesgo_efectivo_pct,
                 limitada_por_peso_maximo=tamano.limitada_por_peso_maximo,
+                cohorte_usada=cand.cohorte_usada,
+                n_cohorte=cand.n_cohorte,
             )
         )
         n_posiciones += 1

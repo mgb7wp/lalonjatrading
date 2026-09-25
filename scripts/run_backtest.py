@@ -67,6 +67,7 @@ def main(argv: list[str] | None = None) -> int:
         '"operacion":"%(name)s","mensaje":"%(message)s"}',
     )
 
+    import estrategia
     from estrategia import backtest as backtest_mod
     from estrategia import config as core_config
     from estrategia import validacion as validacion_mod
@@ -142,6 +143,10 @@ def main(argv: list[str] | None = None) -> int:
                 "modelo": args.modelo,
                 "reglas": cfg.reglas.model_dump(mode="json"),
                 "pesos": modelo.parameters or {},
+                # La version del motor tambien define el experimento: con los
+                # mismos parametros, un motor corregido da otros numeros, y sin
+                # esto el backtest nuevo sobrescribiria las metricas del viejo.
+                "motor": estrategia.__version__,
             },
             metrics=informe.resumen.como_dict(),
         )
@@ -152,11 +157,13 @@ def main(argv: list[str] | None = None) -> int:
             f"experimento #{id_} ({'nuevo' if nuevo else 'repetido'}). "
             f"Distintos hasta ahora: {recuento}"
         )
-        if recuento.get("validacion", 0) > 3:
+        # `completo` incluye el periodo de validacion: tambien lo gasta.
+        usados = recuento.get("validacion", 0) + recuento.get("completo", 0)
+        if usados > cfg.reglas.validacion.consultas_para_alarma:
             print(
-                f"AVISO: el periodo de validacion se ha usado en "
-                f"{recuento['validacion']} experimentos distintos. Cada uno lo "
-                f"acerca mas a ser un segundo periodo de diseno."
+                f"AVISO: el periodo de validacion se ha usado en {usados} "
+                f"experimentos distintos. Cada uno lo acerca mas a ser un "
+                f"segundo periodo de diseno."
             )
     return 0
 

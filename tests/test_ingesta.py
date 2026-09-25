@@ -760,13 +760,13 @@ def test_el_capex_excluye_las_ventas_de_inmovilizado():
     assert PATRON_CAPEX.search(venta) and PATRON_NO_CAPEX.search(venta)
 
 
-def test_el_mapeo_de_empresas_cubre_el_universo_brasileno(cfg):
+def test_el_mapeo_de_empresas_cubre_el_universo_brasileno(cfg_real):
     """Un ticker sin CNPJ no se puede analizar; dos con el mismo, peor."""
     import yaml
 
-    ruta = cfg.dir_config / "cvm_empresas.yaml"
+    ruta = cfg_real.dir_config / "cvm_empresas.yaml"
     empresas = yaml.safe_load(ruta.read_text(encoding="utf-8"))["empresas"]
-    tickers = set(cfg.universo.tickers("br"))
+    tickers = set(cfg_real.universo.tickers("br"))
 
     assert tickers == set(empresas), f"descuadre: {tickers ^ set(empresas)}"
     cnpjs = [v["cnpj"] for v in empresas.values()]
@@ -788,14 +788,14 @@ def test_la_cvm_declara_que_sus_cifras_no_estan_reexpresadas(cfg):
 # ---------------------------------------------------------------------------
 
 
-def test_cada_mercado_pide_los_fundamentales_a_su_fuente(cfg):
+def test_cada_mercado_pide_los_fundamentales_a_su_fuente(cfg_real):
     """Las fuentes con fecha de publicacion real son nacionales.
 
     La SEC solo cubre EE. UU. y la CVM solo Brasil, asi que elegir una sola
     fuente para todo el universo seria elegir que mercado se queda sin
     point-in-time.
     """
-    reparto = cfg.reglas.proveedor_datos
+    reparto = cfg_real.reglas.proveedor_datos
     assert reparto.fuente_de("fundamentales", "us") == "sec"
     assert reparto.fuente_de("fundamentales", "br") == "cvm"
     # Lo que no esta en el reparto cae en la fuente general.
@@ -803,7 +803,7 @@ def test_cada_mercado_pide_los_fundamentales_a_su_fuente(cfg):
     assert reparto.fuente_de("fundamentales", None) == "yfinance"
 
 
-def test_la_calidad_fundamental_no_es_un_si_o_no(cfg):
+def test_la_calidad_fundamental_no_es_un_si_o_no(cfg_real):
     """yfinance devuelve fundamentales de los cinco mercados.
 
     Un "disponible: si/no" diria que si en todos y seria inutil. Lo que cambia
@@ -813,7 +813,7 @@ def test_la_calidad_fundamental_no_es_un_si_o_no(cfg):
     """
     from estrategia.datos.enrutador import Enrutador
 
-    e = Enrutador(cfg, verificar=False)
+    e = Enrutador(cfg_real, verificar=False)
     for mercado in ("us", "br"):
         q = e.calidad_fundamental(mercado)
         assert q.nivel == "completa", f"{mercado}: {q.motivo}"
@@ -920,16 +920,16 @@ def test_una_columna_vacia_solo_es_sospechosa_en_un_lote_grande():
     assert not contrato.verificar_fundamentales(muchos, "sec", magnitudes).cumple
 
 
-def test_un_valor_dado_de_baja_no_se_descarga_pero_no_se_borra(cfg):
+def test_un_valor_dado_de_baja_no_se_descarga_pero_no_se_borra(cfg_real):
     """Borrar la fila deja un universo que finge que la empresa nunca existio.
 
     Eso es sesgo de supervivencia metido a mano. Se marca la baja con su motivo
     y su sucesor, y se excluye de las descargas —pedir a diario cinco valores
     que ya no existen garantiza cinco errores por ejecucion que nadie mira—.
     """
-    activos = cfg.universo.tickers("br")
-    todos = cfg.universo.tickers("br", incluir_inactivos=True)
-    bajas = {v.ticker: v for v in cfg.universo.inactivos()}
+    activos = cfg_real.universo.tickers("br")
+    todos = cfg_real.universo.tickers("br", incluir_inactivos=True)
+    bajas = {v.ticker: v for v in cfg_real.universo.inactivos()}
 
     assert set(todos) - set(activos) == set(bajas)
     assert bajas, "el universo brasileno tiene bajas verificadas"
@@ -938,7 +938,7 @@ def test_un_valor_dado_de_baja_no_se_descarga_pero_no_se_borra(cfg):
         assert valor.sucesor, f"{valor.ticker} sin sucesor anotado"
 
 
-def test_las_bajas_verificadas_son_fusiones_y_traslados(cfg):
+def test_las_bajas_verificadas_son_fusiones_y_traslados(cfg_real):
     """No son renombres, y la diferencia importa.
 
     Un renombre es la misma empresa con otro ticker: se actualiza y ya. Una
@@ -946,11 +946,11 @@ def test_las_bajas_verificadas_son_fusiones_y_traslados(cfg):
     precio de MBRF3 mezclaria dos. Un traslado a NYSE deja en B3 un BDR, que es
     otro instrumento, no la accion.
     """
-    bajas = {v.ticker: v for v in cfg.universo.inactivos()}
+    bajas = {v.ticker: v for v in cfg_real.universo.inactivos()}
     assert "BRFS3.SA" in bajas and bajas["BRFS3.SA"].sucesor == "MBRF3.SA"
     assert "JBSS3.SA" in bajas and "BDR" in bajas["JBSS3.SA"].motivo_baja
     # Los renombres SI se aplicaron sobre el propio ticker.
-    activos = set(cfg.universo.tickers("br"))
+    activos = set(cfg_real.universo.tickers("br"))
     assert "AXIA3.SA" in activos and "ELET3.SA" not in activos
     assert "CPLE3.SA" in activos and "CPLE6.SA" not in activos
 

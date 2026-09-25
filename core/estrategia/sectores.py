@@ -37,19 +37,38 @@ class MapaSectores:
         self._cfg = cfg
         self._excluidos = set(cfg.reglas.universo.excluir_sectores)
         self._sin_mapear: dict[str, set[str]] = {}
+        #: Las categorias del documento (`tecnologia`, `electricas`...). Un
+        #: sector que YA es una de ellas no necesita traduccion: es lo que llega
+        #: cuando el backtest corre desde la base de datos de la plataforma, que
+        #: guarda en `security.sector` la categoria y no la etiqueta del
+        #: proveedor. Sin esto, cada valor salia como sector desconocido y se
+        #: rechazaba, y el backtest desde la base no abria ni una posicion.
+        self._categorias = set(cfg.implementacion.sectores.values())
 
     def clasificar(self, ticker: str, sector_proveedor: str | None) -> Clasificacion:
         """Clasifica un valor a partir del sector que da el proveedor.
 
-        Si el proveedor no devuelve sector se recurre al `sector_declarado` de
-        `universo.yaml`, que existe justo para eso; si tampoco lo hay, el valor
-        se rechaza en lugar de pasar sin clasificar.
+        Dos casos distintos, que antes se trataban igual:
+
+        - El proveedor NO devuelve sector: se recurre al `sector_declarado` de
+          `universo.yaml`, que existe justo para eso.
+        - El proveedor devuelve un sector que el mapeo NO conoce: se rechaza, y
+          el diagnostico imprime la linea que hay que anadir a
+          `implementacion.yaml`. Recurrir aqui al `sector_declarado` dejaba que
+          una etiqueta nueva del proveedor —que podria ser la de un banco— se
+          tapara con lo que alguien escribio a mano, sin que nadie revisara la
+          traduccion.
         """
-        sector = self._cfg.implementacion.sector(sector_proveedor)
+        if sector_proveedor and sector_proveedor.strip() in self._categorias:
+            sector = sector_proveedor.strip()
+        else:
+            sector = self._cfg.implementacion.sector(sector_proveedor)
+
+        if sector == SECTOR_DESCONOCIDO and sector_proveedor:
+            self._sin_mapear.setdefault(sector_proveedor, set()).add(ticker)
+            return Clasificacion(sector, False, MotivoRechazo.SECTOR_DESCONOCIDO)
 
         if sector == SECTOR_DESCONOCIDO:
-            if sector_proveedor:
-                self._sin_mapear.setdefault(sector_proveedor, set()).add(ticker)
             valor = self._cfg.universo.valores_por_ticker.get(ticker)
             if valor is not None:
                 sector = valor.sector_declarado

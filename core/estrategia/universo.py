@@ -22,6 +22,7 @@ import numpy as np
 
 from .config import Config
 from .datos.almacen import VistaPuntual
+from .errores import ErrorDatos
 from .sectores import MapaSectores
 from .tipos import MotivoRechazo
 
@@ -63,13 +64,21 @@ def volumen_medio_base(
     # el resultado menos que el ruido del propio umbral.
     try:
         cambio = vista.fx(divisa, fecha, cfg.reglas.cartera.divisa_base)
-    except Exception:
+    except ErrorDatos:
+        # Sin cambio no se puede medir la liquidez en divisa base: el valor no
+        # entra. Solo errores de datos; uno de anticipacion tiene que saltar.
         return 0.0
 
     importes = serie.cierre_bruto[desde : i + 1] * serie.volumen[desde : i + 1]
     if importes.size == 0:
         return 0.0
-    return float(np.mean(importes) * cambio)
+    # Una sesion sin volumen cuenta como una sesion sin negociacion, no se
+    # ignora: con la media de NumPy, un solo hueco volvia NaN todo el promedio,
+    # y como `NaN < minimo` es falso, el valor pasaba el filtro de liquidez sin
+    # que se supiera cuanto se negociaba.
+    importes = np.nan_to_num(importes, nan=0.0)
+    medio = float(np.mean(importes) * cambio)
+    return medio if np.isfinite(medio) else 0.0
 
 
 def evaluar(

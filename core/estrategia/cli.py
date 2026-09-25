@@ -18,6 +18,8 @@ import sys
 from datetime import date, timedelta
 from pathlib import Path
 
+import pandas as pd
+
 from . import backtest as backtest_mod
 from . import config as config_mod
 from . import diagnostico as diagnostico_mod
@@ -43,15 +45,40 @@ RUTA_CONSULTAS = DIR_DATOS / "consultas_validacion.json"
 def _enrutador(cfg, forzar: str | None = None) -> Enrutador:
     """El enrutador de fuentes, con la opcion de forzar una sola desde el CLI.
 
-    `--proveedor` sigue existiendo porque es comodo para los tests y para
-    trabajar sin red, pero el reparto normal vive en `reglas.yaml`.
+    Sin `--proveedor` manda el reparto de `reglas.yaml`. La opcion sigue
+    existiendo porque es comoda para los tests y para trabajar sin red, pero
+    tiene que pedirse a proposito: un valor por defecto que forzara una fuente
+    haria inalcanzable el reparto y, si esa fuente fuera la sintetica, daria
+    datos inventados a quien cree estar trabajando con los reales.
     """
     if forzar:
         cfg = cfg.con_fuente_unica(forzar)
     return Enrutador(cfg)
 
 
+def _nombre_cache(args, cfg) -> str:
+    """Carpeta de `datos/cache/` que corresponde a esta ejecucion.
+
+    Es el origen de los datos (`yfinance`, `eodhd+yfinance`, `sintetico`...), el
+    mismo que queda anotado en la instantanea. Asi `datos` escribe justo donde
+    luego leen los demas comandos y el panel, que ofrece una opcion por carpeta.
+    """
+    return _enrutador(cfg, args.proveedor).origen
+
+
+def _opcion_proveedor(args) -> str:
+    """Como repetir la opcion `--proveedor` en un mensaje, si se uso."""
+    return f"--proveedor {args.proveedor} " if args.proveedor else ""
+
+
 def _descargar(cfg, nombre_proveedor: str | None, inicio: date, fin: date) -> Instantanea:
+    """Descarga cada tipo de dato por separado.
+
+    Un tipo que falla no arrastra a los demas: se anota en
+    `Instantanea.incompletos`, se deja vacio y quien guarde decide si conserva
+    el de la descarga anterior. Las filas que se han tenido que reparar o
+    apartar se imprimen como avisos.
+    """
     enrutador = _enrutador(cfg, nombre_proveedor)
 
     problemas = enrutador.comprobar_disponibilidad()
@@ -71,32 +98,69 @@ def _descargar(cfg, nombre_proveedor: str | None, inicio: date, fin: date) -> In
         | {r.divisa for r in cfg.implementacion.referencias.values()}
     )
 
-    print(f"Descargando precios de {len(tickers)} valores + indices y referencias...")
-    precios = enrutador.precios(tickers + indices + referencias, inicio, fin)
-    print(f"Descargando fundamentales de {len(tickers)} valores...")
-    fundamentales = enrutador.fundamentales(tickers, inicio, fin)
-    print("Descargando tipos de cambio...")
-    fx = enrutador.fx(divisas, inicio, fin)
-    print("Leyendo sectores...")
-    sectores = enrutador.sectores(tickers)
+    incompletos: list[str] = []
+
+    def paso(tipo: str, mensaje: str, descarga, vacio):
+        print(mensaje)
+        try:
+            return descarga()
+        except Exception as exc:  # noqa: BLE001 - frontera con la red
+            incompletos.append(tipo)
+            print(f"  FALLO en {tipo}: {exc}", file=sys.stderr)
+            return vacio
+
+    precios = paso(
+        "precios",
+        f"Descargando precios de {len(tickers)} valores + indices y referencias...",
+        lambda: enrutador.precios(tickers + indices + referencias, inicio, fin),
+        pd.DataFrame(),
+    )
+    fundamentales = paso(
+        "fundamentales", f"Descargando fundamentales de {len(tickers)} valores...",
+        lambda: enrutador.fundamentales(tickers, inicio, fin), pd.DataFrame(),
+    )
+    fx = paso(
+        "fx", "Descargando tipos de cambio...",
+        lambda: enrutador.fx(divisas, inicio, fin), pd.DataFrame(),
+    )
+    sectores = paso(
+        "sectores", "Leyendo sectores...", lambda: enrutador.sectores(tickers), {},
+    )
+    for aviso in enrutador.avisos:
+        print(f"  aviso: {aviso}")
 
     # El origen refleja el reparto real, no una sola fuente: si los precios
     # vienen de una y los fundamentales de otra, el informe tiene que decirlo.
-    usadas = enrutador.fuentes_usadas
-    origen = usadas[0] if len(usadas) == 1 else "+".join(usadas)
-
     return Instantanea(
         precios=precios, fundamentales=fundamentales, fx=fx, sectores=sectores,
-        fecha_descarga=date.today(), origen=origen,
+        fecha_descarga=date.today(), origen=enrutador.origen, incompletos=incompletos,
     )
 
 
+def _informar_incompletos(inst: Instantanea, destino: Path, conservados: bool) -> None:
+    """Explica que falta y termina con codigo 1, para que la tarea programada
+    se entere de que la descarga no fue completa."""
+    if not inst.incompletos:
+        return
+    que = ", ".join(inst.incompletos)
+    if conservados:
+        detalle = (
+            "se conservan los de la descarga anterior donde los habia; donde no, "
+            "quedan vacios"
+        )
+    else:
+        detalle = "quedan vacios en esta copia"
+    print(f"\nDESCARGA INCOMPLETA: ha fallado {que}; {detalle} ({destino}).", file=sys.stderr)
+    raise SystemExit(1)
+
+
 def _cargar_instantanea(args, cfg) -> Instantanea:
-    directorio = DIR_CACHE / args.proveedor
+    nombre = _nombre_cache(args, cfg)
+    directorio = DIR_CACHE / nombre
     if not (directorio / "precios.parquet").is_file():
         print(
-            f"No hay datos en cache para '{args.proveedor}'. "
-            f"Ejecuta primero: estrategia datos --proveedor {args.proveedor}",
+            f"No hay datos en cache para '{nombre}' ({directorio}). "
+            f"Ejecuta primero: estrategia {_opcion_proveedor(args)}datos",
             file=sys.stderr,
         )
         raise SystemExit(2)
@@ -112,12 +176,21 @@ def cmd_datos(args, cfg) -> None:
     fin = date.today()
     inicio = fin - timedelta(days=int(args.anos * 365.25))
     inst = _descargar(cfg, args.proveedor, inicio, fin)
-    destino = DIR_CACHE / args.proveedor
-    inst.guardar(destino)
+    destino = DIR_CACHE / inst.origen
+    if "precios" in inst.incompletos:
+        # Sin precios no hay nada que guardar: se deja la cache como estaba.
+        print(
+            f"\nNo se han podido descargar los precios; la cache de {destino} "
+            f"no se ha tocado.",
+            file=sys.stderr,
+        )
+        raise SystemExit(1)
+    inst.guardar(destino, conservar=set(inst.incompletos))
     print(
         f"Guardado en {destino}: {len(inst.precios)} filas de precios, "
         f"{len(inst.fundamentales)} de fundamentales, {len(inst.fx)} de divisas."
     )
+    _informar_incompletos(inst, destino, conservados=True)
 
 
 def cmd_foto(args, cfg) -> None:
@@ -141,9 +214,11 @@ def cmd_foto(args, cfg) -> None:
     import shutil
     import tempfile
 
+    # La carpeta se crea antes del temporal: en una copia recien clonada
+    # `datos/` no existe, y `mkdtemp` dentro de ella fallaba.
+    DIR_FOTOS.mkdir(parents=True, exist_ok=True)
     temporal = Path(tempfile.mkdtemp(prefix="foto-", dir=str(DIR_FOTOS.parent)))
     try:
-        DIR_FOTOS.mkdir(parents=True, exist_ok=True)
         inst.guardar(temporal)
         if destino.is_dir():
             shutil.rmtree(destino)
@@ -152,6 +227,9 @@ def cmd_foto(args, cfg) -> None:
         if temporal.is_dir():
             shutil.rmtree(temporal, ignore_errors=True)
     print(f"Foto de {ano}-S{semana:02d} guardada en {destino}.")
+    # Una foto con huecos se guarda igual —lo que si llego vale— pero queda
+    # marcada como incompleta en su manifiesto.
+    _informar_incompletos(inst, destino, conservados=False)
 
 
 def cmd_universo(args, cfg) -> None:
@@ -185,21 +263,26 @@ def cmd_senales(args, cfg) -> None:
     inicio = fin - timedelta(days=int(3 * 365.25))
     r = backtest_mod.ejecutar(inst, cfg, max(inicio, inst.rango_precios[0]), fin)
     ev = r.eventos_df
-    if ev.empty:
-        print("No hay eventos en el periodo.")
+    reparto = ev[ev["tipo"].isin(["orden", "rechazo"])] if not ev.empty else ev
+    if reparto.empty:
+        print("No hay ninguna revision con candidatas en el periodo.")
         return
-    ordenes = ev[ev["tipo"] == "orden"]
+    # La fecha de la ultima revision es la de su reparto, que anota a la vez
+    # las ordenes y los rechazos. Antes los rechazos se filtraban por la fecha
+    # del ultimo evento de cualquier tipo (una venta del martes, por ejemplo),
+    # y `--detalle` casi nunca ensenaba nada.
+    ultima = reparto["fecha"].max()
+    ordenes = reparto[(reparto["tipo"] == "orden") & (reparto["fecha"] == ultima)]
     if ordenes.empty:
-        print("La ultima revision no genero ordenes.")
+        print(f"La revision del {ultima} no genero ordenes.")
     else:
-        ultima = ordenes["fecha"].max()
         print(f"Ordenes de la revision del {ultima}:\n")
-        print(ordenes[ordenes["fecha"] == ultima].to_string(index=False))
+        print(ordenes.to_string(index=False))
 
-    rech = ev[(ev["tipo"] == "rechazo") & (ev["fecha"] == ev["fecha"].max())]
+    rech = reparto[(reparto["tipo"] == "rechazo") & (reparto["fecha"] == ultima)]
     if not rech.empty and args.detalle:
-        print("\nRechazos de esa fecha:\n")
-        print(rech.to_string(index=False))
+        print("\nRechazos de esa revision:\n")
+        print(rech.dropna(axis=1, how="all").to_string(index=False))
 
 
 def cmd_diagnostico(args, cfg) -> None:
@@ -214,7 +297,10 @@ def cmd_diagnostico(args, cfg) -> None:
         cfg = cfg.con_fuente_unica(args.proveedor)
 
     filas = diagnostico_mod.ejecutar(cfg, inicio, fin)
-    texto = diagnostico_mod.a_texto(filas, cfg, detalle=args.detalle)
+    auxiliares = diagnostico_mod.comprobar_auxiliares(cfg, inicio, fin)
+    texto = diagnostico_mod.a_texto(
+        filas, cfg, detalle=args.detalle, auxiliares=auxiliares
+    )
     print(texto)
 
     DIR_RESULTADOS.mkdir(parents=True, exist_ok=True)
@@ -222,6 +308,9 @@ def cmd_diagnostico(args, cfg) -> None:
     ruta.write_text(texto, encoding="utf-8")
     print(f"\nGuardado en {ruta}")
 
+    if any(not a.utilizable for a in auxiliares):
+        # Sin un indice o una divisa, un mercado entero queda inservible.
+        raise SystemExit(1)
     utilizables = sum(1 for f in filas if f.utilizable)
     if utilizables < len(filas):
         # Codigo de salida distinto de cero para que CI se entere, pero sin
@@ -233,13 +322,16 @@ def cmd_backtest(args, cfg) -> None:
     inst = _cargar_instantanea(args, cfg)
     division = validacion_mod.dividir(inst, cfg)
 
-    if args.periodo == "validacion":
+    if division.toca_validacion(args.periodo):
+        # "todo" incluye la validacion entera: tambien gasta una consulta.
         registro = validacion_mod.RegistroConsultas(RUTA_CONSULTAS)
-        n = registro.anotar("backtest --periodo validacion")
+        n = registro.anotar(f"{args.comando} --periodo {args.periodo}")
         print(
-            f"AVISO: has abierto el periodo de validacion. Van {n} consultas.\n"
+            f"AVISO: has abierto el periodo de validacion ({division.corte} a "
+            f"{division.fin}). Van {n} consultas.\n"
             f"Cada una lo acerca a ser un periodo de diseno mas.\n"
         )
+    if args.periodo == "validacion":
         inicio, fin = division.validacion
     elif args.periodo == "diseno":
         inicio, fin = division.diseno
@@ -253,7 +345,7 @@ def cmd_backtest(args, cfg) -> None:
     inf = informe_mod.construir(r, cfg, inst, consultas_validacion=consultas)
     texto = informe_mod.a_markdown(inf)
     print("\n" + texto)
-    _guardar_informe(inf, texto, args)
+    _guardar_informe(inf, texto, args, _nombre_cache(args, cfg))
 
 
 def cmd_validar(args, cfg) -> None:
@@ -278,14 +370,14 @@ def cmd_validar(args, cfg) -> None:
     )
     texto = informe_mod.a_markdown(inf)
     print("\n" + texto)
-    _guardar_informe(inf, texto, args)
+    _guardar_informe(inf, texto, args, _nombre_cache(args, cfg))
 
 
 def cmd_informe(args, cfg) -> None:
     cmd_backtest(args, cfg)
 
 
-def _guardar_informe(inf, texto: str, args) -> None:
+def _guardar_informe(inf, texto: str, args, nombre: str) -> None:
     DIR_RESULTADOS.mkdir(parents=True, exist_ok=True)
     marca = "sintetico_" if inf.sintetico else ""
     formato = getattr(args, "formato", "md")
@@ -295,7 +387,17 @@ def _guardar_informe(inf, texto: str, args) -> None:
         ruta.write_text(texto, encoding="utf-8")
         print(f"\nInforme guardado en {ruta}")
 
-    if formato in ("html", "ambos"):
+    if formato in ("html", "ambos") and inf.sintetico:
+        # El sitio se despliega entero: un informe sintetico en `sitio/` acabaria
+        # publicado como si fuera el estado real de la cartera. Se deja en
+        # resultados, que no se publica, para poder mirarlo igualmente.
+        ruta = DIR_RESULTADOS / f"informe_{marca}{date.today().isoformat()}.html"
+        ruta.write_text(informe_html_mod.a_html(inf), encoding="utf-8")
+        print(
+            f"\nInforme HTML guardado en {ruta}. No se copia a {DIR_SITIO} "
+            f"porque esta hecho con datos sinteticos."
+        )
+    elif formato in ("html", "ambos"):
         # El sitio se despliega entero, asi que el informe de esta semana es el
         # index y ademas queda archivado por semana: poder ver que decia el
         # sistema una semana concreta es justo lo que hace que no valga
@@ -304,22 +406,20 @@ def _guardar_informe(inf, texto: str, args) -> None:
         (DIR_SITIO / "informes").mkdir(exist_ok=True)
         pagina = informe_html_mod.a_html(inf)
         ano, semana, _ = date.today().isocalendar()
-        archivo = DIR_SITIO / "informes" / f"{marca}{ano}-S{semana:02d}.html"
+        archivo = DIR_SITIO / "informes" / f"{ano}-S{semana:02d}.html"
         archivo.write_text(pagina, encoding="utf-8")
         (DIR_SITIO / "index.html").write_text(pagina, encoding="utf-8")
         print(f"\nSitio generado en {DIR_SITIO} (index.html y {archivo.name})")
-    inf.curva.to_parquet(DIR_RESULTADOS / f"curva_{args.proveedor}.parquet", index=False)
+    inf.curva.to_parquet(DIR_RESULTADOS / f"curva_{nombre}.parquet", index=False)
     if not inf.operaciones.empty:
         inf.operaciones.to_parquet(
-            DIR_RESULTADOS / f"operaciones_{args.proveedor}.parquet", index=False
+            DIR_RESULTADOS / f"operaciones_{nombre}.parquet", index=False
         )
     if not inf.eventos.empty:
-        inf.eventos.to_parquet(
-            DIR_RESULTADOS / f"eventos_{args.proveedor}.parquet", index=False
-        )
+        inf.eventos.to_parquet(DIR_RESULTADOS / f"eventos_{nombre}.parquet", index=False)
     if inf.sensibilidad is not None and not inf.sensibilidad.empty:
         inf.sensibilidad.to_parquet(
-            DIR_RESULTADOS / f"sensibilidad_{args.proveedor}.parquet", index=False
+            DIR_RESULTADOS / f"sensibilidad_{nombre}.parquet", index=False
         )
 
 
@@ -342,10 +442,11 @@ def construir_parser() -> argparse.ArgumentParser:
         help="directorio de configuracion (por defecto config/)",
     )
     p.add_argument(
-        "--proveedor", default="sintetico",
+        "--proveedor", default=None,
         help="fuerza UNA sola fuente para todos los tipos de dato, ignorando el "
-             "reparto de reglas.yaml. Comodo para trabajar sin red "
-             "('sintetico') o para probar una fuente concreta.",
+             "reparto de reglas.yaml. Sin esta opcion manda reglas.yaml. Comodo "
+             "para trabajar sin red ('sintetico') o para probar una fuente "
+             "concreta.",
     )
     sub = p.add_subparsers(dest="comando", required=True)
 
@@ -371,7 +472,7 @@ def construir_parser() -> argparse.ArgumentParser:
     b = sub.add_parser("backtest", help="corre el backtest")
     b.add_argument(
         "--periodo", choices=["diseno", "validacion", "todo"], default="diseno",
-        help="'validacion' abre el periodo reservado y anota la consulta",
+        help="'validacion' y 'todo' abren el periodo reservado y anotan la consulta",
     )
     b.add_argument("--formato", choices=["md", "html", "ambos"], default="md")
     b.set_defaults(func=cmd_backtest)
@@ -389,7 +490,12 @@ def construir_parser() -> argparse.ArgumentParser:
     v.set_defaults(func=cmd_validar)
 
     i = sub.add_parser("informe", help="alias de backtest, guarda el informe")
-    i.add_argument("--periodo", choices=["diseno", "validacion", "todo"], default="todo")
+    # Por defecto solo el diseno: el informe se genera y se publica cada semana,
+    # y si mostrara la validacion la gastaria sin que nadie lo pidiera.
+    i.add_argument(
+        "--periodo", choices=["diseno", "validacion", "todo"], default="diseno",
+        help="'validacion' y 'todo' abren el periodo reservado y anotan la consulta",
+    )
     i.add_argument("--formato", choices=["md", "html", "ambos"], default="ambos")
     i.set_defaults(func=cmd_informe)
 

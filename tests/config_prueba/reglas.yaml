@@ -2,23 +2,8 @@
 
 proveedor_datos:
   nombre: yfinance          # gratuito, sin clave; cubre precios de la mayoría de bolsas globales
-  divisas: bce              # oficial: tipos de referencia del euro, verificado 16/09/2026
   fundamentales_anos_disponibles: 4   # limitación conocida del proveedor gratuito
   ampliacion_futura: eodhd  # a evaluar solo si el histórico fundamental se queda corto
-
-  # Fundamentales POR MERCADO. Las únicas fuentes gratuitas con fecha de
-  # publicación real son nacionales —la SEC solo cubre EE. UU. y la CVM solo
-  # Brasil—, así que elegir una sola para todo el universo sería elegir qué
-  # mercado se queda sin point-in-time.
-  #
-  # España, Alemania e India no aparecen: caen en `nombre` (yfinance), que da
-  # cuatro ejercicios con fechas estimadas y cifras reexpresadas. Con eso el
-  # filtro fundamental no es fiable, así que esos mercados funcionan solo con la
-  # pata técnica hasta que haya fuente. La API lo declara por mercado; no es un
-  # error, es un hecho que se publica.
-  fundamentales_por_mercado:
-    us: sec
-    br: cvm
 
 cartera:
   divisa_base: EUR
@@ -197,14 +182,11 @@ validacion:
   fraccion_diseno: 0.70
   # AÑADIDO v0.4.8: la fecha de corte entre diseño y validación queda fija.
   # Con la fracción sola, el corte avanzaba cada semana con los datos nuevos
-  # y lo que ayer era validación pasaba a ser diseño.
-  # CAMBIADO v0.5.0: el histórico de referencia es el de la base de datos de la
-  # plataforma, 20 años (septiembre de 2006 a septiembre de 2026), y no los 8
-  # de una descarga por línea de comandos. El 70 % de 20 años (fraccion_diseno)
-  # cae en septiembre de 2020. Una caché de la CLI más corta que empiece después
-  # de esta fecha no tiene periodo de diseño, y `dividir` lo dice con un error.
+  # y lo que ayer era validación pasaba a ser diseño. Esta fecha, con los
+  # datos sintéticos de los tests (2019-2024), deja el 70 % del histórico
+  # para el diseño.
   # No se mueve: si hubiera que moverla, va al registro de cambios.
-  fecha_corte: 2020-09-01
+  fecha_corte: 2023-03-13
   sensibilidad_pct: 0.25
   min_operaciones: 100
   min_operaciones_por_mercado: 15

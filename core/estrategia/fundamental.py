@@ -68,10 +68,15 @@ def percentiles_hazen(valores: pd.Series) -> pd.Series:
 
     Los empates comparten el rango medio, para que dos empresas identicas
     reciban la misma nota.
+
+    Los huecos (NaN) no cuentan en el tamano de la muestra y salen como NaN:
+    una empresa sin el dato no esta en la foto contra la que se compara. Si
+    contaran, todas las demas bajarian de percentil sin motivo; con la mitad de
+    huecos, la mejor del mercado sacaria un 50 en vez de un 90 y pico.
     """
-    n = len(valores)
+    n = int(valores.notna().sum())
     if n == 0:
-        return pd.Series(dtype=float)
+        return pd.Series(np.nan, index=valores.index, dtype=float)
     rangos = valores.rank(method="average", ascending=True)
     return (rangos - 0.5) / n * 100.0
 
@@ -87,6 +92,14 @@ def valor_empresa(
     publicado —que es un dato puntual, del balance— y del precio del dia:
 
         EV = acciones x precio_local + deuda_neta
+
+    El precio tiene que ser el de cotizacion SIN ajustar por dividendos
+    (`cierre_bruto`): el ajustado rebaja los precios pasados en lo que se ha
+    repartido despues, y con el la capitalizacion de hace anos saldria menor
+    que la real y la empresa pareceria mas barata de lo que era.
+
+    Sin deuda neta no hay EV. Tomarla como cero haria parecer barata a una
+    empresa endeudada solo porque al proveedor le falta el dato.
 
     Sin precio se usa el EV almacenado, que es lo que da el proveedor sintetico.
 
@@ -111,7 +124,9 @@ def valor_empresa(
     if reporte and cotizacion and str(reporte) != str(cotizacion):
         return None, f"divisas_distintas:{reporte}/{cotizacion}"
 
-    deuda_neta = _num(ultimo.get("deuda_neta")) or 0.0
+    deuda_neta = _num(ultimo.get("deuda_neta"))
+    if deuda_neta is None:
+        return None, "sin_deuda_neta"
     ev = acciones * precio_local + deuda_neta
     return (ev if ev > 0 else None), (None if ev > 0 else "ev_no_positivo")
 
@@ -125,8 +140,9 @@ def ratios_de(
 ) -> Ratios | None:
     """Ratios del ultimo ejercicio publicado, con las trampas de signo cortadas.
 
-    `precio_local` es el precio de la fecha de decision. Si se pasa, el EV se
-    calcula con el; si no, se usa el que venga almacenado.
+    `precio_local` es el precio de cotizacion sin ajustar (`cierre_bruto`) de
+    la fecha de decision. Si se pasa, el EV se calcula con el; si no, se usa el
+    que venga almacenado.
     """
     if fundamentales.empty:
         return None

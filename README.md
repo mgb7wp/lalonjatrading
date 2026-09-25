@@ -4,7 +4,7 @@ El proyecto tiene dos capas, y conviene saber en cuál se está mirando.
 
 **El motor** (`core/estrategia/`) es la implementación de la estrategia definida
 en [`ESTRATEGIA.md`](ESTRATEGIA.md): datos, indicadores, puntuación fundamental,
-señales y backtesting sobre cinco mercados. Funciona hoy, tiene 92 tests y se usa
+señales y backtesting sobre cinco mercados. Funciona hoy y se usa
 desde la línea de comandos sin necesidad de base de datos ni Docker.
 
 **La plataforma** (`backend/`, `workers/`, `ml/`, `frontend/`) envuelve ese motor
@@ -76,14 +76,18 @@ estrategia --proveedor yfinance validar
 estrategia --proveedor yfinance diagnostico --anos 8 --detalle
 
 # 7. Informe HTML publicable, en sitio/
-estrategia informe --periodo todo --formato ambos
+estrategia informe --formato ambos   # solo el periodo de diseño
 
 # 8. Panel interactivo
 streamlit run panel/app.py
 ```
 
-Todos los comandos aceptan `--proveedor {sintetico,yfinance}`. El informe se
-guarda en `datos/resultados/`.
+Sin `--proveedor`, cada comando usa el reparto de fuentes de `reglas.yaml`
+(`proveedor_datos`). Con `--proveedor {sintetico,yfinance,...}`, que va antes del
+subcomando, se fuerza una sola fuente para todo. Los datos se guardan en
+`datos/cache/<origen>/` (`yfinance`, `eodhd+yfinance`, `sintetico`...), que es lo
+que ofrece el panel. El informe se guarda en `datos/resultados/`; si está hecho
+con datos sintéticos, aunque sea en parte, nunca se copia a `sitio/`.
 
 ### Sin conexión: el proveedor sintético
 
@@ -119,12 +123,12 @@ reconstruidos.
 
 ## La plataforma
 
-En construcción. Lo que ya funciona (FASES 1 a 6 del
-[roadmap](docs/ROADMAP.md)): el esqueleto desplegable, el esquema de base de
-datos con migraciones, la ingesta de los cinco mercados, 22 indicadores técnicos
-los cinco grupos fundamentales de §14 y el motor de scoring con sus cinco
-perfiles, `/health`, `/health/data`, `/markets` y
-el frontend mínimo.
+Desplegada en `lalonja-trading.com` y, de momento, para uso propio. El estado
+de cada fase está en el [roadmap](docs/ROADMAP.md) y las tareas siguientes, en
+[`PLAN.md`](PLAN.md). Funciona: la ingesta diaria de los cinco mercados, 22
+indicadores técnicos, los cinco grupos fundamentales de §14, el scoring con sus
+cinco perfiles, las señales, rankings y screener, usuarios, carteras,
+seguimiento, explicaciones con IA y la interfaz web.
 
 **Fundamentales point-in-time reales en EE. UU. (SEC EDGAR, 19 ejercicios) y
 Brasil (CVM, 16).** España, Alemania e India funcionan con pata técnica: sus
@@ -240,8 +244,14 @@ primera apertura posterior.
 ## Tests
 
 ```bash
-pytest
+pip install -e ".[backend,workers,dev]"
+pytest                     # los de base de datos se saltan si no hay Postgres
+ruff check . && ruff format --check .
 ```
+
+Los de base de datos necesitan `TEST_DATABASE_URL` apuntando a un Postgres de
+usar y tirar (el CI levanta uno). Los tests usan su propia copia de la
+configuración, `tests/config_prueba/`, no `config/`.
 
 Los de `test_anti_sesgo.py` son los que exige el documento y son la condición de
 entrada: si uno falla, los resultados de un backtest no valen nada por buenos que
@@ -286,22 +296,15 @@ dice menos de lo que parece. El informe las repite en cada ejecución.
 
 ## Estado
 
-Todo lo que pide la versión 1 del documento está implementado y probado contra el
-proveedor sintético, más el reparto de fuentes, el adaptador de EODHD, el informe
-HTML publicable y el ciclo semanal de CI.
+Todo lo que pide la versión 1 del documento está implementado, y el motor
+incluye las correcciones 0.4.1 a 0.5.0 del registro de cambios de
+`ESTRATEGIA.md`. La plataforma ya descarga datos reales a diario: precios de
+yfinance para los cinco mercados, fundamentales point-in-time de la SEC (EE. UU.)
+y de la CVM (Brasil) y tipos de cambio del BCE. Lo que falta, por orden, está en
+[`PLAN.md`](PLAN.md).
 
-**Nada se ha ejecutado nunca contra datos reales, ni contra Cloudflare.** El
-entorno donde se desarrolló bloquea Yahoo Finance, EODHD y Cloudflare por
-política de red. Lo que hay está probado contra datos sintéticos y contra
-respuestas grabadas; la primera ejecución de verdad es la tuya o la del primer
-`workflow_dispatch`, y es la que dirá si los tickers, los sectores y los campos
-de los estados financieros salen como se espera.
-
-Empieza por ahí:
-
-```bash
-estrategia --proveedor yfinance diagnostico --anos 8 --detalle
-```
+Desde un entorno en la nube, Yahoo Finance suele responder con un error 429: lo
+que necesite descargar datos se ejecuta en el servidor o en un ordenador propio.
 
 Fuera de la versión 1, como dice el documento: entrada por RSI, salida por
 tiempo, métricas para bancos y aseguradoras, fiscalidad de plusvalías, cobertura

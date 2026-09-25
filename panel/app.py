@@ -29,6 +29,7 @@ from estrategia import informe as informe_mod  # noqa: E402
 from estrategia import universo as universo_mod  # noqa: E402
 from estrategia import validacion as validacion_mod  # noqa: E402
 from estrategia.datos.almacen import Instantanea  # noqa: E402
+from estrategia.datos.enrutador import Enrutador  # noqa: E402
 from estrategia.sectores import MapaSectores  # noqa: E402
 
 DIR_CACHE = RAIZ / "datos" / "cache"
@@ -59,12 +60,39 @@ def correr(proveedor: str, periodo: str, _cfg, _inst):
     return informe_mod.construir(r, _cfg, _inst, consultas_validacion=consultas)
 
 
+def abrir_validacion(proveedor: str, periodo: str) -> bool:
+    """Deja ver el periodo de validacion solo si se pide a proposito, y anota
+    la consulta una vez por sesion.
+
+    Streamlit reejecuta el script entero con cada clic: anotar cada ejecucion
+    inflaria el contador, y no anotar nada dejaba mirar la validacion sin que
+    quedara rastro. Por eso hay un boton, y lo abierto se recuerda en la sesion.
+    """
+    clave = f"validacion_abierta:{proveedor}:{periodo}"
+    registro = validacion_mod.RegistroConsultas(RUTA_CONSULTAS)
+    if st.session_state.get(clave):
+        st.warning(
+            f"Periodo de validación abierto en esta sesión. Van {registro.n} "
+            f"consultas anotadas."
+        )
+        return True
+    st.warning(
+        f"'{periodo}' incluye el periodo de validación ({division.corte} a "
+        f"{division.fin}). Van {registro.n} consultas anotadas; cada una lo "
+        f"acerca un poco más a ser un segundo periodo de diseño."
+    )
+    if st.button("Abrir el periodo de validación y anotar la consulta"):
+        registro.anotar_una_vez(st.session_state, clave, f"panel --periodo {periodo}")
+        return True
+    return False
+
+
 def barra_sintetico(inf) -> None:
     if inf.sintetico:
         st.error(
-            "**DATOS SINTETICOS — NO SON RESULTADOS REALES.** Estas cifras salen "
+            "**DATOS SINTÉTICOS — NO SON RESULTADOS REALES.** Estas cifras salen "
             "de un generador determinista que sirve para comprobar que el motor "
-            "funciona. No describen ningun mercado y no valen para decidir nada.",
+            "funciona. No describen ningún mercado y no valen para decidir nada.",
             icon="⚠️",
         )
 
@@ -89,13 +117,24 @@ def pintar_avisos(inf) -> None:
 # --------------------------------------------------------------------------
 
 st.sidebar.title("Estrategia mixta")
-proveedores = [d.name for d in DIR_CACHE.iterdir() if d.is_dir()] if DIR_CACHE.is_dir() else []
+proveedores = (
+    sorted(d.name for d in DIR_CACHE.iterdir() if d.is_dir()) if DIR_CACHE.is_dir() else []
+)
 if not proveedores:
     st.error(
-        "No hay datos disponibles todavia.\n\n"
-        "Si estas en local: `estrategia --proveedor sintetico datos`"
+        "No hay datos disponibles todavía.\n\n"
+        "Descargalos con `estrategia datos` (usa el reparto de fuentes de "
+        "`reglas.yaml`) o, sin red, con `estrategia --proveedor sintetico datos`."
     )
     st.stop()
+
+# Cada carpeta de la cache lleva el nombre de su origen, el mismo que usa el CLI.
+# Se ofrece primero la del reparto de `reglas.yaml`, para que lo que se ve por
+# defecto sean los datos con los que se opera y no los sinteticos.
+configurado = Enrutador(config_mod.cargar()).origen
+if configurado in proveedores:
+    proveedores.remove(configurado)
+    proveedores.insert(0, configurado)
 
 proveedor = st.sidebar.selectbox("Proveedor de datos", proveedores)
 cfg, inst = cargar(proveedor)
@@ -107,11 +146,11 @@ st.sidebar.caption(
     f"Descarga: {inst.fecha_descarga or 'desconocida'}  \n"
     f"Origen: {inst.origen}  \n"
     f"Rango: {division.inicio} a {division.fin}  \n"
-    f"Corte diseno/validacion: {division.corte}"
+    f"Corte diseño/validación: {division.corte} (fijo, `validacion.fecha_corte`)"
 )
 
 vista = st.sidebar.radio(
-    "Vista", ["Universo", "Senales", "Backtest", "Validacion"], index=2
+    "Vista", ["Universo", "Señales", "Backtest", "Validación"], index=2
 )
 
 # --------------------------------------------------------------------------
@@ -121,8 +160,8 @@ vista = st.sidebar.radio(
 if vista == "Universo":
     st.title("Universo")
     st.caption(
-        "Quien puede entrar y por que no. La elegibilidad se evalua a fecha: un "
-        "valor liquido hoy pudo no serlo hace cinco anos."
+        "Quién puede entrar y por qué no. La elegibilidad se evalúa a fecha: un "
+        "valor líquido hoy pudo no serlo hace cinco años."
     )
     fecha = st.date_input(
         "Fecha", value=division.fin, min_value=division.inicio, max_value=division.fin
@@ -170,39 +209,33 @@ if vista == "Universo":
 # Senales
 # --------------------------------------------------------------------------
 
-elif vista == "Senales":
-    st.title("Senales de la ultima revision")
+elif vista == "Señales":
+    st.title("Señales de la última revisión")
     st.caption(
         "Salen del mismo motor que las produce en el backtest, no de un camino "
-        "paralelo: si divergieran, el panel estaria mintiendo."
+        "paralelo: si divergieran, el panel estaría mintiendo. Para decidir hacen "
+        "falta los datos de hoy, que caen en el periodo de validación; por eso "
+        "aquí solo se enseña la última revisión y nada de cómo le fue al sistema: "
+        "ni historial de órdenes, ni curva, ni resultados."
     )
     inf = correr(proveedor, "todo", cfg, inst)
     barra_sintetico(inf)
 
     ev = inf.eventos
-    if ev.empty:
-        st.info("No hay eventos.")
+    ordenes = ev[ev["tipo"] == "orden"] if not ev.empty else ev
+    if ordenes.empty:
+        st.info("No hay órdenes en la última revisión.")
     else:
-        ordenes = ev[ev["tipo"] == "orden"]
-        if ordenes.empty:
-            st.info("No se genero ninguna orden en el periodo.")
-        else:
-            ultima = ordenes["fecha"].max()
-            st.subheader(f"Ordenes del {ultima}")
-            st.dataframe(ordenes[ordenes["fecha"] == ultima], use_container_width=True)
+        ultima = ordenes["fecha"].max()
+        st.subheader(f"Órdenes del {ultima}")
+        st.dataframe(ordenes[ordenes["fecha"] == ultima], use_container_width=True)
 
-            st.subheader("Historial de ordenes")
-            st.dataframe(ordenes.tail(200), use_container_width=True)
-
-        st.subheader("Candidatas del top 3 que se quedaron fuera")
-        st.caption(
-            "Contesta a «por que no se compro la mejor de la semana» y deja ver "
-            "si un limite de cartera esta costando dinero de forma sistematica."
-        )
-        if inf.rechazos_top.empty:
-            st.info("Ninguna candidata del top 3 fue rechazada.")
+        rechazos = ev[(ev["tipo"] == "rechazo") & (ev["fecha"] == ultima)]
+        st.subheader("Candidatas de esa revisión que se quedaron fuera")
+        if rechazos.empty:
+            st.info("Ninguna candidata de esa revisión fue rechazada.")
         else:
-            st.dataframe(inf.rechazos_top, use_container_width=True)
+            st.dataframe(rechazos, use_container_width=True)
 
 # --------------------------------------------------------------------------
 # Backtest
@@ -212,15 +245,11 @@ elif vista == "Backtest":
     st.title("Backtest")
     periodo = st.radio(
         "Periodo", ["diseno", "todo", "validacion"], horizontal=True,
-        help="El periodo de validacion deja de ser una prueba independiente si "
-             "se consulta muchas veces.",
+        help="El periodo de validación deja de ser una prueba independiente si "
+             "se consulta muchas veces. 'todo' también lo incluye.",
     )
-    if periodo == "validacion":
-        n = validacion_mod.RegistroConsultas(RUTA_CONSULTAS).n
-        st.warning(
-            f"Estas mirando el periodo reservado. Van {n} consultas anotadas. "
-            f"Cada una lo acerca un poco mas a ser un segundo periodo de diseno."
-        )
+    if division.toca_validacion(periodo) and not abrir_validacion(proveedor, periodo):
+        st.stop()
 
     inf = correr(proveedor, periodo, cfg, inst)
     barra_sintetico(inf)
@@ -228,18 +257,18 @@ elif vista == "Backtest":
 
     c = st.columns(4)
     c[0].metric("Anualizada", f"{r.rentabilidad_anualizada:+.2%}")
-    c[1].metric("Drawdown maximo", f"{r.drawdown_maximo:.2%}")
+    c[1].metric("Drawdown máximo", f"{r.drawdown_maximo:.2%}")
     c[2].metric(f"Sharpe ({r.periodicidad_sharpe})", f"{r.sharpe:.2f}")
     c[3].metric("Ganadoras", f"{r.pct_ganadoras:.1%}")
     c = st.columns(3)
     c[0].metric("Operaciones", r.n_operaciones)
-    c[1].metric("Exposicion media", f"{r.exposicion_media:.1%}")
-    c[2].metric("Anos", f"{r.anos:.1f}")
+    c[1].metric("Exposición media", f"{r.exposicion_media:.1%}")
+    c[2].metric("Años", f"{r.anos:.1f}")
 
     st.subheader("Curva de capital")
     st.caption(
-        "Las referencias estan invertidas al 100% todo el tiempo y la estrategia "
-        f"no: su exposicion media fue del {r.exposicion_media:.0%}."
+        "Las referencias están invertidas al 100% todo el tiempo y la estrategia "
+        f"no: su exposición media fue del {r.exposicion_media:.0%}."
     )
     curva = inf.curva.set_index("fecha")[["valor"]].rename(columns={"valor": "estrategia"})
     for nombre, serie in inf.referencias.items():
@@ -250,19 +279,19 @@ elif vista == "Backtest":
     u = inf.uso_riesgo
     if u.n:
         c = st.columns(3)
-        c[0].metric("Riesgo teorico", f"{u.riesgo_teorico_medio:.2%}")
+        c[0].metric("Riesgo teórico", f"{u.riesgo_teorico_medio:.2%}")
         c[1].metric("Riesgo efectivo medio", f"{u.riesgo_efectivo_medio:.2%}")
         c[2].metric("Limitadas por peso_maximo", f"{u.pct_limitadas_por_peso:.0%}")
         if u.pct_limitadas_por_peso > 0.5:
             st.info(
-                "En la mayoria de las ordenes manda `cartera.peso_maximo`, no "
+                "En la mayoria de las órdenes manda `cartera.peso_maximo`, no "
                 "`riesgo.por_operacion`. Si la sensibilidad de ese segundo "
-                "parametro sale plana, no es que la estrategia sea robusta: es "
-                "que el parametro no estaba actuando."
+                "parámetro sale plana, no es que la estrategia sea robusta: es "
+                "que el parámetro no estaba actuando."
             )
 
     for titulo, tabla in (
-        ("Por ano", inf.por_ano),
+        ("Por año", inf.por_ano),
         ("Por mercado", inf.por_mercado),
         ("Por bloque desarrollado/emergente", inf.por_bloque),
     ):
@@ -282,17 +311,17 @@ elif vista == "Backtest":
 # --------------------------------------------------------------------------
 
 else:
-    st.title("Validacion")
+    st.title("Validación")
     st.caption(
-        "La sensibilidad mueve cada parametro arriba y abajo sobre el periodo de "
-        "diseno. Correrla sobre el de validacion seria gastar la unica prueba "
+        "La sensibilidad mueve cada parámetro arriba y abajo sobre el periodo de "
+        "diseño. Correrla sobre el de validación sería gastar la única prueba "
         "independiente que hay."
     )
     inf = correr(proveedor, "diseno", cfg, inst)
     barra_sintetico(inf)
 
     registro = validacion_mod.RegistroConsultas(RUTA_CONSULTAS)
-    st.metric("Consultas anotadas al periodo de validacion", registro.n)
+    st.metric("Consultas anotadas al periodo de validación", registro.n)
     if registro.n:
         with st.expander("Historial de consultas"):
             st.dataframe(pd.DataFrame(registro.leer()), use_container_width=True)
@@ -304,18 +333,18 @@ else:
         # El analisis corre unos treinta backtests. Dejar ese boton abierto a
         # internet en la maquina de uno es regalar un boton de "ocupame la CPU".
         st.info(
-            "El analisis de sensibilidad esta desactivado en modo publico: son "
+            "El análisis de sensibilidad está desactivado en modo público: son "
             "unos treinta backtests y este panel es accesible desde internet. "
-            "Ejecutalo en local con `estrategia validar`, que ademas guarda el "
+            "Ejecútalo en local con `estrategia validar`, que además guarda el "
             "resultado en `datos/resultados/`."
         )
         ruta_sens = RAIZ / "datos" / "resultados" / f"sensibilidad_{proveedor}.parquet"
         if ruta_sens.is_file():
-            st.caption("Ultimo analisis guardado:")
+            st.caption("Último análisis guardado:")
             st.dataframe(pd.read_parquet(ruta_sens), use_container_width=True)
-    elif st.button("Ejecutar analisis de sensibilidad (tarda varios minutos)"):
+    elif st.button("Ejecutar análisis de sensibilidad (tarda varios minutos)"):
         division_d = validacion_mod.dividir(inst, cfg)
-        with st.spinner("Corriendo una variante por parametro y sentido..."):
+        with st.spinner("Corriendo una variante por parámetro y sentido..."):
             sens = validacion_mod.sensibilidad(
                 inst, cfg, *division_d.diseno, inf.resumen
             )
@@ -327,7 +356,7 @@ else:
         )
         if inactivos:
             st.info(
-                "Parametros que no movieron el resultado: "
+                "Parámetros que no movieron el resultado: "
                 f"{', '.join(inactivos)}. Que salgan planos NO significa que la "
                 "estrategia sea robusta frente a ellos, sino que no estaban "
                 "actuando en este periodo."
@@ -336,7 +365,7 @@ else:
     st.subheader("Suficiencia de la muestra")
     val = cfg.reglas.validacion
     st.write(
-        f"Minimos del documento: {val.min_operaciones} operaciones en total y "
+        f"Mínimos del documento: {val.min_operaciones} operaciones en total y "
         f"{val.min_operaciones_por_mercado} por mercado."
     )
     if not inf.por_mercado.empty:

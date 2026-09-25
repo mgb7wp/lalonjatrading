@@ -204,7 +204,7 @@ def test_las_metricas_nuevas_llegan_al_informe(cfg, instantanea):
     r = backtest_mod.ejecutar(instantanea, cfg, dt2.date(2019, 1, 1), dt2.date(2022, 12, 31))
     texto = a_markdown(construir(r, cfg, instantanea))
 
-    for etiqueta in ("Sortino", "Profit factor", "Dias medios en cartera", "Rotacion anual"):
+    for etiqueta in ("Sortino", "Profit factor", "Días medios en cartera", "Rotación anual"):
         assert etiqueta in texto, f"'{etiqueta}' se calcula pero no aparece en el informe"
 
     # Con limites de palabra: "financiero", "financiera" y "finanzas" contienen

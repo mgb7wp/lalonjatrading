@@ -24,7 +24,7 @@ import json
 from dataclasses import dataclass
 from datetime import date, datetime
 from pathlib import Path
-from typing import Any
+from typing import Any, MutableMapping
 
 import pandas as pd
 
@@ -32,6 +32,7 @@ from . import backtest as backtest_mod
 from . import metricas as metricas_mod
 from .config import Config
 from .datos.almacen import Instantanea
+from .errores import ErrorConfiguracion
 
 #: Parametros numericos que tiene sentido mover. Los que no estan aqui son
 #: estructurales: cambiarlos no afina la estrategia, la sustituye.
@@ -71,20 +72,36 @@ class Division:
     def validacion(self) -> tuple[date, date]:
         return self.corte, self.fin
 
+    def toca_validacion(self, periodo: str) -> bool:
+        """Si mirar ese periodo ensena algo del de validacion.
+
+        "todo" tambien: incluye la validacion entera, y ver su curva es mirarla
+        igual que pidiendola sola.
+        """
+        return periodo in ("validacion", "todo")
+
 
 def dividir(instantanea: Instantanea, cfg: Config) -> Division:
-    """Parte el historico en diseno y validacion, por tiempo.
+    """Parte el historico en diseno y validacion por la fecha de corte fija.
 
-    El corte se pone donde la fraccion pedida de SESIONES queda por detras, no
-    donde queda la fraccion de dias naturales: los fines de semana y los
-    festivos no aportan informacion y contarlos desplazaria el corte.
+    El corte es `validacion.fecha_corte`, o la primera sesion a partir de ella.
+    Antes se calculaba como la fraccion `fraccion_diseno` de las sesiones
+    descargadas, y eso lo movia cada semana: al llegar datos nuevos, el corte
+    avanzaba y una parte de lo que era validacion pasaba a ser diseno sin que
+    nadie lo decidiera. Ahora los datos nuevos solo alargan la validacion.
     """
     fechas = sorted(instantanea.precios["fecha"].unique())
     if not fechas:
         raise ValueError("no hay fechas en la instantanea")
-    corte_idx = int(len(fechas) * cfg.reglas.validacion.fraccion_diseno)
-    corte_idx = min(max(corte_idx, 1), len(fechas) - 1)
-    return Division(fechas[0], fechas[corte_idx], fechas[-1])
+    fecha_corte = cfg.reglas.validacion.fecha_corte
+    posteriores = [f for f in fechas if f >= fecha_corte]
+    if fecha_corte <= fechas[0] or not posteriores:
+        raise ErrorConfiguracion(
+            f"validacion.fecha_corte ({fecha_corte}) queda fuera de los datos "
+            f"({fechas[0]} a {fechas[-1]}): no deja periodo de diseno o de "
+            f"validacion. Revisa config/reglas.yaml."
+        )
+    return Division(fechas[0], posteriores[0], fechas[-1])
 
 
 class RegistroConsultas:
@@ -116,6 +133,20 @@ class RegistroConsultas:
             json.dumps(consultas, indent=2, ensure_ascii=False), encoding="utf-8"
         )
         return len(consultas)
+
+    def anotar_una_vez(self, sesion: MutableMapping, clave: str, motivo: str) -> bool:
+        """Anota la consulta si esta sesion no la habia anotado ya.
+
+        El panel se reejecuta entero con cada clic: sin esto, mirar una vez la
+        validacion y mover un filtro contaria como diez consultas. `sesion` es
+        el estado de la sesion (en el panel, `st.session_state`). Devuelve si
+        ha anotado.
+        """
+        if sesion.get(clave):
+            return False
+        self.anotar(motivo)
+        sesion[clave] = True
+        return True
 
 
 # --------------------------------------------------------------------------

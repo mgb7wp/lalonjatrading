@@ -29,6 +29,7 @@ from __future__ import annotations
 import time
 from datetime import date, timedelta
 
+import numpy as np
 import pandas as pd
 
 from ..config import Config
@@ -47,8 +48,10 @@ def ajustar_ohlc(bruto: pd.DataFrame) -> pd.DataFrame:
         raise ErrorDatos(f"faltan columnas en los datos de precios: {sorted(faltan)}")
 
     df = bruto.copy()
-    cierre = df["Close"].replace(0.0, pd.NA)
-    factor = (df["Adj Close"] / cierre).astype(float).fillna(1.0)
+    # Con cierre 0 no hay factor: se deja sin ajustar. Se usa NaN y no `pd.NA`,
+    # que convertia la columna en objetos y hacia fallar la conversion a float.
+    cierre = df["Close"].astype(float).replace(0.0, np.nan)
+    factor = (df["Adj Close"].astype(float) / cierre).fillna(1.0)
     return pd.DataFrame(
         {
             "apertura": df["Open"].astype(float) * factor,
@@ -126,6 +129,32 @@ def _por_ticker(crudo: pd.DataFrame, ticker: str) -> pd.DataFrame:
     return crudo
 
 
+def deuda_neta_de(balance: pd.DataFrame | None, columna) -> float | None:
+    """Deuda neta de un ejercicio: deuda total menos caja.
+
+    Yahoo da a veces la deuda total y a veces solo la deuda neta, que YA tiene
+    la caja restada. Antes las dos se trataban igual y a la neta se le volvia a
+    restar la caja: una empresa con mucha caja salia con menos deuda de la que
+    tenia, o con caja neta que no existia, y pasaba el filtro de deuda/EBITDA y
+    parecia mas barata.
+
+    Se decide ejercicio a ejercicio, porque en un mismo balance un ano puede
+    traer la deuda total y otro solo la neta. Si hay deuda total pero no caja,
+    se toma la deuda total: sobrestima la deuda, que es el lado prudente.
+    """
+    total = _valor(_primera_fila(balance, "Total Debt"), columna)
+    if total is not None:
+        caja = _valor(
+            _primera_fila(
+                balance, "Cash And Cash Equivalents",
+                "Cash Cash Equivalents And Short Term Investments",
+            ),
+            columna,
+        )
+        return total - (caja or 0.0)
+    return _valor(_primera_fila(balance, "Net Debt"), columna)
+
+
 class ProveedorYFinance(Proveedor):
     """Precios, divisas y fundamentales desde Yahoo Finance."""
 
@@ -134,6 +163,18 @@ class ProveedorYFinance(Proveedor):
     def __init__(self, cfg: Config) -> None:
         self._cfg = cfg
         self._info: dict[str, dict] = {}
+        self._red = cfg.implementacion.descargas
+        #: Lo que no se ha podido traer, valor a valor. El enrutador lo recoge y
+        #: el CLI lo imprime: antes estos fallos se tragaban en silencio.
+        self.avisos: list[str] = []
+
+    def _reintentar(self, fn):
+        return con_reintentos(fn, self._red.intentos, self._red.espera_inicial_s)
+
+    def _pausa(self) -> None:
+        """Pausa entre peticiones valor a valor, para no provocar el 429."""
+        if self._red.pausa_entre_peticiones_s > 0:
+            time.sleep(self._red.pausa_entre_peticiones_s)
 
     @property
     def capacidades(self) -> Capacidades:
@@ -166,7 +207,8 @@ class ProveedorYFinance(Proveedor):
             try:
                 import yfinance as yf
 
-                self._info[ticker] = con_reintentos(lambda: yf.Ticker(ticker).info) or {}
+                self._pausa()
+                self._info[ticker] = self._reintentar(lambda: yf.Ticker(ticker).info) or {}
             except Exception:
                 # Una ficha que no se puede leer no tumba la ejecucion: el valor
                 # se quedara fuera por sector desconocido y saldra en el
@@ -182,7 +224,7 @@ class ProveedorYFinance(Proveedor):
         if not tickers:
             return pd.DataFrame()
 
-        crudo = con_reintentos(
+        crudo = self._reintentar(
             lambda: yf.download(
                 tickers=tickers,
                 start=inicio,
@@ -200,13 +242,16 @@ class ProveedorYFinance(Proveedor):
             )
 
         marco: list[pd.DataFrame] = []
+        sin_precios: list[str] = []
         for ticker in tickers:
             try:
                 bruto = _por_ticker(crudo, ticker)
             except KeyError:
+                sin_precios.append(ticker)
                 continue
             bruto = bruto.dropna(how="all")
             if bruto.empty:
+                sin_precios.append(ticker)
                 continue
             ajustado = ajustar_ohlc(bruto)
             ajustado.insert(0, "ticker", ticker)
@@ -215,6 +260,11 @@ class ProveedorYFinance(Proveedor):
 
         if not marco:
             raise ErrorDatos("ningun ticker ha devuelto precios utilizables")
+        if sin_precios:
+            self.avisos.append(
+                f"[yfinance/precios] {len(sin_precios)} valores sin precios: "
+                f"{', '.join(sin_precios)}"
+            )
         return pd.concat(marco, ignore_index=True)
 
     def fx(self, divisas: list[str], inicio: date, fin: date) -> pd.DataFrame:
@@ -229,7 +279,7 @@ class ProveedorYFinance(Proveedor):
         if not pares:
             return pd.DataFrame(columns=["fecha", "divisa", "tasa"])
 
-        crudo = con_reintentos(
+        crudo = self._reintentar(
             lambda: yf.download(
                 tickers=list(pares.values()),
                 start=inicio,
@@ -272,19 +322,26 @@ class ProveedorYFinance(Proveedor):
 
         filas: list[dict] = []
         hoy = date.today()
+        fallidos: list[str] = []
+        vacios: list[str] = []
 
         for ticker in tickers:
             mercado_id = self._cfg.universo.mercado_de_ticker.get(ticker)
             if mercado_id is None:
                 continue
+            self._pausa()
             try:
                 t = yf.Ticker(ticker)
-                resultados = t.income_stmt
-                balance = t.balance_sheet
-                caja = t.cashflow
-            except Exception:
+                # Cada estado es una peticion aparte, y cada una puede fallar
+                # por el limite de Yahoo: se reintentan igual que los precios.
+                resultados = self._reintentar(lambda: t.income_stmt)
+                balance = self._reintentar(lambda: t.balance_sheet)
+                caja = self._reintentar(lambda: t.cashflow)
+            except Exception:  # noqa: BLE001 - se anota y se sigue con el resto
+                fallidos.append(ticker)
                 continue
             if resultados is None or resultados.empty:
+                vacios.append(ticker)
                 continue
 
             ventas_f = _primera_fila(resultados, "Total Revenue", "Operating Revenue")
@@ -293,10 +350,6 @@ class ProveedorYFinance(Proveedor):
             neto_f = _primera_fila(resultados, "Net Income", "Net Income Common Stockholders")
             patrimonio_f = _primera_fila(
                 balance, "Stockholders Equity", "Total Equity Gross Minority Interest"
-            )
-            deuda_f = _primera_fila(balance, "Total Debt", "Net Debt")
-            efectivo_f = _primera_fila(
-                balance, "Cash And Cash Equivalents", "Cash Cash Equivalents And Short Term Investments"
             )
             flujo_f = _primera_fila(caja, "Free Cash Flow")
             # Acciones a cierre del periodo: es un dato del balance, o sea
@@ -325,16 +378,12 @@ class ProveedorYFinance(Proveedor):
                 ebitda = _valor(ebitda_f, columna)
                 neto = _valor(neto_f, columna)
                 patrimonio = _valor(patrimonio_f, columna)
-                deuda = _valor(deuda_f, columna)
-                efectivo = _valor(efectivo_f, columna)
                 flujo = _valor(flujo_f, columna)
 
                 if ventas is None or ebit is None:
                     continue
 
-                deuda_neta = None
-                if deuda is not None:
-                    deuda_neta = deuda - (efectivo or 0.0)
+                deuda_neta = deuda_neta_de(balance, columna)
 
                 filas.append(
                     {
@@ -369,6 +418,16 @@ class ProveedorYFinance(Proveedor):
                     }
                 )
 
+        if fallidos:
+            self.avisos.append(
+                f"[yfinance/fundamentales] {len(fallidos)} valores fallaron tras "
+                f"reintentar: {', '.join(fallidos)}"
+            )
+        if vacios:
+            self.avisos.append(
+                f"[yfinance/fundamentales] {len(vacios)} valores sin estados "
+                f"financieros: {', '.join(vacios)}"
+            )
         return pd.DataFrame(filas)
 
 

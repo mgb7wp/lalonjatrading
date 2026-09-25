@@ -51,6 +51,9 @@ class Instantanea:
     sectores: dict[str, str | None] = field(default_factory=dict)
     fecha_descarga: date | None = None
     origen: str = "desconocido"
+    #: Tipos de dato que la ultima descarga no pudo traer. Lo que haya de ellos
+    #: es de una descarga anterior, o nada; el informe lo avisa.
+    incompletos: list[str] = field(default_factory=list)
 
     _series: dict[str, SerieValor] = field(default_factory=dict, repr=False)
     _fx: dict[str, SerieFX] = field(default_factory=dict, repr=False)
@@ -95,17 +98,36 @@ class Instantanea:
 
     # -- persistencia ------------------------------------------------------
 
-    def guardar(self, directorio: Path) -> None:
+    def guardar(self, directorio: Path, conservar: set[str] | None = None) -> None:
+        """Escribe cada tipo de dato en su fichero.
+
+        `conservar` son tipos que NO se sobrescriben si ya hay un fichero de una
+        descarga anterior: si hoy han fallado los fundamentales, se quedan los
+        de la vez pasada en lugar de perder los precios buenos de hoy o de
+        dejar los fundamentales en blanco.
+        """
         directorio = Path(directorio)
         directorio.mkdir(parents=True, exist_ok=True)
-        self.precios.to_parquet(directorio / "precios.parquet", index=False)
-        self.fundamentales.to_parquet(directorio / "fundamentales.parquet", index=False)
-        self.fx.to_parquet(directorio / "fx.parquet", index=False)
-        pd.DataFrame(
-            {"ticker": list(self.sectores), "sector": list(self.sectores.values())}
-        ).to_parquet(directorio / "sectores.parquet", index=False)
+        conservar = conservar or set()
+        ficheros = {
+            "precios": lambda r: self.precios.to_parquet(r, index=False),
+            "fundamentales": lambda r: self.fundamentales.to_parquet(r, index=False),
+            "fx": lambda r: self.fx.to_parquet(r, index=False),
+            "sectores": lambda r: pd.DataFrame(
+                {"ticker": list(self.sectores), "sector": list(self.sectores.values())}
+            ).to_parquet(r, index=False),
+        }
+        for tipo, escribir in ficheros.items():
+            ruta = directorio / f"{tipo}.parquet"
+            if tipo in conservar and ruta.is_file():
+                continue
+            escribir(ruta)
         pd.Series(
-            {"fecha_descarga": str(self.fecha_descarga or ""), "origen": self.origen}
+            {
+                "fecha_descarga": str(self.fecha_descarga or ""),
+                "origen": self.origen,
+                "incompletos": ",".join(self.incompletos),
+            }
         ).to_json(directorio / "manifiesto.json")
 
     @classmethod
@@ -115,20 +137,29 @@ class Instantanea:
             raise ErrorDatos(
                 f"no hay datos en {directorio}. Ejecuta primero `estrategia datos`."
             )
-        sectores_df = pd.read_parquet(directorio / "sectores.parquet")
+        def leer(nombre: str) -> pd.DataFrame:
+            ruta = directorio / f"{nombre}.parquet"
+            return pd.read_parquet(ruta) if ruta.is_file() else pd.DataFrame()
+
+        sectores_df = leer("sectores")
         manifiesto = {}
         if (directorio / "manifiesto.json").is_file():
             manifiesto = pd.read_json(
                 directorio / "manifiesto.json", typ="series"
             ).to_dict()
         descarga = str(manifiesto.get("fecha_descarga") or "")
+        incompletos = str(manifiesto.get("incompletos") or "")
         return cls(
-            precios=pd.read_parquet(directorio / "precios.parquet"),
-            fundamentales=pd.read_parquet(directorio / "fundamentales.parquet"),
-            fx=pd.read_parquet(directorio / "fx.parquet"),
-            sectores=dict(zip(sectores_df["ticker"], sectores_df["sector"])),
+            precios=leer("precios"),
+            fundamentales=leer("fundamentales"),
+            fx=leer("fx"),
+            sectores=(
+                dict(zip(sectores_df["ticker"], sectores_df["sector"]))
+                if not sectores_df.empty else {}
+            ),
             fecha_descarga=date.fromisoformat(descarga) if descarga else None,
             origen=str(manifiesto.get("origen", "desconocido")),
+            incompletos=[t for t in incompletos.split(",") if t],
         )
 
 

@@ -20,7 +20,9 @@ from pathlib import Path
 from typing import Literal
 
 import yaml
-from pydantic import BaseModel, ConfigDict, Field, model_validator
+from pydantic import BaseModel, ConfigDict, Field, ValidationError, model_validator
+
+from .errores import ErrorConfiguracion
 
 Clasificacion = Literal["desarrollado", "emergente"]
 Lado = Literal["compra", "venta"]
@@ -106,6 +108,7 @@ class CarteraCfg(_Base):
     max_por_sector: int = Field(gt=0)
     max_por_mercado: int = Field(gt=0)
     peso_maximo: float = Field(gt=0, le=1)
+    margen_reserva_pct: float = Field(ge=0)
 
 
 class MercadoCfg(_Base):
@@ -143,6 +146,8 @@ class DatosCfg(_Base):
     guardar_foto_fx: str
     sesiones_sin_datos_cierre_forzoso: int = Field(gt=0)
     fx_decision_dia_anterior: bool
+    fx_antiguedad_maxima_dias: int = Field(gt=0)
+    dias_maximos_sin_precio: int = Field(gt=0)
 
     def retraso(self, mercado: str, periodo: Literal["trimestral", "anual"]) -> int:
         """Dias que se suponen entre el cierre del periodo y su publicacion.
@@ -208,6 +213,8 @@ class TecnicoCfg(_Base):
     momentum_meses: int = Field(gt=0)
     momentum_excluir_meses: int = Field(ge=0)
     atr_periodo: int = Field(gt=0)
+    holgura_historial_factor: float = Field(ge=1)
+    holgura_historial_dias: int = Field(ge=0)
 
     @model_validator(mode="after")
     def _corta_menor_que_larga(self) -> "TecnicoCfg":
@@ -283,13 +290,19 @@ class PanelCfg(_Base):
 class MetricasCfg(_Base):
     tasa_libre_riesgo_anual: float
     periodicidad_sharpe: Literal["diaria", "semanal"]
+    fraccion_periodo_muerto_aviso: float = Field(ge=0, le=1)
 
 
 class ValidacionCfg(_Base):
     fraccion_diseno: float = Field(gt=0, lt=1)
+    #: Donde acaba el diseno y empieza la validacion. Es una fecha fija: con la
+    #: fraccion sola, el corte avanzaba cada semana con los datos nuevos y lo
+    #: que ayer era validacion pasaba a ser diseno sin que nadie lo decidiera.
+    fecha_corte: date
     sensibilidad_pct: float = Field(gt=0)
     min_operaciones: int = Field(ge=0)
     min_operaciones_por_mercado: int = Field(ge=0)
+    consultas_para_alarma: int = Field(ge=0)
 
 
 class SenalesCfg(_Base):
@@ -405,8 +418,17 @@ class ReferenciaCfg(_Base):
     divisa: str
 
 
+class DescargasCfg(_Base):
+    """Como se habla con las fuentes por red: reintentos y pausas."""
+
+    intentos: int = Field(ge=1)
+    espera_inicial_s: float = Field(ge=0)
+    pausa_entre_peticiones_s: float = Field(ge=0)
+
+
 class Implementacion(_Base):
     calendarios: dict[str, str]
+    descargas: DescargasCfg
     codigos_eodhd: dict[str, str] = Field(default_factory=dict)
     codigos_stooq: dict[str, str] = Field(default_factory=dict)
     cik_sec: dict[str, str] = Field(default_factory=dict)
@@ -566,6 +588,10 @@ class Config(_Base):
                         "fundamentales": None,
                         "divisas": None,
                         "sectores": None,
+                        # Sin esto, `--proveedor sintetico` seguia pidiendo los
+                        # fundamentales de EE. UU. a la SEC y los de Brasil a la
+                        # CVM, por la red (riesgo RT-6 de docs/PROJECT_PLAN.md).
+                        "fundamentales_por_mercado": {},
                     }
                 )
             }
@@ -603,30 +629,73 @@ class Config(_Base):
 
 def _leer_yaml(ruta: Path) -> dict:
     if not ruta.is_file():
-        raise FileNotFoundError(f"no existe el fichero de configuracion: {ruta}")
-    with ruta.open(encoding="utf-8") as fh:
-        contenido = yaml.safe_load(fh)
+        raise ErrorConfiguracion(f"no existe el fichero de configuracion: {ruta}")
+    try:
+        with ruta.open(encoding="utf-8") as fh:
+            contenido = yaml.safe_load(fh)
+    except yaml.YAMLError as exc:
+        # Lo tipico: una tabulacion, una sangria mal puesta o unas comillas
+        # sin cerrar. El mensaje de PyYAML ya dice linea y columna.
+        raise ErrorConfiguracion(f"{ruta} no es YAML valido:\n{exc}") from exc
     if not isinstance(contenido, dict):
-        raise ValueError(f"{ruta} no contiene un mapa YAML en la raiz")
+        raise ErrorConfiguracion(f"{ruta} no contiene un mapa YAML en la raiz")
     return contenido
 
 
+def _explicar(exc: ValidationError, origen: str) -> ErrorConfiguracion:
+    """Convierte los errores de pydantic en una lista legible.
+
+    Sin esto, un parametro mal escrito salia como una traza de Python de
+    cuarenta lineas. Aqui sale el fichero, la clave con su ruta (por ejemplo
+    `cartera.max_posiciones`) y que le pasa.
+    """
+    lineas = []
+    for err in exc.errors():
+        clave = ".".join(str(p) for p in err["loc"]) or "(raiz)"
+        mensaje = err["msg"].removeprefix("Value error, ")
+        if err["type"] == "missing":
+            mensaje = "falta esta clave"
+        elif err["type"] == "extra_forbidden":
+            mensaje = "clave desconocida (¿mal escrita?)"
+        lineas.append(f"  - {clave}: {mensaje}")
+    return ErrorConfiguracion(f"la configuracion de {origen} no es valida:\n" + "\n".join(lineas))
+
+
+def _validar(modelo, ruta: Path):
+    try:
+        return modelo.model_validate(_leer_yaml(ruta))
+    except ValidationError as exc:
+        raise _explicar(exc, str(ruta)) from exc
+
+
 def cargar(dir_config: Path | str | None = None) -> Config:
-    """Carga los cuatro ficheros de configuracion y los valida en conjunto."""
+    """Carga los cuatro ficheros de configuracion y los valida en conjunto.
+
+    Cualquier problema sale como `ErrorConfiguracion` con un mensaje en
+    castellano, que el CLI imprime sin traza.
+    """
     directorio = Path(dir_config) if dir_config is not None else DIR_CONFIG_POR_DEFECTO
-    reglas = Reglas.model_validate(_leer_yaml(directorio / "reglas.yaml"))
+    reglas = _validar(Reglas, directorio / "reglas.yaml")
 
     # La ruta del fichero de impuestos la marca reglas.yaml, no el codigo.
     ruta_impuestos = Path(reglas.costes.impuestos_transaccion)
     if not ruta_impuestos.is_absolute():
-        # En reglas.yaml se escribe relativa a la raiz del proyecto.
-        candidata = RAIZ / ruta_impuestos
-        ruta_impuestos = candidata if candidata.is_file() else directorio / ruta_impuestos.name
+        # En reglas.yaml se escribe relativa a la raiz del proyecto. Si el
+        # fichero esta en la propia carpeta que se carga, manda ese: asi una
+        # carpeta de configuracion (la de los tests, por ejemplo) no acaba
+        # leyendo los impuestos de otra.
+        propia = directorio / ruta_impuestos.name
+        ruta_impuestos = propia if propia.is_file() else RAIZ / ruta_impuestos
 
-    return Config(
-        reglas=reglas,
-        implementacion=Implementacion.model_validate(_leer_yaml(directorio / "implementacion.yaml")),
-        universo=Universo.model_validate(_leer_yaml(directorio / "universo.yaml")),
-        impuestos=Impuestos.model_validate(_leer_yaml(ruta_impuestos)),
-        dir_config=directorio,
-    )
+    try:
+        return Config(
+            reglas=reglas,
+            implementacion=_validar(Implementacion, directorio / "implementacion.yaml"),
+            universo=_validar(Universo, directorio / "universo.yaml"),
+            impuestos=_validar(Impuestos, ruta_impuestos),
+            dir_config=directorio,
+        )
+    except ValidationError as exc:
+        # Las comprobaciones que cruzan ficheros (un mercado sin calendario,
+        # por ejemplo).
+        raise _explicar(exc, f"{directorio} (entre ficheros)") from exc

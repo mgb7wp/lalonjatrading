@@ -30,7 +30,7 @@ hace aqui dos cosas que no se pueden dejar a la buena voluntad de cada adaptador
 from __future__ import annotations
 
 from dataclasses import dataclass
-from datetime import date
+from datetime import date, timedelta
 
 import pandas as pd
 
@@ -62,12 +62,22 @@ class CalidadFundamental:
 class Enrutador:
     """Reparte cada peticion a la fuente que corresponde."""
 
-    def __init__(self, cfg: Config, verificar: bool = True) -> None:
+    def __init__(self, cfg: Config, verificar: bool = True, hoy: date | None = None) -> None:
         self._cfg = cfg
         self._verificar = verificar
+        # Las filas con fecha `hoy` o posterior se apartan: la sesion todavia no
+        # ha cerrado y su "cierre" es el ultimo precio del momento. Por defecto
+        # es el dia de hoy. El pipeline programado, que descarga DESPUES del
+        # cierre de cada mercado (y las divisas despues de que el BCE publique),
+        # pasa el dia siguiente: si no, la plataforma iria siempre un dia por
+        # detras.
+        self._hoy = hoy or date.today()
         self._instancias: dict[str, Fuente] = {}
         #: Filas de precios imposibles descartadas en la ultima descarga.
         self.precios_descartados = 0
+        #: Lo que se ha tenido que reparar o apartar en esta descarga. No son
+        #: errores: el CLI lo imprime y la descarga sigue.
+        self.avisos: list[str] = []
         self._por_tipo: dict[str, str] = {
             tipo: cfg.reglas.proveedor_datos.fuente_de(tipo) for tipo in TIPOS_DE_DATO
         }
@@ -96,7 +106,21 @@ class Enrutador:
 
     @property
     def fuentes_usadas(self) -> list[str]:
-        return sorted(set(self._por_tipo.values()))
+        """Todas las fuentes del reparto, incluidas las de fundamentales por
+        mercado (la SEC para EE. UU., la CVM para Brasil)."""
+        nombres = set(self._por_tipo.values())
+        nombres |= set(self._cfg.reglas.proveedor_datos.fundamentales_por_mercado.values())
+        return sorted(nombres)
+
+    @property
+    def origen(self) -> str:
+        """Nombre del reparto: `yfinance` si hay una sola fuente, o las fuentes
+        unidas por `+` (`bce+cvm+sec+yfinance`) si se mezclan.
+
+        Es el origen que queda anotado en la instantanea y tambien el nombre de
+        su carpeta de cache, que es la que lista el panel.
+        """
+        return "+".join(self.fuentes_usadas)
 
     def _instancia(self, nombre: str) -> Fuente:
         """La fuente por su nombre, construida una sola vez.
@@ -153,14 +177,26 @@ class Enrutador:
     def precios(self, tickers: list[str], inicio: date, fin: date) -> pd.DataFrame:
         fuente = self.fuente("precios")
         df = fuente.precios(tickers, inicio, fin)
+        self._recoger_avisos(fuente)
         df = _estampar(df, fuente.nombre)
-        # Las filas imposibles se descartan antes de verificar: unas pocas en
-        # un lote de cientos de miles son ruido de un proveedor gratuito, no un
-        # mapeo roto, y rechazar el lote entero dejaria un mercado sin datos.
-        # `precios_descartados` queda para que el pipeline lo registre.
+        # Primero se apartan la sesion en curso, las filas sin cierre, los
+        # precios no positivos y las fechas repetidas, y se rellenan los huecos
+        # de apertura, maximo y minimo con el cierre (`limpiar_precios`).
+        df, limpieza = contrato.limpiar_precios(df, self._hoy)
+        self.avisos += limpieza.avisos(fuente.nombre)
+        # Despues, las filas con OHLC imposible se DESCARTAN, no se reparan: con
+        # el maximo por debajo del cierre no hay forma de saber cual de los dos
+        # precios es el bueno. Unas pocas son ruido de un proveedor gratuito;
+        # `precios_descartados` queda para que el pipeline lo registre, y si son
+        # demasiadas el contrato rechaza el lote.
+        total = len(df)
         df, self.precios_descartados = contrato.sanear_precios(df)
         if self._verificar:
-            contrato.verificar_precios(df, fuente.nombre).exigir()
+            informe = contrato.verificar_precios(df, fuente.nombre)
+            informe.incumplimientos += contrato.verificar_descartes(
+                self.precios_descartados, total, fuente.nombre
+            ).incumplimientos
+            informe.exigir()
         return df
 
     def fundamentales(self, tickers: list[str], inicio: date, fin: date) -> pd.DataFrame:
@@ -185,6 +221,7 @@ class Enrutador:
         for nombre, del_lote in por_fuente.items():
             fuente = self._instancia(nombre)
             df = fuente.fundamentales(del_lote, inicio, fin)
+            self._recoger_avisos(fuente)
             df = _estampar(df, fuente.nombre)
             df = _completar_opcionales(df)
             if self._verificar and not df.empty:
@@ -246,13 +283,37 @@ class Enrutador:
     def fx(self, divisas: list[str], inicio: date, fin: date) -> pd.DataFrame:
         fuente = self.fuente("divisas")
         df = fuente.fx(divisas, inicio, fin)
+        self._recoger_avisos(fuente)
         df = _estampar(df, fuente.nombre)
+        df, limpieza = contrato.limpiar_fx(df, self._hoy)
+        self.avisos += limpieza.avisos(fuente.nombre, "divisas")
+        limite = self._cfg.reglas.datos.fx_antiguedad_maxima_dias
+        self.avisos += contrato.huecos_fx(df, limite)
         if self._verificar:
-            contrato.verificar_fx(df, fuente.nombre).exigir()
+            base = self._cfg.reglas.cartera.divisa_base
+            contrato.verificar_fx(
+                df,
+                fuente.nombre,
+                esperadas=[d for d in divisas if d != base],
+                # El ultimo cambio posible es el de la vispera de `hoy`: el de
+                # `hoy` se aparta.
+                hasta=min(fin, self._hoy - timedelta(days=1)),
+                antiguedad_maxima_dias=limite,
+            ).exigir()
         return df
 
     def sectores(self, tickers: list[str]) -> dict[str, str | None]:
-        return self.fuente("sectores").sectores(tickers)
+        fuente = self.fuente("sectores")
+        salida = fuente.sectores(tickers)
+        self._recoger_avisos(fuente)
+        return salida
+
+    def _recoger_avisos(self, fuente: Fuente) -> None:
+        """Pasa a `self.avisos` lo que la fuente haya anotado, sin repetirlo."""
+        pendientes = getattr(fuente, "avisos", None)
+        if pendientes:
+            self.avisos += pendientes
+            pendientes.clear()
 
 
 def _completar_opcionales(df: pd.DataFrame) -> pd.DataFrame:

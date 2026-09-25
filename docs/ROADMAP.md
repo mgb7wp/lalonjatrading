@@ -9,6 +9,14 @@ son construcción desde cero sino extracción, extensión y conexión.
 Una fase no se da por terminada si sus tests no pasan y su documentación no está
 actualizada. No hay estimaciones en días: dependen de dedicación y no aportan.
 
+**23/09/2026 — la plataforma pasa a `main`.** Se integran en ella las
+correcciones del motor 0.4.1 a 0.5.0 (registro de cambios de `ESTRATEGIA.md`):
+reparto de huecos global entre mercados, deslizamiento contado una vez,
+calentamiento con histórico previo, percentiles sin huecos, EV con precio sin
+ajustar, descargas robustas, sectores, corte fijo entre diseño y validación. Los
+perfiles de puntuación pasan a la versión 1.1.0. La plataforma es, de momento,
+de uso propio; las tareas siguientes, por orden, están en [`PLAN.md`](../PLAN.md).
+
 ---
 
 ## FASE 0 — Análisis y diseño ✅ COMPLETADA

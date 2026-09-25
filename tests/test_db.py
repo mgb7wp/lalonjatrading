@@ -163,7 +163,7 @@ def test_un_mercado_sin_metadatos_falla_al_cargar(sesion):
 
     from backend.db.seed import ReferenciaIncompleta, cargar
 
-    cfg = core_config.cargar()
+    cfg = core_config.cargar(core_config.DIR_CONFIG_POR_DEFECTO)
     referencia = {"paises": {}, "divisas": {}, "mercados": {"es": {}}, "bolsas": []}
     with pytest.raises(ReferenciaIncompleta) as exc:
         cargar(sesion, cfg=cfg, referencia=referencia)

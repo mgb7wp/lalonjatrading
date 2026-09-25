@@ -21,9 +21,14 @@ El reparto por especialidad es lo que resuelve el problema real de este
 proyecto: quedarse con los precios gratuitos de yfinance y traer los
 fundamentales de una fuente con histórico largo y fechas de publicación reales.
 
-`--proveedor` en la línea de comandos fuerza una sola fuente para todo,
-ignorando el reparto. Es cómodo para trabajar sin red (`--proveedor sintetico`)
-o para probar una fuente concreta.
+Sin más opciones, la línea de comandos usa este reparto. `--proveedor` fuerza
+una sola fuente para todo, ignorando el reparto. Es cómodo para trabajar sin red
+(`--proveedor sintetico`) o para probar una fuente concreta.
+
+Los datos descargados se guardan en `datos/cache/<origen>/`, donde el origen es
+la fuente o las fuentes usadas unidas por `+` (`eodhd+yfinance`). Si en el
+origen aparece `sintetico`, el informe lleva la marca de datos sintéticos y no
+se publica en `sitio/`.
 
 ## Las fuentes que hay
 
@@ -128,8 +133,17 @@ el enrutador, en el único sitio por el que pasan todos los datos, así que no
 depende de que quien escriba el adaptador se acuerde.
 
 Comprueba columnas presentes y tipos, fechas ordenadas y sin duplicados,
-coherencia OHLC, fechas de publicación presentes, y **ninguna columna
-obligatoria entera a nulo**.
+coherencia OHLC, fechas de publicación presentes, que llegan todas las divisas
+pedidas y ninguna con el último cambio más viejo que
+`datos.fx_antiguedad_maxima_dias`, y **ninguna columna obligatoria entera a
+nulo**.
+
+Antes de comprobar, el enrutador **limpia** los precios y los cambios: aparta
+las filas sin cierre, con precios negativos, repetidas o de la sesión en curso,
+y repara las de OHLC incoherente. Así una sola fila rara de Yahoo ya no tumba
+una descarga de 140 valores. Todo lo que toca se imprime como aviso, igual que
+lo que cada fuente anote en su lista `avisos` (valores sin precios, estados
+financieros que fallaron tras reintentar).
 
 Esa última es la que más vale, y tiene una historia concreta detrás. El proveedor
 de yfinance devolvía la columna `ev` entera a nulo —con un comentario que decía

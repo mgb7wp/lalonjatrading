@@ -80,7 +80,12 @@ def ejecutar_mercado(mercado_id: str, codigo_calendario: str) -> None:
         return
 
     cfg = core_config.cargar()
-    enrutador = Enrutador(cfg)
+    # Esta tarea corre DESPUES del cierre del mercado (ver `planificador.py`), asi
+    # que la sesion de hoy ya es definitiva. El enrutador aparta por defecto las
+    # filas de hoy, porque a media sesion su "cierre" es el ultimo precio del
+    # momento; aqui se le dice que hoy ya ha cerrado. Sin esto la plataforma iria
+    # siempre un dia por detras.
+    enrutador = Enrutador(cfg, hoy=hoy + dt.timedelta(days=1))
     with _fabrica()() as sesion:
         resultados = ingesta.ejecutar(
             sesion,
@@ -165,7 +170,9 @@ def ejecutar_divisas() -> None:
     from workers.pipeline import ingesta
 
     cfg = core_config.cargar()
-    enrutador = Enrutador(cfg)
+    # Corre despues de que el BCE publique el cambio de hoy (ver
+    # `planificador.py`): ese cambio ya es definitivo y no se aparta.
+    enrutador = Enrutador(cfg, hoy=dt.date.today() + dt.timedelta(days=1))
     with _fabrica()() as sesion:
         # Sin mercados: solo corre la etapa global de divisas.
         resultados = ingesta.ejecutar(sesion, cfg, enrutador, mercados=[], con_divisas=True)

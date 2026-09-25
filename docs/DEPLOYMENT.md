@@ -107,11 +107,24 @@ curl -fsSL https://get.docker.com | sh          # Docker + Compose v2 al día
 apt install -y git
 git clone https://github.com/mgb7wp/lalonjatrading.git
 cd lalonjatrading
+# La plataforma vive en `main` desde el 23/09/2026 (motor v0.5.0). Antes habia
+# que pedir la rama de desarrollo `claude/saas-investment-analysis-ai-rix1km`.
+git checkout main
+```
 
-# Mientras el trabajo siga en la rama de desarrollo, hay que pedirla
-# explicitamente: `main` no tiene ni el frontend desplegable ni el compose de
-# produccion, asi que un despliegue desde ahi falla sin decir por que.
-git checkout claude/saas-investment-analysis-ai-rix1km
+**Si el servidor ya estaba desplegado desde la rama de desarrollo**, se cambia a
+`main` una sola vez, y después se recalcula (ver 5b), porque los perfiles de
+puntuación pasan a la versión 1.1.0 y hasta que se recalculan no tienen scores:
+
+```bash
+cd /root/lalonjatrading
+git fetch origin
+git checkout main
+git pull
+./despliegue/desplegar.sh --tunel      # sin --tunel si no se usa Cloudflare Tunnel
+cp=(docker compose -f docker-compose.yml -f docker-compose.produccion.yml -f docker-compose.tunel.yml)
+"${cp[@]}" exec api python scripts/calculate_scores.py
+"${cp[@]}" exec api python scripts/calculate_signals.py
 ```
 
 En un servidor con menos de 2 GB de RAM, la construccion del frontend puede
@@ -321,16 +334,18 @@ gestionar un token.
 
 ### Qué se ve hoy
 
-Conviene no llamarse a engaño: el frontend actual es el MVP de la FASE 6 —una
-página con el estado del servicio y la tabla de mercados—. La interfaz de verdad
-es la FASE 17. Lo que este despliegue demuestra es que la tubería entera
-funciona de punta a punta con TLS y dominio propio, no que el producto esté
-terminado.
+La interfaz de la FASE 17: panel, mercados, descubrir (screener), rankings,
+ficha de cada valor, seguimiento, cartera y buscador. Las explicaciones con IA
+(FASE 16) necesitan `ANTHROPIC_API_KEY` y un plan que las incluya.
 
 ### Pendiente
 
-- Backups de Postgres verificados — un backup que nunca se ha restaurado no es un backup
-- Monitorización y alertas sobre `/health` y `/health/data`
+La lista de tareas al día está en [`PLAN.md`](../PLAN.md). Lo propio del
+despliegue:
+
+- Sacar las copias de seguridad de la máquina (Cloudflare R2)
+- Monitorización y alertas sobre `/health` y `/health/data`, incluida la
+  frescura de scores y señales
 - Rotación de secretos
 - Despliegue automático desde CI en lugar de `git pull` por SSH
 - **Cambio de proveedor de datos a uno con licencia comercial** (riesgo RD-1 de

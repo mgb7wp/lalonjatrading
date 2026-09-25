@@ -14,6 +14,7 @@ from __future__ import annotations
 
 import datetime as dt
 import os
+from pathlib import Path
 
 import pytest
 import sqlalchemy as sa
@@ -41,13 +42,30 @@ def pytest_configure(config):  # noqa: ARG001 - firma de pytest
     backend.config.settings.cache_clear()
 
 
+#: Copia fija de la configuracion para los tests. Asi, cambiar `config/` (el
+#: capital, los mercados o las comisiones de eToro) no rompe ningun test.
+DIR_CONFIG_PRUEBA = Path(__file__).resolve().parent / "config_prueba"
+
 INICIO = dt.date(2019, 1, 1)
 FIN = dt.date(2024, 12, 31)
 
 
 @pytest.fixture(scope="session")
 def cfg():
-    return config_mod.cargar()
+    return config_mod.cargar(DIR_CONFIG_PRUEBA)
+
+
+@pytest.fixture(scope="session")
+def cfg_real():
+    """La configuracion de `config/`, la del dueño.
+
+    Solo para los tests que comprueban la coherencia de esa configuracion —que
+    el mapeo de la CVM cubre el universo brasileño, que cada mercado pide sus
+    fundamentales a su fuente—. Ningun test de comportamiento del motor debe
+    usarla: esos van con la copia fija de `tests/config_prueba/`, para que
+    cambiar un parametro en `config/` no rompa nada.
+    """
+    return config_mod.cargar(config_mod.DIR_CONFIG_POR_DEFECTO)
 
 
 @pytest.fixture(scope="session")
