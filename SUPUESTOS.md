@@ -82,6 +82,36 @@ que al documento le importa.
 **Sin EV/EBIT utilizable, la valoracion puntua en el peor percentil, no en uno
 neutro.** No saber si una empresa esta barata no es lo mismo que estar barata.
 
+**Los huecos no cuentan en el tamano de la muestra del percentil** (v0.4.4). Una
+empresa sin el dato no esta en la foto contra la que se compara: si contara,
+todas las demas bajarian de percentil sin motivo. Sigue contando para decidir si
+el mercado tiene gente suficiente (`min_empresas_percentil`), que mide empresas
+elegibles, no datos.
+
+**El EV se calcula con el precio sin ajustar por dividendos** (`cierre_bruto`,
+v0.4.4). El ajustado rebaja los precios pasados en lo que se repartio despues, y
+con el la capitalizacion de hace anos saldria menor que la real. Limite conocido:
+el precio sin ajustar de los proveedores si viene ajustado por splits, y las
+acciones en circulacion son las del ultimo balance; si hubo un split entre ese
+balance y la fecha de decision, el EV sale descuadrado hasta el balance
+siguiente.
+
+**Deuda neta de yfinance: la caja se resta una sola vez** (v0.4.6). Yahoo da a
+veces la deuda total y a veces solo la neta, que ya lleva la caja restada. Con la
+deuda total se resta la caja; con solo la neta, se toma tal cual. Se decide
+ejercicio a ejercicio. Si hay deuda total pero no caja, se toma la deuda total:
+sobrestima la deuda, que es el lado prudente.
+
+**Sin deuda neta no hay EV** (v0.4.4). Tomarla como cero haria parecer barata a
+una empresa endeudada solo porque al proveedor le falta el dato. La empresa ya
+no pasaba el filtro (deuda/EBITDA sin calcular), pero su EV entraba en la
+cohorte y movia la valoracion de las demas.
+
+**El informe cuenta las compras puntuadas fuera de su mercado** (v0.4.4): cuantas
+se percentilaron contra el bloque y cuantas con una cohorte insuficiente, por
+mercado. Con la cohorte de todos los mercados a la vez (v0.4.1), el recurso al
+bloque ya actua de verdad.
+
 **Empates: desempate por ticker ascendente.** Sin un desempate explicito, dos
 ejecuciones del mismo backtest pueden dar carteras distintas segun como ordene
 pandas, y el resultado deja de ser reproducible.
@@ -117,6 +147,24 @@ el momento del fill haria que el mercado que abre antes (India, 04:00 UTC) se
 quedara siempre con los huecos antes que Europa o EE. UU.: un sesgo de huso
 horario, no una decision de estrategia.
 
+**El reparto es uno solo por semana, para todos los mercados** (v0.4.1). Cada
+mercado calcula sus salidas, sus senales y sus ratios en su propia sesion de
+decision, con sus datos de ese dia. Al terminar el dia en que decide el ultimo
+mercado de la semana, las candidatas de todos se ordenan en una lista global y
+los huecos se reparten una vez, contra un unico estado reservado de la cartera
+(posiciones, sector, mercado y efectivo). El patrimonio que sirve para
+dimensionar es el de ese momento. Repartir mercado a mercado dejaba que cada uno
+viera la cartera como si los demas no hubieran reservado nada.
+
+**Las posiciones ya en cartera cuentan en la cohorte del percentil de
+momentum**, igual que ya contaban en la de los ratios fundamentales, y luego se
+quitan de la lista antes de repartir. Si no contaran, la nota de una candidata
+dependeria de lo que se tiene en cartera: comprar la mejor de un mercado subiria
+el percentil de las demas la semana siguiente sin que nada hubiera cambiado en
+el mercado. Al quitarlas antes de repartir, el puesto del ranking que se anota
+es el de las comprables de verdad y el registro de rechazos no se llena cada
+semana de `ya_en_cartera`.
+
 **Orden de comprobacion**, que es lo que hace el resultado reproducible: ya en
 cartera, regimen, tope de posiciones, tope de sector, tope de mercado, tamano
 cero, efectivo. Si dos motivos pudieran aplicarse, siempre gana el primero.
@@ -127,7 +175,22 @@ un hallazgo honesto, no algo que convenga esconder redondeando a una accion.
 
 **Un sector que el mapeo no reconoce rechaza el valor.** Fallar hacia el lado
 prudente importa: un sector sin traducir podria colar un banco en una cartera
-que por diseno no quiere bancos.
+que por diseno no quiere bancos. Aunque el valor tenga `sector_declarado` en
+universo.yaml (v0.4.7): ese respaldo solo se usa cuando el proveedor NO devuelve
+sector. Si devuelve uno que el mapeo no conoce, taparlo con lo que alguien
+escribio a mano dejaria sin revisar justo la traduccion que falta. El
+diagnostico imprime la linea de YAML que hay que pegar en `sectores`: con la
+categoria que declaran los valores afectados si todos coinciden, y comentada si
+no, para decidir a mano.
+
+**Un sector que ya es una categoria del documento se admite tal cual** (v0.5.0).
+La base de datos de la plataforma guarda en `security.sector` la categoria
+(`tecnologia`, `electricas`...), no la etiqueta del proveedor (`Technology`), y
+el backtest desde la base se la pasa al motor como si fuera la del proveedor.
+Esas categorias son exactamente las de la columna derecha de `sectores`, asi que
+no hay nada que traducir ni ningun banco que se pueda colar: `bancos` sigue
+siendo `bancos` y se excluye. Sin esta regla, la de v0.4.7 rechazaba todos los
+valores y el backtest desde la base no abria ni una posicion.
 
 **La elegibilidad del universo se evalua a fecha.** Calcularla una sola vez con
 todo el historico seria anticipacion y supervivencia a la vez.
@@ -157,6 +220,41 @@ posiciones pequenas pagan una fraccion alta en comisiones. Se mide y se reporta
 (`coste_pct_posicion`), pero no se rechaza ninguna candidata por eso: seria
 cambiar la estrategia, y el documento pide medir antes de tocar.
 
+**El deslizamiento va en el precio y se informa como coste, pero se resta una
+sola vez** (v0.4.2). Los precios de entrada y salida de cada operacion son los
+realmente pagados y cobrados, con el deslizamiento dentro. El resultado de la
+operacion resta solo comision e impuesto, y por construccion es lo que se movio
+en caja. `costes_base` sigue siendo el coste total, deslizamiento incluido
+(aparte en `deslizamiento_base`), porque es lo que cuesta operar y es lo que
+mide `coste_pct_posicion`.
+
+## Periodo de validacion
+
+**La fecha de corte es fija** (`validacion.fecha_corte`, v0.4.8). El documento
+define el diseno como la fraccion inicial `fraccion_diseno` del historico. Con
+la fraccion sola, el corte avanzaba cada semana al llegar datos nuevos, y lo que
+ayer era validacion pasaba a ser diseno sin que nadie lo decidiera. La fecha es
+la que deja ese 70 % sobre el historico de la base de datos de la plataforma, 20
+anos desde septiembre de 2006: 2020-09-01 (v0.5.0; en v0.4.8 era 2024-05-01,
+pensada para los 8 anos de una descarga por linea de comandos). A partir de ahi
+los datos nuevos solo alargan la validacion. Moverla es un cambio de regla y va
+al registro.
+
+**Mirar "todo" es mirar la validacion** (v0.4.8), y anota la consulta igual que
+pedir la validacion sola. El informe que se genera y se publica cada semana
+muestra por defecto solo el periodo de diseno.
+
+**El panel pide confirmacion y anota una vez por sesion** (v0.4.8). Streamlit
+reejecuta el script con cada clic; anotar cada ejecucion inflaria el contador y
+no anotar nada dejaba mirar sin rastro. La vista de senales ensena solo la
+ultima revision, sin historial de ordenes.
+
+**Operar no gasta la validacion.** Para decidir las ordenes de la semana hacen
+falta los datos de hoy, que caen en el periodo de validacion. Usarlos para
+decidir no es consultarlos: lo que gasta la validacion es mirar como le fue al
+sistema (curva, resultados, historial de operaciones), y eso solo se ensena con
+la consulta anotada.
+
 ## Metricas
 
 **El Sharpe se calcula sobre rentabilidades semanales** por defecto
@@ -181,7 +279,24 @@ la comparacion hacia atras.
 comparacion justa.
 
 **Las posiciones abiertas al final se cierran al ultimo cierre** y se marcan
-`abierta_al_final`, para que la curva este completa.
+`abierta_al_final`, para que la curva este completa. El ultimo punto de la curva
+es el de DESPUES de esa liquidacion, con los costes de salida pagados (v0.4.3):
+asi el capital final del resumen es la suma del inicial y de los resultados de
+todas las operaciones.
+
+**La rentabilidad de cada ano se mide desde el ultimo valor del ano anterior**
+(v0.4.3), y el primer ano desde el valor inicial. Medirla desde la primera
+sesion del ano dejaba fuera lo que pasaba entre el cierre de diciembre y la
+primera sesion de enero, y los anos encadenados no daban la rentabilidad total.
+
+**El calentamiento se cuenta desde el principio de los datos, no desde el del
+backtest** (v0.4.3). Las medias, el ATR, el regimen y el momentum necesitan
+unos trece meses de historia. Si el backtest empieza despues de tenerlos (el
+periodo de validacion, o cualquier `inicio` posterior al de los datos), se decide
+desde la primera semana con el historico anterior. Solo cuando no hay historia
+previa, como en el arranque del periodo de diseno, la cartera espera en liquidez;
+ese tramo sigue dentro de la curva y rebaja la rentabilidad anualizada, y la
+exposicion media lo deja ver.
 
 ## Datos
 
@@ -195,11 +310,52 @@ reexpresiones no son neutras. Cada fila lleva `origen_pit` (`capturado` o
 `reconstruido`) y el informe publica el porcentaje reconstruido, que en un
 backtest de la version 1 es practicamente el 100%.
 
+**Una venta programada sin precio ese dia se aplaza a la siguiente sesion** del
+mercado (v0.4.9), y queda anotada como `venta_aplazada`. La decision de vender
+sigue en pie; antes se perdia sin rastro y la posicion seguia abierta hasta que
+saltara el stop.
+
 **Cierre forzoso tras `sesiones_sin_datos_cierre_forzoso` sesiones sin precio.**
 Arrastrar el ultimo cierre indefinidamente falsea el resultado.
 
 **El regimen se apaga si falta el indice o esta desfasado.** Equivocarse hacia
 el lado prudente cuesta operaciones no hechas; hacia el otro cuesta dinero.
+
+**Las filas malas de precios se reparan o se apartan, no tumban la descarga**
+(v0.4.5). Se apartan las que no se pueden arreglar sin inventar: sin cierre, con
+precios negativos o cero, y las de la sesion en curso. De una fecha repetida se
+queda la ultima fila que llego. Si falta la apertura, el maximo o el minimo, se
+rellenan con el cierre. Todo se cuenta al descargar.
+
+**Un OHLC imposible se descarta, no se repara** (v0.5.0, al integrar la
+plataforma). Con el maximo por debajo del cierre no hay forma de saber cual de
+los dos precios es el bueno, y la plataforma ya los descartaba (`sanear_precios`)
+y registraba cuantos en el pipeline. Se mantiene eso, con un limite: si hay que
+descartar mas del 0,1 % del lote, el lote no sirve y el contrato lo rechaza.
+
+**La sesion del dia en curso no se usa** (v0.4.5). Mientras el mercado esta
+abierto, el "cierre" de hoy es el ultimo precio del momento. Se apartan los
+precios y cambios con fecha de hoy o posterior; el ultimo dato es el de ayer.
+La excepcion es la descarga programada de la plataforma (v0.5.0): corre despues
+del cierre de cada mercado, y la de divisas despues de que el BCE publique, asi
+que para ella la sesion de hoy ya es definitiva y se conserva. Sin eso la
+plataforma iria siempre un dia por detras.
+
+**Un volumen que falta cuenta como una sesion sin negociacion** (v0.4.5). En la
+media de liquidez, un hueco suma cero en lugar de ignorarse. Antes un solo hueco
+volvia el promedio NaN, y como `NaN < minimo` es falso, el valor pasaba el
+filtro sin que se supiera cuanto se negociaba.
+
+**Faltar una divisa o tener el cambio congelado es un error al descargar**
+(`datos.fx_antiguedad_maxima_dias`, v0.4.5). El ultimo cambio de cada divisa no
+puede tener mas de esos dias; un tramo del historico sin cotizacion mas largo se
+avisa, pero no para la descarga: el backtest arrastra el ultimo cambio conocido.
+
+**Cada tipo de dato se descarga y se guarda por separado** (v0.4.5). Si fallan
+los fundamentales, las divisas o los sectores, los precios buenos se guardan y
+del tipo que fallo se conserva lo de la descarga anterior, si lo habia. El
+manifiesto lo anota (`incompletos`), el informe lo avisa y el comando termina con
+codigo 1 para que la tarea programada se entere. Sin precios no se toca nada.
 
 ## Inconsistencias del documento
 

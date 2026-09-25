@@ -1,0 +1,90 @@
+# Despliegue de produccion. Se usa junto al compose de desarrollo:
+#
+#   docker compose -f docker-compose.yml -f docker-compose.produccion.yml up -d
+#
+# o mejor, con el script:  ./despliegue/desplegar.sh
+#
+# Diferencias con desarrollo, todas deliberadas:
+#
+#   - Postgres y Redis dejan de publicar puertos al exterior. En un VPS con IP
+#     publica, `ports: 5432:5432` es una base de datos abierta a Internet, y los
+#     escaneres la encuentran en horas.
+#   - La API no publica el 8000 tampoco: se llega a ella por Caddy, con TLS.
+#   - Sin `--reload` y sin montar el codigo como volumen: lo que corre es lo que
+#     hay en la imagen, no lo que haya en el disco del servidor.
+#   - Se anaden `web` (Next.js) y `caddy` (TLS + proxy inverso).
+#   - `restart: unless-stopped` en todo, para que un reinicio del servidor no
+#     deje el sitio caido.
+
+services:
+  postgres:
+    ports: !override []
+    restart: unless-stopped
+
+  redis:
+    ports: !override []
+    restart: unless-stopped
+
+  api:
+    command: sh -c "python scripts/init_db.py && uvicorn backend.main:app --host 0.0.0.0 --port 8000 --workers 2"
+    volumes: !override []
+    ports: !override []
+    restart: unless-stopped
+    environment:
+      DATABASE_URL: postgresql+psycopg://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}
+      REDIS_URL: redis://redis:6379/0
+      JWT_SECRET: ${JWT_SECRET:?JWT_SECRET es obligatorio en produccion}
+      ENTORNO: produccion
+      DEBUG: "false"
+      CORS_ORIGENES: '["https://${DOMINIO}"]'
+      SEC_USER_AGENT: ${SEC_USER_AGENT}
+      # Opcional: sin clave, las explicaciones con IA se declaran no
+      # disponibles y el resto de la API funciona igual (FASE 16).
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
+      LLM_MODELO: ${LLM_MODELO:-claude-opus-5}
+
+  worker:
+    volumes: !override []
+    restart: unless-stopped
+    environment:
+      DATABASE_URL: postgresql+psycopg://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}
+      REDIS_URL: redis://redis:6379/0
+      ENTORNO: produccion
+      SEC_USER_AGENT: ${SEC_USER_AGENT}
+
+  web:
+    build:
+      context: ./frontend
+    restart: unless-stopped
+    environment:
+      # Red interna de Docker: el navegador nunca ve esta URL.
+      API_URL: http://api:8000
+      # Vacio = mismo origen. Caddy enruta /api a la API, asi que el navegador
+      # no necesita saber donde vive.
+      NEXT_PUBLIC_API_URL: ""
+    depends_on:
+      api: {condition: service_healthy}
+
+  caddy:
+    image: caddy:2-alpine
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    environment:
+      DOMINIO: ${DOMINIO}
+      ACME_EMAIL: ${ACME_EMAIL}
+    volumes:
+      - ./despliegue/Caddyfile:/etc/caddy/Caddyfile:ro
+      # Los certificados persisten entre reinicios. Sin este volumen, cada
+      # `docker compose up` pide uno nuevo y Let's Encrypt corta por limite de
+      # peticiones al quinto intento de la semana.
+      - caddy_data:/data
+      - caddy_config:/config
+    depends_on:
+      - api
+      - web
+
+volumes:
+  caddy_data:
+  caddy_config:

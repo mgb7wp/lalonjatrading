@@ -36,6 +36,18 @@ referencias:
     nombre: "iShares Core MSCI EM IMI UCITS ETF (Acc)"
     divisa: EUR
 
+# AÑADIDO al integrar la plataforma: claves que la plataforma exige. Mismos
+# valores que config/implementacion.yaml.
+cik_sec:
+  XOM: "0000034088"
+
+codigos_stooq:
+  es: es
+  us: us
+  de: de
+  in: in
+  br: br
+
 # Codigos de bolsa de EODHD. NO coinciden con los sufijos de Yahoo: lo que en
 # Yahoo es `RELIANCE.NS` alli es `RELIANCE.NSE`, y `SAP.DE` es `SAP.XETRA`.
 # Sin verificar contra la API: es de las primeras cosas que dira el diagnostico
@@ -46,6 +58,17 @@ codigos_eodhd:
   de: XETRA
   in: NSE
   br: SA
+
+# Como se habla con las fuentes por red. Yahoo limita por volumen y falla de
+# forma intermitente: cada peticion se reintenta `intentos` veces, esperando
+# `espera_inicial_s` segundos la primera vez y el doble en cada intento
+# siguiente, y entre valor y valor se hace una pausa para no provocar el
+# limite (error 429). Con 140 valores, 0,5 s de pausa suman poco mas de un
+# minuto.
+descargas:
+  intentos: 4
+  espera_inicial_s: 2.0
+  pausa_entre_peticiones_s: 0.5
 
 # Par de divisas con el que se convierte cada moneda a la base (EUR).
 # El codigo invierte el par cuando hace falta.

@@ -1,0 +1,12 @@
+<!-- La marca de LaLonja Trading.
+     Dos cuadrados iguales desplazados en diagonal; el solape se vacia al fondo.
+     Geometria medida sobre el original de 512 px, no aproximada a ojo, y los
+     tres colores son los tokens del diseno: #0B0E11, #F5F5F5 y #F0B90B.
+     La placa oscura va dentro a proposito: sin ella el cuadrado blanco
+     desaparece en una pestania de navegador en modo claro. -->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-label="LaLonja Trading">
+  <rect width="512" height="512" fill="#0B0E11"/>
+  <rect x="205" y="138" width="169" height="169" fill="#F5F5F5"/>
+  <rect x="138" y="205" width="169" height="169" fill="#F0B90B"/>
+  <rect x="205" y="205" width="102" height="102" fill="#0B0E11"/>
+</svg>

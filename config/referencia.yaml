@@ -1,0 +1,78 @@
+# Datos de referencia de la plataforma: paises, divisas, bolsas y metadatos de
+# cada mercado.
+#
+# Estan aqui y no en el codigo por la misma razon que el resto de la
+# configuracion: §3 del encargo exige que los mercados no esten incrustados.
+# Anadir Francia es una entrada en `mercados` de reglas.yaml, su calendario en
+# implementacion.yaml, sus tickers en universo.yaml y una entrada aqui.
+#
+# El script de carga COMPRUEBA que todo mercado de reglas.yaml tiene su entrada
+# en `mercados`, y falla si falta. Un mercado a medio dar de alta produciria
+# valores sin pais ni divisa, que es el tipo de hueco que no se nota hasta que
+# una consulta devuelve menos filas de las que deberia.
+#
+# El huso horario NO se escribe aqui: lo da el calendario de negociacion, que es
+# la fuente autoritativa. Dos sitios donde escribir el huso es un sitio donde
+# equivocarse.
+
+paises:
+  ES: España
+  US: Estados Unidos
+  DE: Alemania
+  IN: India
+  BR: Brasil
+
+divisas:
+  EUR: {nombre: Euro, decimales: 2}
+  USD: {nombre: Dolar estadounidense, decimales: 2}
+  INR: {nombre: Rupia india, decimales: 2}
+  BRL: {nombre: Real brasileno, decimales: 2}
+
+mercados:
+  es:
+    benchmark_nombre: IBEX 35
+    nombre: España
+    pais: ES
+    # `benchmark_total_return` dice si el indice de referencia incluye
+    # dividendos. Importa mucho mas de lo que parece: las series de las acciones
+    # vienen ajustadas por dividendos, asi que construir el target de un modelo
+    # contra un indice de PRECIO le regala a cada accion la rentabilidad por
+    # dividendo del indice y sesga la etiqueta hacia el 1. Decision D-5.
+    # Los cinco estan a `false` porque los simbolos configurados hoy son de
+    # precio. Es un hecho incomodo anotado, no un problema resuelto.
+    benchmark_total_return: false
+  us:
+    benchmark_nombre: S&P 500
+    nombre: Estados Unidos
+    pais: US
+    benchmark_total_return: false
+  de:
+    benchmark_nombre: DAX
+    nombre: Alemania
+    pais: DE
+    # El DAX es, de los cinco, el unico que historicamente se publica como
+    # indice de rentabilidad total. Se deja en `false` de todas formas hasta
+    # comprobar que el simbolo concreto que se descarga es esa version y no la
+    # de precio: anotar una ventaja que no se ha verificado es peor que no
+    # tenerla.
+    benchmark_total_return: false
+  in:
+    benchmark_nombre: NIFTY 50
+    nombre: India
+    pais: IN
+    benchmark_total_return: false
+  br:
+    benchmark_nombre: Ibovespa
+    nombre: Brasil
+    pais: BR
+    benchmark_total_return: false
+
+# Una bolsa por mercado. La lista crecera cuando un mercado tenga varias plazas.
+bolsas:
+  - {codigo: BME,  nombre: Bolsa de Madrid,                mic: XMAD, pais: ES, mercado: es}
+  - {codigo: NYSE, nombre: New York Stock Exchange,        mic: XNYS, pais: US, mercado: us}
+  - {codigo: XETR, nombre: Xetra,                          mic: XETR, pais: DE, mercado: de}
+  # Los tickers del universo llevan sufijo .NS (NSE), pero el calendario
+  # configurado es XBOM: la NSE comparte festivos con la BSE.
+  - {codigo: NSE,  nombre: National Stock Exchange of India, mic: XNSE, pais: IN, mercado: in}
+  - {codigo: B3,   nombre: B3 - Brasil Bolsa Balcao,       mic: BVMF, pais: BR, mercado: br}

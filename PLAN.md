@@ -1,369 +1,204 @@
-# Plan de tareas para completar LalonjaTrading
+# Plan de tareas de La Lonja
 
 ## Contexto
 
-**Qué hay hoy.** El repositorio contiene la versión 1 completa de la estrategia de `ESTRATEGIA.md`. Son unas 11.000 líneas de Python y 92 tests. Incluye:
-- el motor: universo, filtro fundamental, señal técnica, stops, costes y divisas;
-- un informe en HTML;
-- un panel de Streamlit.
+**Qué es.** La Lonja (`lalonja-trading.com`) es la plataforma de análisis de inversiones del proyecto:
+- el **motor** de la estrategia está en `core/estrategia/`, en español;
+- la **plataforma** (API, base de datos, tareas diarias, web) está en `backend/`, `workers/`, `ml/` y `frontend/`, en inglés;
+- el **servidor** es un Hetzner, detrás de Cloudflare Tunnel.
 
-**El problema.** Solo se ha probado con datos inventados (el proveedor "sintético"). Nunca ha tocado datos reales, ni un bróker, ni Cloudflare.
+**Para qué, de momento.** Para uso propio:
+- analizar valores con datos reales;
+- operar en eToro, con 1.000 € de capital inicial, primero en simulado.
 
-**Tus objetivos:**
-1. Un backtest fiable con datos reales.
-2. Una hoja de órdenes semanal que puedas seguir en eToro: primero en simulado y después con 1.000 € reales.
+Lo comercial (cobrar a suscriptores) queda aparcado hasta el final.
 
-**Tus condiciones:**
-- Datos gratis. Como mucho, pagarías un mes de EODHD.
-- Todo automático en tu ordenador Windows.
-- Las órdenes se consultan en una página web privada en tu dominio de Cloudflare.
-
-**Diagnóstico.** Revisé todos los ficheros y verifiqué a mano los fallos más graves. Hay tres bloques de trabajo:
-- **(a) Fallos que falsean los resultados.** Hay que arreglarlos antes de creerse ningún número.
-- **(b) El "modo operativo" no existe.** El comando `senales` no puede usarse para operar:
-  - siempre enseña las órdenes de la semana anterior;
-  - no dice ni qué vender ni dónde poner el stop;
-  - no conoce tu cartera real.
-- **(c) Falta la automatización.** El ciclo semanal que describe la documentación (`.github/workflows/semanal.yml`) no está en el repositorio: se perdió al importarlo.
+**De dónde viene este plan.** El 23/09/2026 la plataforma pasó a `main` e incorporó los arreglos del motor B1–B10. Antes vivía en ramas separadas. Las fases del producto están en [`docs/ROADMAP.md`](docs/ROADMAP.md), y las decisiones de diseño (D-1 a D-14), en [`docs/PROJECT_PLAN.md`](docs/PROJECT_PLAN.md).
 
 ## Cómo usar este plan
-- **Cada tarea tiene un código** (A1, B2…) y un responsable:
+
+- **Cada tarea tiene un código** (S1, M2…) y un responsable:
   - 🤖 lo hace Claude Code;
   - 👤 lo haces tú;
   - 🤝 lo hacéis juntos.
-- **Para una tarea 🤖**, abre una sesión de Claude Code y escribe: *"Haz la tarea B2 de PLAN.md"*. Cada una cabe en una sesión: Claude crea una rama, cambia el código, añade tests y te explica el resultado.
-- **Dónde ejecutarlas:**
-  - Las que necesitan datos reales, eToro o tu ordenador (marcadas 💻) hay que hacerlas **en tu Windows**. Desde la nube, Yahoo Finance devuelve el error 429 (lo he comprobado).
-  - Para esas, instala Claude Code en tu PC (app de escritorio o CLI).
-  - Las demás pueden hacerse desde la web.
-- **El orden importa.** No saltes a la fase F (operar) sin haber cerrado la B (fallos).
+- **Para una tarea 🤖**, abre una sesión y escribe: *"Haz la tarea M1 de PLAN.md"*. Cada una cabe en una sesión y termina en una pull request con sus tests. El CI tiene que salir en verde (ruff, pytest con Postgres y build del frontend).
+- **Las tareas 🖥️ necesitan el servidor.** Claude no tiene acceso por SSH: te da los comandos y tú los pegas.
+- **El orden importa:** primero, que el servicio no falle en silencio y que los números sean correctos; después, usarla para operar.
 
 ---
 
-## Fase A — Preparar el terreno
+## Fase 1 — Unificar (en curso)
 
-**A1 🤖 Guardar el plan y crear las reglas para Claude.**
-- Guarda este plan como `PLAN.md` en el repositorio.
-- Crea un `CLAUDE.md` con las normas del proyecto:
-  - en español;
-  - `ESTRATEGIA.md` manda sobre el código;
-  - ningún parámetro cambia sin una entrada en su registro de cambios;
-  - ejecutar `pytest` siempre.
-- *Hecho cuando:* ambos ficheros están en `main`.
+**I1 🤖 Integración.** Terminada en la rama `claude/gallant-lamport-saaeo8`; falta fusionarla.
+- La plataforma incorpora B1–B10.
+- Se arreglan dos choques: los sectores del backtest desde la base de datos, y la sesión del día en la descarga programada.
+- 648 tests en verde.
 
-**A2 🤖 Poner los tests en marcha.**
-- Instala las dependencias y ejecuta los 92 tests. Arregla los que fallen.
-- Pon versiones máximas a `yfinance`, `streamlit` y `exchange-calendars` en `pyproject.toml`: las versiones nuevas cambian cosas sin avisar. Quita `plotly`, que no se usa.
-- Arregla `test_el_enrutador_avisa_de_una_clave_que_falta` (`tests/test_fuentes.py:198`): falla si existe la variable de entorno `EODHD_API_KEY`.
-- *Hecho cuando:* `pytest` sale en verde.
+**I2 🤖 `main` pasa a ser la plataforma.** Hay que fusionar la pull request de I1 y cerrar la PR #1, cuyo contenido llega por I1.
 
-**A3 🤖 Separar la configuración de los tests de la tuya.**
-- Crea una copia fija de la configuración para los tests (por ejemplo `tests/config_prueba/`).
-- Así, cuando cambies capital, mercados o comisiones para eToro, los tests no se rompen.
-- *Hecho cuando:* cambiar `config/reglas.yaml` no hace fallar ningún test.
+**I3 👤🖥️ El servidor pasa a `main`.**
+- Es una vez. Los comandos están en [`docs/DEPLOYMENT.md`](docs/DEPLOYMENT.md), sección 1: `git checkout main`, `desplegar.sh` y el recálculo de scores y señales.
+- *Hecho cuando:*
+  - `/api/v1/rankings` da la fecha de hoy;
+  - la pestaña "Análisis IA" aparece en la ficha de un valor.
 
-**A4 🤖 Comprobación automática en GitHub (opcional).**
-- Un workflow `.github/workflows/tests.yml` que ejecuta `pytest` en cada cambio.
-- Si GitHub rechaza subir el fichero por permisos (probablemente la misma causa por la que se perdió el anterior), Claude te da el contenido y lo pegas tú desde la web de GitHub.
+**I4 🤖 Ramas viejas.**
+- Borrar las ramas que ya no se usan:
+  - `claude/saas-investment-analysis-ai-rix1km`;
+  - `claude/affectionate-goodall-5zkcyd`;
+  - `claude/tarea-a2-plan-3vkpwa`;
+  - `claude/tarea-b1-plan-upatwu`.
+- `claude/blissful-faraday-mi75sr` se borra después de M3 y M4, que aprovechan dos de sus commits.
+- Solo con tu permiso.
 
-## Fase B — Arreglar los fallos que falsean resultados
+## Fase 2 — Que no falle en silencio
 
-**B1 🤖 La línea de comandos usa datos inventados por defecto.**
-- Qué pasa:
-  - `--proveedor` vale `sintetico` por defecto (`src/estrategia/cli.py:344`) y siempre fuerza una sola fuente (`cli.py:49`).
-  - Por eso el reparto de fuentes de `reglas.yaml` es inalcanzable.
-  - Y `estrategia informe` publicaría datos falsos como si fueran reales.
-- Qué hacer:
-  - Que por defecto se use `reglas.yaml`.
-  - Que la carpeta de caché sea coherente con la que lee el panel.
-  - Que un origen mixto como "eodhd+sintetico" también se marque como sintético (`informe.py:55`).
-- Añadir tests.
+**S1 🤖 Vigilar scores y señales.**
+- Hoy `/health/data` vigila la frescura de precios, fundamentales y divisas, pero no la de scores y señales.
+- Eso es justo lo que falló el 22/09: los rankings enseñaban scores viejos y nada avisó.
+- Hay que añadirlo, y conectar un aviso externo gratuito (UptimeRobot o similar) que te escriba si `/health/data` no está en verde.
 
-**B2 🤖 Ranking global y límites de cartera entre mercados. Es el fallo más grave.**
-- Qué pasa:
-  - La revisión semanal decide mercado a mercado: `backtest.py:222-229` → `_revisar` → `ordenes.asignar`, sin contar las órdenes que ya han reservado los otros mercados.
-  - Resultado: puede haber hasta 15 compras en una semana con un máximo de 8 posiciones.
-  - Los topes por sector y el efectivo disponible se pueden rebasar.
-  - Y entra antes quien va primero en la lista es, us, de, in, br, no quien tiene mejor puntuación.
-- Qué hacer:
-  - En cada corte semanal, reunir las candidatas de todos los mercados.
-  - Ordenarlas globalmente, como dicen `ESTRATEGIA.md` y `SUPUESTOS.md:115-118`.
-  - Repartir los huecos una sola vez.
-  - Recalcular el percentil de momentum dentro de cada mercado, pero con la cohorte completa.
-- Test: en una semana con 5 mercados activos nunca se superan `max_posiciones`, `max_por_sector`, `max_por_mercado` ni el efectivo.
+**S2 🤝🖥️ Copias de seguridad fuera del servidor.**
+- Hoy viven en el mismo disco que la base de datos (`despliegue/copia_seguridad.sh`).
+- Subirlas a Cloudflare R2, que tiene 10 GB gratis. Tú creas el bucket y el token; Claude, el script.
 
-**B3 🤖 El deslizamiento se cuenta dos veces por operación.**
-- Qué pasa:
-  - Los precios de compra y venta ya lo incluyen (`backtest.py:416`, `:473`).
-  - `cartera.py:74-94` lo vuelve a restar.
-  - La curva de capital está bien, pero el % de operaciones ganadoras y los resultados por mercado y por bloque salen peor de lo real, sobre todo en emergentes.
-- Arreglar y añadir test.
+**S3 🤝 Cerrar la web con Cloudflare Access.**
+- Solo tu email entra, incluido `/docs`.
+- Es de uso propio, los datos de yfinance no se pueden redistribuir, y así nadie gasta tu cuota de IA.
+- Se hace en el panel de Cloudflare (Zero Trust → Access); Claude te guía.
 
-**B4 🤖 El calentamiento y las métricas anuales.**
-- El calentamiento de unos 13 meses se aplica después de `inicio` aunque exista histórico anterior (`backtest.py:117`, `:266-275`). Por eso el periodo de validación pierde casi la mitad de su tiempo en liquidez. Hay que usar el histórico previo para los indicadores.
-- La rentabilidad por año no encadena bien los años (`metricas.py:146`).
-- La curva termina antes de la liquidación final.
+**S4 🤖 Despliegue automático desde el CI (opcional).**
+- Hoy es `git pull` por SSH.
 
-**B5 🤖 Puntuación fundamental.**
-- Los percentiles cuentan los huecos (NaN) en el tamaño de la muestra (`fundamental.py:72-76`).
-- El EV se calcula con el precio ajustado por dividendos; debe usar `cierre_bruto` (`backtest.py:352-356`).
-- La deuda neta que falta se toma como 0.
-- El recurso de percentilar contra el bloque (desarrollado o emergente) cuando un mercado tiene pocas empresas nunca llega a actuar, y el informe no lo dice.
+## Fase 3 — Que los números sean correctos
 
-**B6 🤖 Descargas robustas con datos reales.**
-- Qué pasa hoy:
-  - Una sola fila mala de Yahoo (OHLC incoherente o fecha repetida, `contrato.py:133-154`) tumba toda la descarga.
-  - Si fallan los fundamentales, tampoco se guardan los precios.
-- Qué hacer:
-  - Reparar o apartar las filas malas y avisar de ellas.
-  - Guardar cada tipo de dato por separado.
-  - Reintentos también en los estados financieros (`yfinance_proveedor.py:259-264`).
-  - Pausas entre peticiones.
-  - Comprobar que llegan todas las divisas y poner un límite de antigüedad al tipo de cambio.
-  - Volumen con huecos (NaN) no debe pasar el filtro de liquidez.
-  - Descartar filas sin cierre.
-  - No usar la sesión del día en curso.
-- Corregir `diagnostico.py`:
-  - usa el ejercicio más antiguo en lugar del más reciente (`:145`);
-  - no comprueba índices, divisas ni ETF de referencia.
+**M1 🤖 Fuga de futuro en los scores de producción.** Es lo más urgente de esta fase. Tres problemas en `workers/pipeline/scores.py`:
+- `_fundamentales` no filtra por fecha de publicación, y `historico.iloc[-1]` puede ser un ejercicio que aún no se había publicado ese día. Un recálculo hacia atrás usa datos del futuro.
+- La valoración usa `close`, que está ajustado por dividendos, en lugar de `close_raw`. Además, el EV suma la deuda bruta en lugar de la neta.
+- `_indicadores` y `_precios` no tienen límite de antigüedad, así que un valor que dejó de cotizar sigue puntuando.
 
-**B7 🤖 yfinance: correcciones y tests.**
-- La caja se resta dos veces en la deuda neta (`yfinance_proveedor.py:275` y `:315`).
-- Añadir tests para `ajustar_ohlc`, `con_reintentos` y `estimar_fecha_publicacion`.
+A la vez, en `core/estrategia/scoring.py` y `grupos.py`:
+- el mínimo de cohorte debe contar los valores presentes, no las filas;
+- la cohorte `__refundida__` no debe etiquetarse como `BLOQUE`.
 
-**B8 🤖 Sectores desconocidos.**
-- Un sector que el mapeo no conoce hoy acaba usando el `sector_declarado` (`sectores.py:50-55`). Contradice `SUPUESTOS.md:128`: podría colar un banco.
-- Aplicar la regla documentada: se rechaza, y el diagnóstico imprime el YAML que hay que pegar.
+Tests de anticipación como los de `tests/test_anti_sesgo.py`.
 
-**B9 🤖 Proteger el periodo de validación.**
-- `informe --periodo todo`, que es la opción por defecto, y el panel enseñan el periodo de validación sin anotar la consulta (`cli.py:391`, `panel/app.py:179`, `:213-225`).
-- La fecha de corte entre diseño y validación se desplaza cada semana.
-- Qué hacer:
-  - Fijar la fecha de corte en la configuración.
-  - Que el informe semanal muestre solo el periodo de diseño.
-  - Que el panel anote cada consulta.
+**M2 🤖 Señales** (`workers/pipeline/senales.py`).
+- El score de "hace 30 días" se busca en un día exacto, y en fines de semana y festivos no lo encuentra. El limitador de caída se salta en silencio.
+- El umbral `momentum_minimo` (tanto por uno) se compara con un sub-score de 0 a 100, así que nunca actúa.
 
-**B10 🤖 Limpieza de fallos menores.**
-- `foto` falla en una carpeta recién clonada (`cli.py:144`).
-- Una venta programada se pierde sin dejar rastro (`backtest.py:172-174`).
-- Un `except Exception` silencioso al pedir el tipo de cambio (`backtest.py:373`).
-- `senales --detalle` filtra por la fecha equivocada (`cli.py:199`).
-- Los errores de configuración salen como traza cruda, en vez de un mensaje claro.
-- Números sueltos en el código que deberían ir a la configuración (`ordenes.py:127`, `tecnico.py:131/174/195`, `informe.py:112/262`).
-- Código muerto (`tecnico.py:27-105`).
-- Faltan ñ y tildes en los textos públicos ("Ano").
+**M3 🤖 Órdenes pendientes.**
+- Las órdenes que aún no se han ejecutado deben ocupar hueco en el reparto semanal del backtest.
+- Se trae el commit `c3018c8` de la rama `blissful-faraday`: `asignar(pendientes=)` y `Orden.reserva_base`.
 
-## Fase C — Primer contacto con datos reales 💻
+**M4 🤖 Saltos de precio sin ajustar.**
+- Traer el detector `contrato.saltos_sospechosos` del commit `a0afefb`.
+- Arreglar los tres casos conocidos:
+  - `TMPV.NS`: la escisión de Tata Motors;
+  - `UGPA3.SA`: su histórico antes de 2021-06-28;
+  - `EMBR3.SA`, que ahora es `EMBJ3.SA` (también en `config/cvm_empresas.yaml`).
 
-**C1 🤝 Instalación en tu Windows.**
-- Instalar Python 3.11 o superior, Git y Claude Code.
-- Clonar el repositorio y ejecutar `pip install -e ".[panel,dev]"`.
-- Después: `estrategia diagnostico --anos 8 --detalle`.
-- *Hecho cuando:* tienes el informe de diagnóstico en `datos/resultados/`.
+**M5 🤖 Fuente de precios de respaldo.**
+- Hoy los cinco mercados dependen solo de yfinance.
+- Candidatas gratuitas: Tiingo y Twelve Data. EODHD es de pago.
 
-**C2 🤖💻 Corregir el universo con el diagnóstico.**
-- Tickers probablemente obsoletos: `TATAMOTORS.NS`, `BRFS3.SA`, `JBSS3.SA`, `ELET3.SA`, `CPLE6.SA`.
-- Sectores que Yahoo devuelve y el mapeo no conoce.
-- Campos de los estados financieros que salen vacíos.
-- EV calculable en la mayoría de los valores.
-- *Hecho cuando:* al menos el 90 % de los valores son utilizables y no queda ningún sector sin mapear.
+**M6 🤝 Fundamentales de España, Alemania e India.**
+- Hoy son 4 ejercicios reexpresados de yfinance.
+- Opción: pagar **un mes** de EODHD, descargar todo el histórico y guardarlo. Antes hay que corregir el adaptador, que nunca se ha ejecutado con clave real:
+  - toma la divisa de `CurrencySymbol`;
+  - usa `commonStock` como número de acciones;
+  - resta la caja dos veces en la deuda neta.
 
-**C3 👤 Comprobar qué vende eToro.**
-- Claude te prepara la lista de los 140 valores y tú marcas cuáles se pueden comprar en eToro.
-- Lo más probable es que eToro no ofrezca India (NSE) ni Brasil (B3).
-- Tú decides qué hacer con esos mercados:
-  - quitarlos;
-  - sustituirlos por sus ADR en EE. UU.;
-  - o dejarlos solo en el backtest.
-- Después, 🤖 aplica la decisión en `config/universo.yaml` y `reglas.yaml`, con una entrada en el registro de cambios.
+**M7 🤝 Verificar la configuración que dice "sin verificar".**
+- `config/universo.yaml`: marcar qué valores vende eToro. India y Brasil probablemente no están, y hay que decidir qué hacer con ellos.
+- Las listas del ITF español, contra la Agencia Tributaria.
+- La tasa de la SEC.
+- Los retrasos de publicación de India (105 días) y Brasil (100), que hoy son menores que los 120 de Europa y EE. UU.
 
-**C4 🤝 Verificar los impuestos.**
-- Contrastar con la lista oficial de la Agencia Tributaria las listas anuales del ITF español (`config/impuestos_transaccion.yaml`). Hoy son idénticas todos los años y falta 2026.
-- Actualizar también la tasa de la SEC.
+## Fase 4 — Operar con ella (eToro, 1.000 €)
 
-**C5 👤 Decidir los retrasos de publicación.**
-- `reglas.yaml` da a India 105 días y a Brasil 100, menos que los 120 de Europa y EE. UU.
-- Eso contradice la idea del documento: los emergentes publican más tarde.
-- Tú eliges los valores; 🤖 los aplica y los anota en el registro de cambios.
+**O1 🤖 Cartera.**
+- Poder corregir una transacción y renombrar la cartera. Hoy la API lo permite, pero la web no.
+- Permitir una comisión de custodia sin valor asociado: hoy `portfolio_transaction.security_id` es obligatorio, así que hace falta una migración.
 
-**C6 🤖💻 Primeros backtests y explicación en lenguaje llano.**
-- Primero solo con la parte técnica (`fundamental.activo: false`) sobre todo el histórico. Sirve para validar calendarios, stops, costes y divisas con más de 100 operaciones.
-- Después con el filtro fundamental activado. Con yfinance habrá muy pocas operaciones, y eso es esperable.
-- *Hecho cuando:* los informes no llevan la marca "sintético" y entiendes qué dicen.
+**O2 🤖 Hoja de órdenes semanal sobre tu cartera.** Es el corazón de "operar".
+- Qué vender, a qué nivel mover cada stop y qué comprar, con el importe en €.
+- Sale de las mismas funciones del motor que el backtest, partiendo de tu cartera real.
+- Queda detrás de un interruptor `PERSONALIZATION_ENABLED`, activado solo para ti (decisión D-6: esto es recomendación personalizada y no puede abrirse a terceros sin revisión legal).
+- Arreglar a la vez que las señales del motor van una semana tarde: la última revisión se descarta porque su sesión de ejecución cae fuera del calendario (`core/estrategia/backtest.py`).
 
-## Fase D — Fundamentales: gratis y, si quieres, un mes de EODHD
+**O3 🤖 eToro y 1.000 €.**
+- Comprar fracciones de acción: hoy `acciones` es un entero en `core/estrategia/tipos.py` y `riesgo.py`.
+- Las tarifas reales de eToro, incluida la conversión de divisa, en `costes`.
+- Revisar `max_posiciones`, `max_por_mercado` y `peso_maximo` para 1.000 €.
+- Todo va al registro de cambios.
 
-**D1 🤖 Preparar EODHD antes de pagar, para no gastar el mes depurando.** Se hace desde la nube, con respuestas grabadas.
-- Corregir errores probables del adaptador:
-  - toma la divisa de `CurrencySymbol`, que es un símbolo como "$" y no un código (`eodhd_proveedor.py:118-119`);
-  - usa `commonStock` como número de acciones, pero es un importe (`:59`);
-  - resta la caja dos veces en la deuda neta (`:57`, `:182`);
-  - no tiene reintentos ni gestiona el error 429;
-  - los errores por valor se tragan en silencio.
-- Guardar en disco las respuestas en bruto (`datos/eodhd_crudo/`, fuera de git por la licencia).
-- Crear una fuente `archivo` que lea esas respuestas sin clave y complete los años nuevos con yfinance.
-- Que el informe lea las capacidades reales de cada fuente, en lugar del número escrito a mano en `fundamentales_anos_disponibles`.
+**O4 🤖 Alertas (FASE 15).**
+- Aviso por email o Telegram cuando haya que mover un stop o cuando salga la hoja semanal.
+- Las tablas `alert` y `alert_event` ya existen; no hay nada construido encima.
 
-**D2 🤝💻 El mes de pago.**
-- Contratar el plan que incluya fundamentales. Compruébalo en su web: el plan básico de precios no los trae.
-- Descargar todo en uno o dos días, pasar el diagnóstico y guardar el archivo.
-- Opcional: bajar también las empresas deslistadas para reducir el sesgo de supervivencia.
+**O5 👤 De 8 a 12 semanas en simulado.**
+- Con la cartera virtual de eToro, siguiendo la hoja y registrando lo que ejecutas.
+- Para pasar a real: ninguna diferencia sin explicar, y costes reales iguales o menores que los del modelo.
 
-**D3 👤 Cancelar la suscripción.**
-- La configuración queda con la fuente `archivo` para los fundamentales.
+## Fase 5 — Completar la web
 
-**Alternativa gratuita parcial:** SEC EDGAR da fundamentales de EE. UU. gratis y con fechas reales de presentación. Solo es una opción si descartas EODHD.
+**W1 🤝 Explicaciones con IA (FASE 16).**
+- Probar una llamada real. Nunca se ha hecho y necesita `ANTHROPIC_API_KEY` con límite de gasto.
+- Darte un plan que las incluya: el plan FREE tiene 0 al día.
+- Quitar el texto del panel que dice que esa capa "todavía no está construida".
 
-## Fase E — Adaptar la estrategia a eToro y a 1.000 €
+**W2 🤖 Huecos de la web.**
+- Restablecer la contraseña y la página de ajustes.
+- Las entradas del menú marcadas "PRONTO".
+- Las pestañas Valoración, Comparables y Noticias: ocultarlas si no hay datos, en lugar de enseñar un hueco.
 
-**E1 🤖 Fracciones de acción.**
-- Con 1.000 € y 8 posiciones caben unos 125-150 € por valor. Redondeando a acciones enteras, casi nada cabe.
-- Hay que cambiar `acciones: int` a decimal en `tipos.py:156,179,225` y `riesgo.py:41,74`, y en las órdenes y la cartera.
-- Nuevos parámetros:
-  - `cartera.fracciones_permitidas`;
-  - `cartera.importe_minimo_orden` (el mínimo de eToro).
-- Entrada en el registro de cambios como v0.5.
+**W3 🤖 Screeners guardados (FASE 11).** La tabla `saved_screener` ya existe.
 
-**E2 🤝 Tarifas reales de eToro.**
-- Consultar la página oficial de tarifas: comisión por operación y comisión de conversión de divisa.
-- Poner esos valores en `costes.*`.
-- Añadir `costes.conversion_divisa_pct`, un parámetro nuevo que hay que anotar en el registro de cambios.
-- Referencia: la comisión fija actual de 3 € supondría un 2,4 % por operación con posiciones de 125 €.
+## Fase 6 — Validación y cierre de versión
 
-**E3 🤝 Límites de cartera con 1.000 €.**
-- Revisar `max_posiciones`, `max_por_mercado` y `peso_maximo`.
-- Solo se comparan en el periodo de diseño, y todo cambio se anota.
-- El lote de 100 de Brasil deja de importar con fracciones, si Brasil sigue en el universo.
-
-## Fase F — Modo operativo: la hoja de órdenes semanal
-
-**F1 🤖 Cartera persistente.**
-- Ficheros `datos/cartera/simulada.yaml` y `datos/cartera/real.yaml`. Cada uno guarda las posiciones (valor, fecha, precio, acciones, stop inicial, ATR de entrada, máximo cierre) y el efectivo.
-- Comandos:
-  - `estrategia cartera ver`
-  - `cartera compra TICKER --acciones --precio --fecha`
-  - `cartera venta ...`
-- Reutilizar la estructura `Posicion` de `tipos.py`.
-- Siempre puedes pedirle a Claude: *"he comprado 0,4 acciones de X a 120 €, regístralo"*.
-
-**F2 🤖 Decidir la semana actual, no la anterior.**
-- El calendario se construye solo hasta el último precio disponible (`backtest.py:107`, `:130`). Por eso la última revisión, que se ejecutaría el lunes siguiente, se descarta.
-- Solución: extender el calendario con las sesiones futuras, que `exchange_calendars` ya conoce.
-- Test: con datos hasta un viernes, salen las órdenes para el lunes.
-
-**F3 🤖 Nuevo comando `estrategia semana` con tu cartera real.**
-- Usa las mismas funciones del motor que el backtest (`_revisar`, `ordenes.asignar`, `salidas`, `tecnico.senal`), sin un camino paralelo.
-- Produce, en Markdown y HTML:
-  1. **VENDER:** las salidas semanales (bajo la media larga o ya no pasa el filtro fundamental).
-  2. **MOVER STOP:** el nuevo nivel para cada posición.
-  3. **COMPRAR:** para cada valor, el importe en €, las acciones aproximadas, el precio de referencia, el stop inicial, su puesto en el ranking y el motivo.
-  4. **AVISOS:** mercados con el régimen apagado o datos que faltan.
-- Test: la hoja coincide con lo que haría el backtest partiendo de la misma cartera.
-
-**F4 🤖 Stops diarios.**
-- El trailing stop de eToro no sigue la regla "máximo cierre − 3 ATR", así que el nivel se recalcula cada día.
-- Nuevo comando `estrategia stops`, que ejecuta cada mañana laborable y lista solo los stops que han subido, para que los actualices en eToro.
-
-**F5 🤖 Diario de ejecución.**
-- Cada hoja semanal se archiva.
-- Se compara lo que dijo el sistema con lo que ejecutaste: precio real frente a la apertura y deslizamiento real frente al modelado.
-
-**F6 👤 8-12 semanas en simulado.**
-- En la cartera virtual de eToro, sigues la hoja cada semana y registras lo que ejecutas.
-- Para pasar a real: ninguna discrepancia sin explicar, costes reales iguales o menores que los modelados, y que entiendas cada orden.
-
-**F7 👤 Pasar a real con 1.000 €.**
-
-## Fase G — Automatización en tu Windows y web privada 💻
-
-**G1 🤖 `foto` útil.**
-- Guardar solo fundamentales, tipos de cambio y sectores. Hoy guarda además 8 años de precios cada semana y engorda git.
-- Crear las carpetas si faltan.
-- Reutilizar la descarga de `datos` en vez de bajar todo otra vez.
-- Marcar las fotos incompletas.
-
-**G2 🤖 Script semanal y tareas programadas de Windows.**
-- Un script `despliegue/windows/semanal.ps1` que hace, en orden:
-  1. activa el entorno;
-  2. `datos`;
-  3. `foto`;
-  4. `semana`;
-  5. `informe`;
-  6. commit y push de `datos/fotos`;
-  7. despliegue de la web.
-- Guarda un log y te avisa si algo falla.
-- Programador de tareas: el **sábado por la mañana**, con los cierres del viernes ya dentro. Así tienes el fin de semana para revisar las órdenes antes de la apertura del lunes.
-- Un segundo script diario para `stops`.
-
-**G3 🤝 Web privada.**
-- Cloudflare Pages: crear el proyecto con la rama de producción `main` (hoy `DESPLIEGUE.md:56` cita una rama que no existe).
-- Instalar Node.js y wrangler en Windows y guardar el token en una variable de entorno.
-- Cloudflare Access, con acceso solo para tu email.
-- Una página índice con la hoja de la semana, el informe y el archivo de semanas anteriores.
-- *Hecho cuando:* lo abres desde el móvil con el código que te llega por email, y nadie más puede.
-
-**G4 🤖 Panel solo en local.**
-- Que escuche solo en `127.0.0.1` y oculte las trazas de error.
-- Arreglar la caché: hoy no detecta los cambios de configuración (`panel/app.py:48-49`).
-- Añadir una pestaña "Mi cartera".
-- No exponerlo por el túnel: no forma parte de tus objetivos.
-
-**G5 🤖 Leer las fotos semanales (cuando haya meses acumulados).**
-- Convertirlas en fundamentales `capturado`. Hoy nadie las lee.
-
-**G6 🤖 Aviso por email o Telegram cuando la hoja esté lista (opcional).**
-- `ESTRATEGIA.md` lo deja fuera de la versión 1, así que se anota como cambio.
-
-## Fase H — Calidad del informe y cierre de versión
-
-**H1 🤖 Informe completo.**
-- Por mercado y por bloque: rentabilidad anualizada, drawdown y Sharpe.
-- Las referencias MSCI con cifras, no solo como líneas, y también en el Markdown.
-- La sensibilidad dentro del HTML.
-- `sesiones_de_retraso`.
-- Un título con fecha en cada informe.
-
-**H2 🤖 Sensibilidad.**
-- Añadir los parámetros que no se mueven (`validacion.py:38-55`).
+**V1 🤖 Sensibilidad.**
+- Mover los parámetros que hoy no se mueven (`core/estrategia/validacion.py`).
 - Informar de las variantes inválidas en vez de saltarlas en silencio.
-- Mover `crecimiento_ventas_3a` sumando y restando, porque vale 0 y un ±25 % no lo cambia.
 - Dar un veredicto de "robusta / no robusta".
 
-**H3 🤝 Cerrar la versión.**
+**V2 👤🤝 Cerrar la versión.**
 - Congelar los parámetros.
-- Ejecutar el periodo de validación **una sola vez**.
-- Rellenar las fechas y los resultados del registro de cambios de `ESTRATEGIA.md`.
+- Abrir el periodo de validación (desde `validacion.fecha_corte`, 2020-09-01) **una sola vez**.
+- Anotar el resultado en el registro de cambios de `ESTRATEGIA.md`.
 
-**H4 🤖 Documentación al día.**
-- README, DESPLIEGUE y FUENTES: Windows, eToro, comandos correctos, rama `main`, estado real.
-- Versión 0.5 en `pyproject.toml`.
+## Aparcado mientras sea de uso propio
 
-**Mantenimiento recurrente 👤:**
-- Cada enero: la lista del ITF de la Agencia Tributaria y la tasa de la SEC.
-- Cada trimestre: los tickers que siguen en eToro.
-- Cada año: revisar `universo.yaml`.
+Todo esto es necesario antes de cobrar, y no antes:
 
-## Fuera de alcance (versión 2 del documento)
-Quedan fuera:
-- entrada por RSI;
-- salida por tiempo;
-- bancos y aseguradoras;
-- fiscalidad de plusvalías (FIFO y regla de los dos meses; para la declaración usarás el informe anual de eToro);
-- cobertura de divisa;
-- panel público por túnel.
+- **Datos:** un proveedor con licencia comercial (riesgo RD-1: yfinance no la tiene).
+- **Legal:** revisión de MAR y MiFID (decisión D-6).
+- **Cuentas y cobro:** pagos, verificación de email, 2FA, borrar la cuenta, páginas de privacidad y términos, y límites de peticiones por plan.
+- **Más producto:**
+  - machine learning (FASE 8: necesita 1.000 valores; hoy hay 138);
+  - más mercados;
+  - el copiloto conversacional;
+  - empresas deslistadas.
 
-## Verificación final
-- `pytest` en verde, con tests nuevos para el ranking global, el deslizamiento, las fracciones, la semana actual, la cartera persistente y la hoja coherente con el backtest.
-- Diagnóstico real: al menos el 90 % de valores utilizables, ningún sector sin mapear y EV calculable en la mayoría.
-- Backtest solo técnico con 100 operaciones o más, sin la marca de sintético.
-- Un sábado, la tarea programada genera sola la hoja para el lunes y la web privada la muestra. Se comprueba dos semanas seguidas.
-- Entre 8 y 12 semanas de simulado registradas en el diario antes de meter dinero real.
+---
 
-## Estado de las tareas
+## Hecho
 
-Marca aquí cada tarea al terminarla (Claude Code lo hace al cerrar cada sesión).
+**Tareas A y B, del plan anterior (motor), ya integradas en la plataforma:**
+- A1: `PLAN.md` y `CLAUDE.md`.
+- A2: tests en verde y versiones máximas.
+- A3: copia fija de la configuración para los tests.
+- A4: CI. Hoy lo cubre `.github/workflows/ci.yml`.
+- B1–B10: correcciones del motor. El detalle de cada una está en el registro de cambios de `ESTRATEGIA.md` (versiones 0.4.1 a 0.4.9):
+  - B1: fuentes de datos por defecto;
+  - B2: reparto de huecos global entre mercados;
+  - B3: deslizamiento contado una vez;
+  - B4: calentamiento con histórico previo y años encadenados;
+  - B5: percentiles y EV;
+  - B6: descargas robustas;
+  - B7: yfinance;
+  - B8: sectores;
+  - B9: corte fijo entre diseño y validación;
+  - B10: limpieza.
 
-- [x] A1 — `PLAN.md` y `CLAUDE.md` creados (fusionada en `main`).
-- [x] A2 — Tests en verde (92/92). Versiones máximas en `yfinance` (<1.8), `streamlit` (<1.65) y `exchange-calendars` (<4.14); `plotly` quitado; el test de la clave de EODHD ya no depende de tu ordenador (fusionada en `main`).
-- [x] A3 — Los tests usan su propia copia fija de la configuración (`tests/config_prueba/`). Comprobado: con `config/` quitada entera, los 94 tests pasan (fusionada en `main`).
-- [x] A4 — `.github/workflows/tests.yml`: GitHub ejecuta `pytest` en cada cambio (fusionada en `main`).
+**I1: integración de B1–B10 en la plataforma** (motor v0.5.0), pendiente de fusionar en `main`.

@@ -1,0 +1,38 @@
+# Variante con Cloudflare Tunnel, para desplegar en una maquina SIN IP publica:
+# un portatil, un mini-PC, una Raspberry Pi o un VPS detras de NAT.
+#
+#   docker compose -f docker-compose.yml \
+#                  -f docker-compose.produccion.yml \
+#                  -f docker-compose.tunel.yml up -d
+#
+# o, mas corto:  ./despliegue/desplegar.sh --tunel
+#
+# Se apila SOBRE el de produccion, no lo sustituye: de ahi salen los ajustes que
+# importan (nada de --reload, sin volumenes de codigo, Postgres y Redis sin
+# puertos publicados). Lo que esta capa cambia es solo como entra el trafico.
+#
+# El tunel sale desde la maquina hacia Cloudflare, asi que:
+#   - No hay que abrir ningun puerto en el router ni tener IP fija.
+#   - Caddy deja de publicar 80 y 443: la maquina no expone NADA a Internet.
+#   - El TLS lo termina Cloudflare; el certificado deja de ser cosa nuestra.
+#
+# A cambio, el sitio solo esta disponible mientras esa maquina este encendida.
+
+services:
+  caddy:
+    # Sin TLS y sin puertos al exterior: la unica forma de llegar aqui es el
+    # tunel, por la red interna de Docker.
+    ports: !override []
+    environment: !override {}
+    volumes: !override
+      - ./despliegue/Caddyfile.tunel:/etc/caddy/Caddyfile:ro
+
+  cloudflared:
+    image: cloudflare/cloudflared:latest
+    restart: unless-stopped
+    # `--no-autoupdate`: que una actualizacion automatica no reinicie el tunel a
+    # las tres de la manana sin que nadie lo haya decidido. Actualizar es
+    # cambiar la imagen y volver a desplegar.
+    command: tunnel --no-autoupdate run --token ${CLOUDFLARE_TUNNEL_TOKEN:?falta CLOUDFLARE_TUNNEL_TOKEN en .env}
+    depends_on:
+      - caddy

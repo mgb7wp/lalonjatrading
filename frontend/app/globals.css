@@ -1,0 +1,568 @@
+/* Tokens del diseno de LaLonja Trading.
+ *
+ * Todos los valores salen de `LaLonja Trading.dc.html`, el diseno exportado de
+ * Claude Design. No hay ni un color, tamanio ni espaciado inventado aqui: si
+ * algo no estaba en el diseno, no esta.
+ *
+ * ## Solo oscuro, y es una decision del diseno
+ *
+ * La version anterior tenia modo claro y oscuro, con el oscuro ELEGIDO paso a
+ * paso en lugar de invertido. El diseno nuevo es un terminal oscuro y no define
+ * variante clara, asi que mantener la doble variante significaria inventarse la
+ * mitad. `color-scheme: dark` le dice al navegador que pinte de oscuro tambien
+ * los controles nativos —barras de scroll, selectores de fecha—; sin eso salen
+ * blancos sobre el fondo negro.
+ *
+ * ## Por que el sistema Broadsheet no aparece por ningun lado
+ *
+ * El export enlaza `_ds/broadsheet-.../styles.css`, pero el diseno no usa ni uno
+ * solo de sus tokens ni de sus clases: lo comprobe contando referencias y salen
+ * cero. Broadsheet es papel de periodico —serif, fondo #f3f2f2, cian y
+ * magenta—; esto es lo contrario. Aplicarlo daria una pagina que no se parece
+ * al diseno que hay que implementar.
+ */
+
+:root {
+  color-scheme: dark;
+
+  /* Fondos, del mas hondo al mas claro. */
+  --fondo: #0b0e11;        /* lienzo y barra lateral */
+  --superficie: #12161c;   /* tarjetas, tablas, paneles */
+  --superficie-2: #161b22; /* fila resaltada al pasar por encima */
+
+  /* Bordes: el fino separa filas, el marcado dibuja el contorno de una tarjeta. */
+  --linea: #161b22;
+  --borde: #1a1f26;
+  --borde-2: #1e242c;
+  --borde-vivo: #2a323c;   /* contorno al pasar por encima */
+
+  /* Tinta. */
+  --tinta: #f5f5f5;
+  --tinta-2: #c4cad2;
+  --tinta-3: #848e9c;
+  --tinta-4: #5c6470;
+
+  /* Acento. Uno solo, y es oro: marca lo interactivo y lo que dice LaLonja. */
+  --oro: #f0b90b;
+  --oro-claro: #ffd34d;
+  --oro-10: rgba(240, 185, 11, 0.1);
+  --oro-16: rgba(240, 185, 11, 0.16);
+  --oro-35: rgba(240, 185, 11, 0.35);
+
+  /* Direccion de un cambio: hecho, no juicio. Nunca viajan solos —el diseno
+   * antepone ▲/▼— porque un porcentaje tiene que leerse sin interpretar color. */
+  --sube: #1fa37a;
+  --baja: #e0604c;
+
+  --radio: 6px;
+  --radio-2: 4px;
+  --radio-pildora: 100px;
+}
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  padding: 0;
+  background: var(--fondo);
+}
+
+body {
+  color: var(--tinta);
+  font-family: Sora, "Helvetica Neue", Helvetica, Arial, sans-serif;
+  font-size: 14px;
+  line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
+}
+
+h1,
+h2,
+h3 {
+  font-weight: 600;
+  letter-spacing: -0.02em;
+  margin: 0;
+}
+
+a {
+  color: var(--oro);
+  text-decoration: none;
+}
+a:hover {
+  color: var(--oro-claro);
+}
+
+button {
+  font-family: inherit;
+  cursor: pointer;
+}
+input,
+select,
+textarea {
+  font-family: inherit;
+}
+
+/* El foco de teclado es del sistema, no el azul del navegador. */
+:focus-visible {
+  outline: 2px solid var(--oro);
+  outline-offset: 2px;
+}
+
+::selection {
+  background: rgba(240, 185, 11, 0.28);
+}
+
+::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+::-webkit-scrollbar-thumb {
+  background: var(--borde-2);
+  border-radius: var(--radio);
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+/* Las cifras van en monoespaciada de ancho fijo: una columna de precios que
+ * baila al cambiar un digito es ilegible de un vistazo, que es justo para lo
+ * que sirve una tabla de mercado. */
+.mono {
+  font-family: "IBM Plex Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-weight: 500;
+  font-variant-numeric: tabular-nums;
+}
+
+/* Rotulo pequenio en versalitas espaciadas: el patron de etiqueta del diseno. */
+.rotulo {
+  font-family: "IBM Plex Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-weight: 500;
+  font-size: 10px;
+  letter-spacing: 0.18em;
+  color: var(--tinta-3);
+  text-transform: uppercase;
+}
+
+.sube {
+  color: var(--sube);
+}
+.baja {
+  color: var(--baja);
+}
+
+@keyframes fadeUp {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@keyframes pulseDot {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.25;
+  }
+}
+
+/* Quien prefiere menos movimiento no lo recibe. El diseno anima la entrada de
+ * cada pantalla; una animacion de entrada no lleva informacion, asi que
+ * suprimirla no quita nada. */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+
+/* --- Componentes compartidos --------------------------------------------
+ *
+ * Empezo siendo una capa de compatibilidad temporal, para que ningun commit
+ * dejara la aplicacion a medio pintar mientras se convertia pantalla a
+ * pantalla. Acabo siendo lo que de verdad viste la mitad de la aplicacion:
+ * `/rankings`, `/screener`, `/buscar`, `/seguimiento` y `/cartera` usan estas
+ * clases y ya tienen el aspecto del diseno, porque todos los valores de aqui
+ * salen de sus tokens.
+ *
+ * Se renombra en lugar de dejar el comentario anterior diciendo "temporal": un
+ * comentario que promete un borrado que no va a ocurrir hace dudar del resto.
+ *
+ * Las paginas escritas contra el diseno (`/`, `/panel`, la ficha de valor,
+ * `/mercados`, `/entrar`) no usan estas clases: llevan sus estilos en linea,
+ * como el propio export.
+ */
+
+.envoltorio {
+  max-width: 1240px;
+  margin: 0 auto;
+}
+
+.rejilla {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(230px, 1fr));
+  gap: 14px;
+}
+
+.tarjeta {
+  background: var(--superficie);
+  border: 1px solid var(--borde-2);
+  border-radius: var(--radio);
+  padding: 18px 20px;
+}
+.tarjeta-enlace {
+  text-decoration: none;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  color: inherit;
+}
+.tarjeta-enlace:hover {
+  border-color: var(--borde-vivo);
+}
+
+.etiqueta {
+  font-family: "IBM Plex Mono", ui-monospace, monospace;
+  font-weight: 500;
+  font-size: 10px;
+  letter-spacing: 0.14em;
+  color: var(--tinta-3);
+  text-transform: uppercase;
+}
+.cifra {
+  font-family: "IBM Plex Mono", ui-monospace, monospace;
+  font-weight: 500;
+  font-size: 26px;
+  letter-spacing: -0.02em;
+  margin-top: 8px;
+  display: block;
+}
+.apunte {
+  color: var(--tinta-3);
+  font-size: 12px;
+}
+
+.desliza {
+  overflow-x: auto;
+}
+table {
+  border-collapse: collapse;
+  width: 100%;
+  font-size: 13px;
+}
+th {
+  text-align: left;
+  font-family: "IBM Plex Mono", ui-monospace, monospace;
+  font-weight: 500;
+  font-size: 9px;
+  letter-spacing: 0.14em;
+  color: var(--tinta-4);
+  text-transform: uppercase;
+  padding: 10px 12px;
+  border-bottom: 1px solid var(--borde);
+}
+td {
+  padding: 13px 12px;
+  border-bottom: 1px solid var(--linea);
+}
+tbody tr:hover {
+  background: var(--superficie-2);
+}
+.num {
+  text-align: right;
+  font-family: "IBM Plex Mono", ui-monospace, monospace;
+  font-variant-numeric: tabular-nums;
+}
+
+/* El medidor del score: UN solo tono, del oro tenue al oro pleno. Sigue sin ser
+ * un semaforo — un percentil no es un aprobado ni un suspenso. */
+.medidor {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+}
+.medidor-canal {
+  display: block;
+  flex: 1;
+  min-width: 60px;
+  height: 6px;
+  background: var(--borde);
+  border-radius: 3px;
+  overflow: hidden;
+}
+.medidor-relleno {
+  display: block;
+  height: 100%;
+  border-radius: 0 3px 3px 0;
+}
+.medidor-valor {
+  font-family: "IBM Plex Mono", ui-monospace, monospace;
+  font-weight: 500;
+  font-variant-numeric: tabular-nums;
+  min-width: 26px;
+}
+
+.insignia {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  border: 1px solid;
+  border-radius: var(--radio-2);
+  padding: 3px 9px;
+  font-size: 12px;
+  white-space: nowrap;
+}
+.insignia-glifo {
+  font-size: 0.85em;
+}
+
+.bloque-falta {
+  color: var(--tinta-3);
+  background: var(--superficie);
+  border: 1px solid var(--borde-2);
+  border-left: 2px solid var(--borde-vivo);
+  border-radius: var(--radio);
+  padding: 14px 18px;
+  font-size: 13px;
+  line-height: 1.6;
+}
+.frescura {
+  color: var(--tinta-4);
+  font-size: 11px;
+  font-weight: 400;
+}
+.vacio {
+  color: var(--tinta-3);
+  font-style: italic;
+}
+.error {
+  color: var(--baja);
+  border: 1px solid var(--baja);
+  border-radius: var(--radio);
+  padding: 12px 16px;
+  font-size: 13px;
+}
+
+.formulario {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+  align-items: flex-end;
+}
+.formulario-vertical {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  align-items: stretch;
+}
+.formulario-vertical button {
+  align-self: flex-start;
+}
+.formulario label,
+.formulario-vertical label {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  font-family: "IBM Plex Mono", ui-monospace, monospace;
+  font-size: 9px;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--tinta-3);
+}
+select,
+input,
+textarea {
+  background: var(--superficie);
+  border: 1px solid var(--borde-2);
+  border-radius: var(--radio);
+  padding: 10px 12px;
+  color: var(--tinta);
+  font-size: 14px;
+  letter-spacing: normal;
+  text-transform: none;
+}
+button {
+  background: var(--oro);
+  color: var(--fondo);
+  border: none;
+  border-radius: var(--radio);
+  padding: 10px 16px;
+  font-size: 13px;
+  font-weight: 700;
+}
+button:hover {
+  background: var(--oro-claro);
+}
+button[disabled] {
+  opacity: 0.6;
+  cursor: progress;
+}
+.enlace-boton {
+  background: none;
+  border: none;
+  padding: 0;
+  font: inherit;
+  font-weight: 600;
+  color: var(--tinta-3);
+  text-decoration: underline;
+}
+.enlace-boton:hover {
+  background: none;
+  color: var(--oro);
+}
+
+h1 {
+  font-size: 28px;
+  margin: 0 0 4px;
+}
+h2 {
+  font-size: 16px;
+  margin: 28px 0 12px;
+}
+section {
+  margin-bottom: 28px;
+}
+
+/* Rampa del score: UN solo tono, del oro tenue al oro pleno.
+ *
+ * Sustituye a la rampa azul del sistema anterior. Sigue siendo un solo tono, y
+ * por la misma razon: el score es un PERCENTIL —"esta por encima del 87% de sus
+ * comparables"—, no un aprobado. Un semaforo convertiria el numero en un juicio
+ * que el numero no hace; ese juicio lo emite el motor de senales y llega aparte.
+ *
+ * El diseno hace lo mismo en su pildora de score: oro pleno arriba, oro tenue
+ * en medio, gris abajo. */
+:root {
+  --escala-100: rgba(240, 185, 11, 0.22);
+  --escala-300: rgba(240, 185, 11, 0.45);
+  --escala-450: rgba(240, 185, 11, 0.7);
+  --escala-600: #f0b90b;
+
+  /* Estados de senal y regimen, sobre fondo oscuro. Reservados: no se
+   * reutilizan para "una serie mas". */
+  --bueno: #1fa37a;
+  --aviso: #f0b90b;
+  --serio: #e0904c;
+  --critico: #e0604c;
+}
+
+/* El margen de una pagina de aplicacion. Lo pone la pagina y NO el armazon: la
+ * cabecera del diseno va a sangre y el contenido de debajo no, asi que rellenar
+ * desde los dos sitios termina con una pagina de margen doble y otra sin. */
+.pagina {
+  padding: 30px 28px 60px;
+}
+
+/* --- Movil ---------------------------------------------------------------
+ *
+ * El diseno lo describe en su pantalla `Mobile`: desaparece la barra lateral y
+ * los destinos pasan a una barra inferior. No es una adaptacion inventada.
+ */
+.barra-inferior {
+  display: none;
+}
+
+@media (max-width: 900px) {
+  .barra-lateral {
+    display: none !important;
+  }
+
+  .barra-inferior {
+    display: flex;
+    position: fixed;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    z-index: 30;
+    background: rgba(11, 14, 17, 0.96);
+    backdrop-filter: blur(8px);
+    border-top: 1px solid var(--borde);
+    /* Respeta la zona segura de los moviles con barra de gestos. */
+    padding-bottom: env(safe-area-inset-bottom, 0);
+  }
+
+  /* Hueco para que la barra no tape el ultimo bloque de la pagina. */
+  body {
+    padding-bottom: 64px;
+  }
+
+  .pagina {
+    padding: 22px 16px 40px;
+  }
+
+  /* El diseno usa rejillas de dos columnas en escritorio; en un movil de 390 px
+   * eso deja columnas de 170 px donde no cabe una tabla ni un titulo. */
+  main [style*="grid-template-columns: minmax(0,1.55fr)"],
+  main [style*="grid-template-columns: minmax(0,1.6fr)"],
+  main [style*="grid-template-columns: minmax(0,1.5fr)"],
+  main [style*="grid-template-columns: minmax(0,1.2fr)"],
+  main [style*="grid-template-columns: minmax(0,1fr) minmax(0,1fr)"] {
+    grid-template-columns: minmax(0, 1fr) !important;
+  }
+
+  h1 {
+    font-size: 24px !important;
+  }
+}
+
+/* La pantalla de entrar parte en dos columnas; en movil, una. */
+@media (max-width: 760px) {
+  body > div[style*="grid-template-columns: minmax(0,1fr) minmax(0,1fr)"] {
+    grid-template-columns: minmax(0, 1fr) !important;
+  }
+}
+
+/* Rejilla de dos columnas del diseno: la principal mas ancha y la lateral
+ * estrecha. La proporcion de la izquierda la pasa cada pagina en `--izq`.
+ *
+ * Va en una CLASE y no en un `style` en linea con un selector de atributo
+ * detras: React serializa el estilo sin espacio tras los dos puntos, asi que un
+ * `[style*="grid-template-columns: ..."]` no casa con nada y el colapso a una
+ * columna en movil no llegaba a ocurrir. Fallaba en silencio. */
+.dos-columnas {
+  display: grid;
+  grid-template-columns: minmax(0, var(--izq, 1fr)) minmax(0, 1fr);
+  align-items: start;
+}
+
+@media (max-width: 900px) {
+  .dos-columnas {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+/* La portada lleva 48 px de margen lateral fijo, que en un movil de 390 deja
+ * 294 de contenido y saca la cabecera de la pantalla. */
+.portada-seccion {
+  padding-left: 48px;
+  padding-right: 48px;
+}
+
+@media (max-width: 760px) {
+  .portada-seccion {
+    padding-left: 18px;
+    padding-right: 18px;
+  }
+  .portada-cabecera {
+    padding-left: 18px !important;
+    padding-right: 18px !important;
+    gap: 12px !important;
+  }
+  .portada-cabecera nav {
+    margin-left: 0 !important;
+    order: 3;
+    width: 100%;
+  }
+}

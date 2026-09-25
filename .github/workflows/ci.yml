@@ -1,0 +1,82 @@
+name: CI
+
+on:
+  push:
+    branches: ["main", "claude/**"]
+  pull_request:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  tests:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+
+    # Desde la FASE 2 hay tests que necesitan Postgres de verdad: las
+    # restricciones que sostienen el esquema —la FK que exige version de modelo,
+    # el CHECK de la fecha de publicacion, el enrutado a particiones— no se
+    # pueden comprobar contra SQLite ni simulando. Los tests del motor siguen sin
+    # tocarla, y los de base de datos se saltan solos si no hay ninguna.
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: lalonja
+          POSTGRES_PASSWORD: lalonja
+          POSTGRES_DB: lalonja_test
+        ports: ["5432:5432"]
+        # `-d lalonja_test` no es opcional: sin el, pg_isready intenta conectar
+        # a una base llamada como el usuario, que aqui no existe. El servicio
+        # nunca llega a sano y el job muere antes de ejecutar un solo test.
+        options: >-
+          --health-cmd "pg_isready -U lalonja -d lalonja_test"
+          --health-interval 5s
+          --health-timeout 3s
+          --health-retries 10
+
+    env:
+      TEST_DATABASE_URL: postgresql+psycopg://lalonja:lalonja@localhost:5432/lalonja_test
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+
+      - name: Instalar
+        run: pip install -e ".[backend,workers,dev]"
+
+      - name: Lint (solo codigo nuevo; ver pyproject)
+        run: ruff check .
+
+      - name: Formato
+        run: ruff format --check .
+
+      - name: Tests
+        # Ningun test toca la red: el motor corre sobre el proveedor sintetico y
+        # los adaptadores se prueban con respuestas grabadas. Un CI que
+        # dependiera de que Yahoo responda seria un CI que falla por motivos que
+        # no son el codigo.
+        run: pytest -q
+
+  frontend:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+      - name: Instalar
+        working-directory: frontend
+        run: npm install --no-audit --no-fund
+      - name: Typecheck
+        working-directory: frontend
+        run: npm run typecheck
+      - name: Build
+        working-directory: frontend
+        run: npm run build

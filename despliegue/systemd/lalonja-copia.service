@@ -1,0 +1,27 @@
+# Copia de seguridad diaria de Postgres.
+#
+# Instalacion (como root, en el servidor):
+#   cp despliegue/systemd/lalonja-copia.* /etc/systemd/system/
+#   systemctl daemon-reload
+#   systemctl enable --now lalonja-copia.timer
+#
+# Comprobar:   systemctl list-timers lalonja-copia.timer
+# Ver el ultimo intento:   journalctl -u lalonja-copia.service -n 50
+# Forzar una ahora:        systemctl start lalonja-copia.service
+
+[Unit]
+Description=Copia de seguridad verificada de la base de datos de La Lonja
+# El script habla con Postgres a traves de Docker, asi que no tiene sentido
+# intentarlo antes de que Docker exista.
+After=docker.service
+Requires=docker.service
+
+[Service]
+Type=oneshot
+WorkingDirectory=/root/lalonjatrading
+ExecStart=/root/lalonjatrading/despliegue/copia_seguridad.sh
+
+# Sin reintentos automaticos: si una copia falla, quiero que el fallo se vea en
+# el journal y no que un reintento lo tape. El timer volvera a intentarlo manana
+# de todas formas.
+TimeoutStartSec=30min

@@ -3,10 +3,15 @@ requires = ["setuptools>=68"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "estrategia"
-version = "0.2.0"
-description = "Estrategia mixta (fundamental + tecnica) multi-mercado, segun ESTRATEGIA.md"
+name = "lalonja"
+version = "0.5.0"
+description = "Plataforma de analisis cuantitativo de inversiones multi-mercado"
 requires-python = ">=3.11,<4"
+
+# Dependencias del NUCLEO cuantitativo (core/estrategia). Deliberadamente sin
+# FastAPI, sin SQLAlchemy y sin driver de base de datos: `core` tiene que poder
+# correr un backtest sin levantar nada. Esa frontera es la regla de dependencias
+# de docs/ARCHITECTURE.md y esta comprobada en tests/test_arquitectura.py.
 dependencies = [
     "pandas>=2.1,<3",
     "numpy>=1.26,<3",
@@ -14,20 +19,82 @@ dependencies = [
     "pydantic>=2.6,<3",
     "pyarrow>=14",
     "exchange-calendars>=4.5,<4.14",
+    # Tope superior a proposito: el salto de 0.2.x a 1.x cambio la forma de lo
+    # que devuelve `download` para un solo ticker, y el adaptador se rompio en
+    # silencio en ese camino. Un rango abierto deja que la proxima ruptura entre
+    # sin avisar.
     "yfinance>=0.2.40,<1.8",
     "tabulate>=0.9",
 ]
 
 [project.optional-dependencies]
+# La plataforma SaaS. Se instala aparte para que quien solo quiera el motor no
+# arrastre un servidor web ni un driver de Postgres.
+backend = [
+    "fastapi>=0.110,<1",
+    "uvicorn[standard]>=0.27",
+    "pydantic-settings>=2.2,<3",
+    "sqlalchemy>=2.0,<3",
+    "alembic>=1.13,<2",
+    "psycopg[binary]>=3.1,<4",
+    "argon2-cffi>=23.1",
+    # Valida sintaxis y dominio del correo. Se declara en lugar de improvisar
+    # una expresion regular: las de correo escritas a mano rechazan direcciones
+    # validas y aceptan basura, y eso deja gente fuera sin saber por que.
+    "email-validator>=2.1",
+    "pyjwt>=2.8,<3",
+    "redis>=5,<6",
+    "httpx>=0.27",
+    # Capa LLM (FASE 16). Tope en la mayor: la 1.x cambio el cliente HTTP por
+    # debajo, y una 2.x hara lo mismo sin pedir permiso.
+    "anthropic>=1.8,<2",
+]
+workers = ["apscheduler>=3.10,<4"]
+# plotly no lo importa nadie; streamlit con tope, como el resto.
 panel = ["streamlit>=1.30,<1.65"]
-dev = ["pytest>=8", "pytest-cov>=4"]
+# ruff va fijado a una version exacta, no a un rango. Un formateador
+# cambia su salida entre versiones: con `>=0.4`, el CI instalaba la
+# ultima y una version nueva empezo a formatear los bloques de codigo
+# dentro de los .md. Resultado: CI rojo de un dia para otro sin que
+# nadie tocara nada, y un `ruff format` local que no reproducia el
+# fallo. Subirla es una decision, no un efecto secundario de la fecha.
+dev = ["pytest>=8", "pytest-cov>=4", "ruff==0.15.8"]
 
 [project.scripts]
 estrategia = "estrategia.cli:main"
 
+# `core` alberga el motor; `backend`, `workers` y `ml` son la plataforma.
+# Se declaran por separado para que la separacion sea real en el empaquetado y
+# no solo una convencion de carpetas.
 [tool.setuptools.packages.find]
-where = ["src"]
+where = ["core", "."]
+include = ["estrategia*", "backend*", "workers*", "ml*"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 filterwarnings = ["ignore::DeprecationWarning"]
+
+[tool.ruff]
+line-length = 100
+# El linter entra con el codigo nuevo y no se aplica retroactivamente al motor ni
+# a sus tests. No es dejadez: reformatear 7.600 lineas probadas y sus 92 tests
+# produce un diff enorme cuyo unico efecto es que una herramienta deje de
+# quejarse, y entierra los cambios que si importan. Cuando haya un motivo mejor
+# que "que salga verde", se migran en un commit propio y aislado.
+extend-exclude = [
+    "core/estrategia",
+    "panel",
+    "tests/ayudas.py",
+    "tests/test_anti_sesgo.py",
+    "tests/test_estrategia.py",
+    "tests/test_fuentes.py",
+    "tests/test_motor.py",
+]
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B"]
+
+[tool.ruff.lint.per-file-ignores]
+# Alembic escribe estos ficheros. Recortar a mano la linea larga de un CHECK
+# generado es trabajo que se repite en cada migracion nueva y no mejora nada.
+"backend/db/migrations/versions/*" = ["E501"]

@@ -1,6 +1,36 @@
-# Estrategia mixta (fundamental + técnica), multi-mercado
+# La Lonja — plataforma de análisis cuantitativo de inversiones
 
-Implementación de la estrategia definida en [`ESTRATEGIA.md`](ESTRATEGIA.md). El
+El proyecto tiene dos capas, y conviene saber en cuál se está mirando.
+
+**El motor** (`core/estrategia/`) es la implementación de la estrategia definida
+en [`ESTRATEGIA.md`](ESTRATEGIA.md): datos, indicadores, puntuación fundamental,
+señales y backtesting sobre cinco mercados. Funciona hoy y se usa
+desde la línea de comandos sin necesidad de base de datos ni Docker.
+
+**La plataforma** (`backend/`, `workers/`, `ml/`, `frontend/`) envuelve ese motor
+en una aplicación SaaS: API, persistencia, usuarios, carteras, rankings y
+explicaciones. Está en construcción; el plan, las decisiones y el estado de cada
+fase están en [`docs/`](docs/):
+
+| Documento | Qué contiene |
+|---|---|
+| [`docs/PROJECT_PLAN.md`](docs/PROJECT_PLAN.md) | Análisis del encargo: 14 inconsistencias resueltas, riesgos y 14 decisiones registradas |
+| [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) | Capas, regla de dependencias, modelo de datos, flujo |
+| [`docs/DATA_SOURCES.md`](docs/DATA_SOURCES.md) | Qué hay gratis por mercado y qué habrá que pagar |
+| [`docs/ROADMAP.md`](docs/ROADMAP.md) | 18 fases con criterio de aceptación |
+| [`docs/DATABASE.md`](docs/DATABASE.md) | Las 29 tablas y por qué son así |
+| [`docs/DEPLOYMENT.md`](docs/DEPLOYMENT.md) | Cómo levantarlo |
+| [`docs/GLOSARIO.md`](docs/GLOSARIO.md) | El motor está en español y la plataforma en inglés; aquí se traduce |
+
+La regla que sostiene todo lo demás: **el motor no importa nada de la
+plataforma**. Por eso se puede correr un backtest en un portátil sin levantar
+Postgres, y por eso hay un test que falla si alguien invierte esa dirección.
+
+---
+
+## El motor
+
+El
 análisis fundamental decide **qué** empresas son candidatas, el técnico decide
 **cuándo** entrar y salir, y la gestión del riesgo decide **cuánto** comprar,
 sobre un universo de cinco mercados (España, EE. UU., Alemania, India y Brasil)
@@ -16,15 +46,15 @@ se publica el informe y se expone el panel, en [`DESPLIEGUE.md`](DESPLIEGUE.md).
 > son un punto de partida razonable, no valores optimizados. Un backtest es una
 > comprobación de que el código hace lo que dice, no una previsión.
 
-## Instalación
+### Instalación
 
 ```bash
-pip install -e ".[panel,dev]"
+pip install -e ".[panel,dev]"        # solo el motor
 ```
 
 Python 3.11 o superior.
 
-## Uso
+### Uso
 
 ```bash
 # 1. Descargar datos y dejarlos en caché
@@ -46,14 +76,18 @@ estrategia --proveedor yfinance validar
 estrategia --proveedor yfinance diagnostico --anos 8 --detalle
 
 # 7. Informe HTML publicable, en sitio/
-estrategia informe --periodo todo --formato ambos
+estrategia informe --formato ambos   # solo el periodo de diseño
 
 # 8. Panel interactivo
 streamlit run panel/app.py
 ```
 
-Todos los comandos aceptan `--proveedor {sintetico,yfinance}`. El informe se
-guarda en `datos/resultados/`.
+Sin `--proveedor`, cada comando usa el reparto de fuentes de `reglas.yaml`
+(`proveedor_datos`). Con `--proveedor {sintetico,yfinance,...}`, que va antes del
+subcomando, se fuerza una sola fuente para todo. Los datos se guardan en
+`datos/cache/<origen>/` (`yfinance`, `eodhd+yfinance`, `sintetico`...), que es lo
+que ofrece el panel. El informe se guarda en `datos/resultados/`; si está hecho
+con datos sintéticos, aunque sea en parte, nunca se copia a `sitio/`.
 
 ### Sin conexión: el proveedor sintético
 
@@ -87,6 +121,49 @@ El comando es idempotente por semana, así que está pensado para programarlo:
 Cuanto antes empiece, antes habrá datos capturados de verdad en lugar de
 reconstruidos.
 
+## La plataforma
+
+Desplegada en `lalonja-trading.com` y, de momento, para uso propio. El estado
+de cada fase está en el [roadmap](docs/ROADMAP.md) y las tareas siguientes, en
+[`PLAN.md`](PLAN.md). Funciona: la ingesta diaria de los cinco mercados, 22
+indicadores técnicos, los cinco grupos fundamentales de §14, el scoring con sus
+cinco perfiles, las señales, rankings y screener, usuarios, carteras,
+seguimiento, explicaciones con IA y la interfaz web.
+
+**Fundamentales point-in-time reales en EE. UU. (SEC EDGAR, 19 ejercicios) y
+Brasil (CVM, 16).** España, Alemania e India funcionan con pata técnica: sus
+fundamentales gratuitos son cuatro ejercicios reexpresados, y sobre eso no se
+construye un backtest creíble.
+
+```bash
+cp .env.example .env          # y genera un JWT_SECRET, ver docs/DEPLOYMENT.md
+docker compose up --build     # aplica migraciones y carga la referencia al arrancar
+
+# Datos, sin red (proveedor sintético) o con ella:
+python scripts/update_market_data.py --anos 12
+python scripts/calculate_scores.py --mercados us,br
+python scripts/verify_sources.py      # qué sirve de verdad cada fuente
+```
+
+`update_market_data.py` es **idempotente**: ejecutarlo dos veces no cambia una
+sola fila, ni saltándose las etapas hechas ni reescribiéndolas con `--forzar`.
+Si un mercado falla, se registra y se sigue con el resto.
+
+- API: <http://localhost:8000/api/v1/health>
+- OpenAPI: <http://localhost:8000/docs>
+- Frontend: `cd frontend && npm install && npm run dev` → <http://localhost:3000>
+
+`/markets` no tiene ningún mercado escrito en el código: salen de
+`config/*.yaml` a la tabla `market` mediante una carga idempotente que **falla si
+un mercado declarado no tiene metadatos**. Añadir Francia es configuración, no un
+despliegue. Es el requisito §3 del encargo, comprobado por un test en vez de
+prometido en un documento.
+
+El esquema y el porqué de cada decisión, en [`docs/DATABASE.md`](docs/DATABASE.md).
+
+La API arranca aunque Postgres no esté levantado, y `/health` lo dice. Un health
+check que se cae con su dependencia no sirve para diagnosticar nada.
+
 ## Configuración
 
 Todos los parámetros de estrategia viven en `config/`; el código no contiene
@@ -107,7 +184,7 @@ que es más fiable que buscar números en el código.
 ## Arquitectura
 
 ```
-src/estrategia/
+core/estrategia/
   tipos.py         Estructuras y enumeraciones compartidas. No importa nada del paquete.
   config.py        Carga y valida los cuatro YAML. Único sitio que lee configuración.
   indicadores.py   Medias, ATR de Wilder y momentum, precalculados por valor.
@@ -167,8 +244,14 @@ primera apertura posterior.
 ## Tests
 
 ```bash
-pytest
+pip install -e ".[backend,workers,dev]"
+pytest                     # los de base de datos se saltan si no hay Postgres
+ruff check . && ruff format --check .
 ```
+
+Los de base de datos necesitan `TEST_DATABASE_URL` apuntando a un Postgres de
+usar y tirar (el CI levanta uno). Los tests usan su propia copia de la
+configuración, `tests/config_prueba/`, no `config/`.
 
 Los de `test_anti_sesgo.py` son los que exige el documento y son la condición de
 entrada: si uno falla, los resultados de un backtest no valen nada por buenos que
@@ -213,22 +296,15 @@ dice menos de lo que parece. El informe las repite en cada ejecución.
 
 ## Estado
 
-Todo lo que pide la versión 1 del documento está implementado y probado contra el
-proveedor sintético, más el reparto de fuentes, el adaptador de EODHD, el informe
-HTML publicable y el ciclo semanal de CI.
+Todo lo que pide la versión 1 del documento está implementado, y el motor
+incluye las correcciones 0.4.1 a 0.5.0 del registro de cambios de
+`ESTRATEGIA.md`. La plataforma ya descarga datos reales a diario: precios de
+yfinance para los cinco mercados, fundamentales point-in-time de la SEC (EE. UU.)
+y de la CVM (Brasil) y tipos de cambio del BCE. Lo que falta, por orden, está en
+[`PLAN.md`](PLAN.md).
 
-**Nada se ha ejecutado nunca contra datos reales, ni contra Cloudflare.** El
-entorno donde se desarrolló bloquea Yahoo Finance, EODHD y Cloudflare por
-política de red. Lo que hay está probado contra datos sintéticos y contra
-respuestas grabadas; la primera ejecución de verdad es la tuya o la del primer
-`workflow_dispatch`, y es la que dirá si los tickers, los sectores y los campos
-de los estados financieros salen como se espera.
-
-Empieza por ahí:
-
-```bash
-estrategia --proveedor yfinance diagnostico --anos 8 --detalle
-```
+Desde un entorno en la nube, Yahoo Finance suele responder con un error 429: lo
+que necesite descargar datos se ejecuta en el servidor o en un ordenador propio.
 
 Fuera de la versión 1, como dice el documento: entrada por RSI, salida por
 tiempo, métricas para bancos y aseguradoras, fiscalidad de plusvalías, cobertura

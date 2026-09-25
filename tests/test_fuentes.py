@@ -35,11 +35,19 @@ from ayudas import serie_precios
 # --------------------------------------------------------------------------
 
 
-def _fundamentales_validos(n: int = 4) -> pd.DataFrame:
+def _fundamentales_validos(n: int = 5) -> pd.DataFrame:
+    """Lote valido de n valores distintos.
+
+    Un ticker por fila, y n>=5 por defecto, porque la comprobacion de "columna
+    entera a nulo" solo se aplica a lotes con varios valores: con uno solo, una
+    columna vacia no distingue un mapeo roto de una empresa que legitimamente no
+    publica esa magnitud. Los tests de abajo son los que codifican el fallo del
+    `ev`, asi que tienen que ejercitar el camino en el que la comprobacion actua.
+    """
     return pd.DataFrame(
         [
             {
-                "ticker": "X",
+                "ticker": f"X{i}",
                 "fin_periodo": dt.date(2020 + i, 12, 31),
                 "periodo": "anual",
                 "fecha_publicacion": dt.date(2021 + i, 4, 30),
@@ -186,6 +194,30 @@ def test_una_fuente_sin_precios_no_puede_ser_dueña_de_los_precios(cfg):
     )
     with pytest.raises(ErrorConfiguracion, match="solo sirve"):
         Enrutador(otra).fuente("precios")
+
+
+def test_el_nombre_de_la_fuente_de_fundamentales_es_el_del_mercado(cfg_real):
+    """Preguntar en global por los fundamentales da una respuesta equivocada.
+
+    Son el unico tipo que se reparte por mercado —la SEC solo cubre EE. UU. y
+    la CVM solo Brasil—, asi que el reparto global contesta 'yfinance' para los
+    cinco. `/health/data` lo publicaba asi: decia que los fundamentales de
+    EE. UU. venian de yfinance mientras el API servia los de la SEC con
+    `pit_origin = captured`.
+
+    Se lee del `reglas.yaml` de verdad y no de uno inventado: si manana alguien
+    cambia el reparto y se olvida del panel, esto lo dice.
+    """
+    e = Enrutador(cfg_real)
+    assert e.nombre_de("fundamentales", "us") == "sec"
+    assert e.nombre_de("fundamentales", "br") == "cvm"
+    # Sin fuente propia se cae al atajo global, que es un hecho que se publica
+    # por mercado, no un error: esos tres van con fechas estimadas.
+    assert e.nombre_de("fundamentales", "es") == e.nombre_de("fundamentales")
+    assert e.nombre_de("fundamentales", "us") != e.nombre_de("fundamentales")
+
+    # Los precios no se reparten: preguntar por mercado no cambia la respuesta.
+    assert e.nombre_de("precios", "us") == e.nombre_de("precios")
 
 
 def test_el_enrutador_estampa_la_procedencia(cfg, instantanea):

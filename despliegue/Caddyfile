@@ -1,0 +1,51 @@
+# Proxy inverso y TLS. Caddy pide y renueva el certificado de Let's Encrypt
+# solo; no hay que tocar certbot ni cron.
+#
+# IMPORTANTE con Cloudflare: para que el reto HTTP-01 llegue hasta aqui, el
+# registro DNS tiene que estar en "DNS only" (nube gris) al menos hasta que el
+# certificado se emita. Con la nube naranja Cloudflare intercepta el reto y
+# Caddy se queda reintentando para siempre. Ver docs/DEPLOYMENT.md.
+
+{
+    email {$ACME_EMAIL}
+}
+
+{$DOMINIO} {
+    encode gzip
+
+    # La API va antes que el catch-all: el orden de los bloques no manda en
+    # Caddy, pero el `handle` mas especifico si.
+    handle /api/* {
+        reverse_proxy api:8000
+    }
+
+    # OpenAPI: util mientras no hay interfaz de verdad.
+    handle /docs* {
+        reverse_proxy api:8000
+    }
+    handle /openapi.json {
+        reverse_proxy api:8000
+    }
+
+    handle {
+        reverse_proxy web:3000
+    }
+
+    header {
+        Strict-Transport-Security "max-age=31536000; includeSubDomains"
+        X-Content-Type-Options "nosniff"
+        X-Frame-Options "DENY"
+        Referrer-Policy "strict-origin-when-cross-origin"
+        -Server
+    }
+
+    log {
+        output stdout
+        format console
+    }
+}
+
+# www -> apex, para que quien escriba www.lalonja-trading.com no vea un error.
+www.{$DOMINIO} {
+    redir https://{$DOMINIO}{uri} permanent
+}
