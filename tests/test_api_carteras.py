@@ -499,6 +499,41 @@ def test_el_score_medio_se_pondera_por_peso_y_no_es_la_media_aritmetica(cliente)
     assert medio["valor"] != pytest.approx(50.0, abs=0.01), "no es la media aritmetica"
 
 
+def test_la_cartera_se_valora_al_precio_de_mercado_y_no_al_ajustado(cliente, bd_con_referencia):
+    """`close` es el cierre ajustado por los dividendos POSTERIORES a esa fecha.
+
+    Para las senales es el bueno, pero una cartera valorada con el a una fecha
+    pasada sale por debajo de lo que valia, y ademas descuenta un dividendo que
+    ya se cuenta aparte como transaccion. Lo que valia la posicion es el precio
+    al que cotizaba: `close_raw`. Aqui el ajustado es 200 y el de mercado 210.
+    """
+    with sa.orm.Session(bd_con_referencia) as s:
+        s.execute(
+            sa.update(Price)
+            .where(Price.source == "prueba-carteras", Price.date == CORTE, Price.close == 210)
+            .values(close=200)
+        )
+        s.commit()
+
+    cab = _cabeceras(cliente, "bruto@pruebas.example.com")
+    cartera = _cartera(cliente, cab)
+    _mover(
+        cliente,
+        cab,
+        cartera,
+        ticker="AAPL",
+        tipo="buy",
+        cantidad="30",
+        precio="150",
+        fx="0.90",
+        fecha="2024-01-10",
+    )
+
+    (pos,) = _valorar(cliente, cab, cartera)["posiciones"]
+    assert D(pos["precio"]) == D("210")
+    assert D(pos["valor"]) == D("30") * D("210") * FX_USD_EUR
+
+
 def test_una_version_nueva_del_modelo_no_borra_el_score_de_una_fecha_pasada(
     cliente, bd_con_referencia
 ):

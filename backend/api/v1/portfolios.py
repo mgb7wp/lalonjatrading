@@ -269,7 +269,14 @@ def _fx_del_dia(bd: Session, divisa: str, base: str, fecha: dt.date) -> Decimal 
 def _ultimos_precios(
     bd: Session, ids: list[int], corte: dt.date
 ) -> dict[int, tuple[Decimal, dt.date]]:
-    """Ultimo cierre de cada valor en o antes del corte. Nunca posterior."""
+    """Ultimo cierre de cada valor en o antes del corte. Nunca posterior.
+
+    Es el cierre de MERCADO (`close_raw`), no el ajustado (`close`): el ajustado
+    rebaja los precios pasados en los dividendos que se repartieron despues, asi
+    que una cartera valorada con el a una fecha pasada valdria menos de lo que
+    valia, y ademas descontaria un dividendo que ya entra como transaccion. Si
+    la fuente no da el bruto, se usa el ajustado.
+    """
     if not ids:
         return {}
     ultimo = (
@@ -279,7 +286,7 @@ def _ultimos_precios(
         .subquery()
     )
     filas = bd.execute(
-        select(Price.security_id, Price.close, Price.date).join(
+        select(Price.security_id, func.coalesce(Price.close_raw, Price.close), Price.date).join(
             ultimo,
             and_(Price.security_id == ultimo.c.security_id, Price.date == ultimo.c.fecha),
         )
