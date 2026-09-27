@@ -428,6 +428,36 @@ def test_sin_mercados_solo_se_descargan_las_divisas(bd_ingesta, cfg):
     assert hechas == 0, "ninguna etapa de mercado puede quedar marcada como hecha"
 
 
+def test_un_29_de_febrero_no_tumba_la_descarga(bd_ingesta, cfg):
+    """`update_market_data.py --anos 3` un 29 de febrero revento con ValueError.
+
+    El inicio del historico se calculaba cambiando solo el ano, y 2025 no tiene
+    29 de febrero. Con los 20 anos por defecto no se nota —casi siempre cae en
+    otro bisiesto—, con cualquier numero que no sea multiplo de cuatro si.
+    """
+    import sqlalchemy as sa
+    from estrategia.datos.enrutador import Enrutador
+
+    from workers.pipeline import ingesta
+
+    assert ingesta.anos_antes(dt.date(2028, 2, 29), 3) == dt.date(2025, 2, 28)
+    assert ingesta.anos_antes(dt.date(2028, 2, 29), 4) == dt.date(2024, 2, 29)
+    assert ingesta.anos_antes(dt.date(2026, 9, 27), 20) == dt.date(2006, 9, 27)
+
+    cfg_uno = cfg.con_fuente_unica("sintetico")
+    with sa.orm.Session(bd_ingesta) as s:
+        resultados = ingesta.ejecutar(
+            s,
+            cfg_uno,
+            Enrutador(cfg_uno),
+            mercados=[],
+            anos=3,
+            dia=dt.date(2028, 2, 29),
+            con_divisas=False,
+        )
+    assert resultados == []
+
+
 def test_el_fallo_de_un_mercado_no_tumba_el_resto(bd_ingesta, cfg):
     """§48: un proveedor caido degrada el servicio, no lo tumba.
 

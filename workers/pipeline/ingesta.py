@@ -71,6 +71,19 @@ DIAS_PARA_RANCIO_POR_DEFECTO = 5
 ANOS_HISTORICO = 20
 
 
+def anos_antes(fecha: dt.date, anos: int) -> dt.date:
+    """La misma fecha `anos` anos antes.
+
+    Un 29 de febrero cae en el 28 cuando el ano de destino no es bisiesto:
+    cambiar solo el ano revienta con ValueError, y con `--anos 3` eso tumbaba la
+    descarga entera cada cuatro anos.
+    """
+    try:
+        return fecha.replace(year=fecha.year - anos)
+    except ValueError:
+        return fecha.replace(year=fecha.year - anos, day=28)
+
+
 def _umbrales_rancio(cfg) -> dict[str, int]:
     return {**DIAS_PARA_RANCIO, "fundamentales": cfg.reglas.fundamental.antiguedad_maxima_dias}
 
@@ -364,7 +377,7 @@ def ejecutar(
     hoy = dt.date.today()
     dia = dia or hoy
     fin = dia
-    inicio = dt.date(fin.year - anos, fin.month, fin.day)
+    inicio = anos_antes(fin, anos)
     ids_mercado = [m.id for m in cfg.reglas.universo.mercados] if mercados is None else mercados
     # Antes de descargar nada: media hora de descarga para acabar rechazando la
     # escritura no le sirve a nadie.
