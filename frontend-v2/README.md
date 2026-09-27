@@ -1,6 +1,6 @@
 # LaLonja Trading — frontend (v2, estilo claro)
 
-Implementación en Next.js 14 (App Router, componentes de servidor, CSS propio con variables, fuentes autoalojadas) de el diseño «LaLonja Trading v2» de Claude Design (estilo claro). Convive con `frontend/` sin sustituirlo.
+Implementación en Next.js 14 (App Router, componentes de servidor, CSS propio con variables, fuentes autoalojadas) del diseño «LaLonja Trading v2» de Claude Design (estilo claro). Convive con `frontend/` sin sustituirlo.
 
 ```bash
 npm install
