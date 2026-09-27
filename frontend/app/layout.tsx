@@ -9,17 +9,18 @@ import type { Metadata } from "next";
 import type { ReactNode } from "react";
 
 import "./fuentes.css";
+import "./industry.css";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "LaLonja Trading",
+  title: { default: "LaLonja Trading", template: "%s · LaLonja Trading" },
   description:
     "Análisis cuantitativo de mercados sobre un motor determinista y reproducible.",
 };
 
 export default function RootLayout({ children }: { children: ReactNode }) {
   return (
-    <html lang="es">
+    <html lang="es-ES">
       <body>{children}</body>
     </html>
   );

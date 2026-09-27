@@ -1,10 +1,8 @@
 import Link from "next/link";
 
-import { Cabecera } from "@/components/armazon";
-import { usuarioActual } from "@/lib/sesion";
-
-import { Medidor } from "@/components/piezas";
+import { Medidor, Encabezado, PestanasDescubrir } from "@/components/piezas";
 import { api, intenta, type Market, type RespuestaRanking } from "@/lib/api";
+import { fechaConsulta } from "@/lib/consulta";
 
 export const dynamic = "force-dynamic";
 
@@ -40,13 +38,12 @@ export default async function Rankings({
 
   const esVariacion = VARIACION.has(tipo);
 
-  const dentro = (await usuarioActual()) !== null;
 
   return (
     <>
-      {dentro ? <Cabecera miga="Rankings" /> : null}
       <div className="pagina">
-      <h1>Rankings</h1>
+      <Encabezado rotulo="03 · DESCUBRIR · RANKINGS" titulo="Rankings" />
+      <PestanasDescubrir activa="rankings" fecha={fechaConsulta()} />
       <p className="apunte">
         Una empresa, una fila: cuando un ADR y su acción local conviven en el
         universo, se conserva la línea principal. Contarlas dos veces concentra una

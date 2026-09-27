@@ -14,6 +14,8 @@
 //
 // `NEXT_PUBLIC_*` se incrusta al construir la imagen; `API_URL` no. Por eso lo
 // de servidor NO lleva ese prefijo.
+import { rutaConFecha } from "./consulta";
+
 const BASE =
   typeof window === "undefined"
     ? (process.env.API_URL ?? "http://localhost:8000")
@@ -29,7 +31,7 @@ export class ApiError extends Error {
 }
 
 export async function api<T>(ruta: string, init?: RequestInit): Promise<T> {
-  const res = await fetch(`${BASE}/api/v1${ruta}`, {
+  const res = await fetch(`${BASE}/api/v1${rutaConFecha(ruta, init)}`, {
     ...init,
     headers: { "Content-Type": "application/json", ...init?.headers },
     cache: "no-store",
@@ -369,3 +371,32 @@ export type Lista = {
   n: number;
   valores: Vigilado[];
 };
+
+// --- Frescura de los datos (/health/data) --------------------------------
+
+export type FrescuraDatos = {
+  dataset: string;
+  market_id: string | null;
+  last_data_date: string | null;
+  last_success_at?: string | null;
+  source: string | null;
+  securities_covered: number | null;
+  securities_expected: number | null;
+  coverage: number | null;
+  days_behind: number | null;
+  is_stale: boolean;
+};
+
+export type SaludDatos = {
+  estado: string;
+  checked_at?: string;
+  datasets: FrescuraDatos[];
+  stale?: string[];
+};
+
+/** Frescura de un conjunto de datos por mercado, indexada por `market_id`. */
+export function frescuraPorMercado(salud: SaludDatos | null, dataset: string): Map<string, FrescuraDatos> {
+  const m = new Map<string, FrescuraDatos>();
+  for (const d of salud?.datasets ?? []) if (d.market_id && d.dataset === dataset) m.set(d.market_id, d);
+  return m;
+}

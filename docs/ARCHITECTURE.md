@@ -120,7 +120,7 @@ ml/                    feature store, entrenamiento, evaluación, registro
   training/            splits temporales purgados con embargo, walk-forward
   registry/            metadatos de cada versión de modelo
 
-frontend/              Next.js + TypeScript, MVP funcional sin diseño elaborado
+frontend/              Next.js + TypeScript, diseño v2 (claro, sistema Industry)
 scripts/               update_market_data.py · calculate_scores.py · verify_sources.py
 config/                reglas.yaml · universo.yaml · implementacion.yaml · impuestos_transaccion.yaml
 docs/                  esta carpeta

@@ -2,8 +2,8 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 
 import { crearCartera } from "@/app/acciones";
-import { Cabecera } from "@/components/armazon";
 import { Formulario } from "@/components/formularios";
+import { Encabezado } from "@/components/piezas";
 import { apiSesion, usuarioActual } from "@/lib/sesion";
 import type { CarteraResumen } from "@/lib/api";
 
@@ -24,9 +24,8 @@ export default async function Carteras() {
 
   return (
     <>
-      <Cabecera miga="Cartera" />
       <div className="pagina">
-      <h1>Mis carteras</h1>
+      <Encabezado rotulo="06 · CARTERA" titulo="Mis carteras" />
 
       {fallo ? <p className="bloque-falta">No disponible. {fallo}</p> : null}
 

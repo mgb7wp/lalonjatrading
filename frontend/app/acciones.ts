@@ -226,3 +226,38 @@ export async function borrarLista(datos: FormData): Promise<void> {
   revalidatePath("/seguimiento");
   redirect("/seguimiento");
 }
+
+// --- Restablecer la contrasena ---------------------------------------------
+
+export async function pedirReinicio(_previo: Resultado, datos: FormData): Promise<Resultado> {
+  const email = String(datos.get("email") ?? "").trim();
+  if (!email) return { error: "hace falta el correo" };
+  const res = await fetch(`${BASE}/api/v1/auth/password-reset`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ email }),
+    cache: "no-store",
+  }).catch(() => null);
+  if (!res) return { error: "el servicio no responde; inténtalo en unos minutos" };
+  if (!res.ok) return { error: await mensaje(res) };
+  // La misma respuesta exista o no la cuenta: no se confirma quien esta dada de alta.
+  redirect("/restablecer?enviado=1");
+}
+
+export async function confirmarReinicio(_previo: Resultado, datos: FormData): Promise<Resultado> {
+  const token = String(datos.get("token") ?? "");
+  const contrasena = String(datos.get("contrasena") ?? "");
+  const repetida = String(datos.get("repetida") ?? "");
+  if (contrasena.length < 12) return { error: "la contraseña necesita al menos 12 caracteres" };
+  if (contrasena !== repetida) return { error: "las dos contraseñas no coinciden" };
+  const res = await fetch(`${BASE}/api/v1/auth/password-reset/confirm`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ token, contrasena }),
+    cache: "no-store",
+  }).catch(() => null);
+  if (!res) return { error: "el servicio no responde; inténtalo en unos minutos" };
+  if (!res.ok) return { error: await mensaje(res) };
+  await guardarSesion((await res.json()) as Tokens);
+  redirect("/panel");
+}

@@ -1,10 +1,8 @@
 import Link from "next/link";
 
-import { Cabecera } from "@/components/armazon";
-import { usuarioActual } from "@/lib/sesion";
-
-import { InsigniaSenal, Medidor, nombre } from "@/components/piezas";
+import { InsigniaSenal, Medidor, nombre, Encabezado, PestanasDescubrir } from "@/components/piezas";
 import { api, intenta, type Market, type RespuestaScreener } from "@/lib/api";
+import { fechaConsulta } from "@/lib/consulta";
 
 export const dynamic = "force-dynamic";
 
@@ -53,19 +51,17 @@ export default async function Screener({
     intenta(
       api<RespuestaScreener>("/screener", {
         method: "POST",
-        body: JSON.stringify({ filtros, orden: campo, n: 50 }),
+        body: JSON.stringify({ filtros, orden: campo, n: 50, ...(fechaConsulta() ? { fecha: fechaConsulta() } : {}) }),
       }),
     ),
     intenta(api<Market[]>("/markets")),
   ]);
 
-  const dentro = (await usuarioActual()) !== null;
-
   return (
     <>
-      {dentro ? <Cabecera miga="Descubrir" /> : null}
       <div className="pagina">
-      <h1>Screener</h1>
+      <Encabezado rotulo="03 · DESCUBRIR · SCREENER" titulo="Screener" />
+      <PestanasDescubrir activa="screener" fecha={fechaConsulta()} />
       <p className="apunte">
         Filtra el universo por percentil. Recuerda que un 70 en «riesgo» significa
         estar entre los <strong>mejores</strong> de su cohorte en riesgo, no tener
