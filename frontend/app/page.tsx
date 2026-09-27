@@ -1,95 +1,36 @@
-// La portada publica. Implementa la pantalla `landing` del diseno.
+// La portada publica (v2).
 //
-// ## La tarjeta de muestra trae datos DE VERDAD
-//
-// El diseno lleva ASML dentro, con su precio y su Score escritos a mano. Aqui se
-// pide a la API el valor mejor puntuado del dia y se pinta ese. Cuesta una
-// llamada y cambia dos cosas:
-//
-// - Lo que se ensena en la portada es lo que el motor dice hoy, no una captura.
-// - Si el motor no responde, la tarjeta lo dice en lugar de mostrar un numero
-//   bonito y falso. Una portada que presume de datos no puede ser el unico sitio
-//   del producto donde los datos son de mentira.
-//
-// ## Las cifras del diseno estan corregidas
-//
-// El diseno anuncia "48.000 EMPRESAS", "4 MERCADOS" y "DATOS DESDE 2005". El
-// universo real son 140 valores en 5 mercados. Se leen de `/markets` en lugar de
-// escribirse, para que no vuelvan a quedarse desfasadas.
+// Titular, un esquema de como se lee una ficha —sin cifras que parezcan reales—
+// y tres numeros del universo. Esos numeros se leen de la API en lugar de
+// escribirse: una portada que presume de datos no puede ser el unico sitio del
+// producto donde los datos son de mentira. El que la API no sirve (anos de
+// historico) se declara no disponible en vez de rellenarse.
 
-import Link from "next/link";
 import { redirect } from "next/navigation";
 
-import { Marca, MarcaConNombre } from "@/components/marca";
+import { AvisoLegal } from "@/components/aviso-legal";
+import { MarcaConNombre } from "@/components/marca";
+import { Celdas, Esquinas } from "@/components/piezas";
 import { api, intenta, type Market, type RespuestaRanking } from "@/lib/api";
+import { fmtFecha } from "@/lib/fecha";
 import { usuarioActual } from "@/lib/sesion";
 
 export const dynamic = "force-dynamic";
 
 export const metadata = {
-  title: "LaLonja Trading — todo el mercado, ya ordenado",
+  title: "LaLonja Trading — cada acción, medida contra sus iguales",
   description:
-    "Análisis cuantitativo de mercados: fundamentales, técnico y valoración en una sola lectura, sobre un motor determinista y reproducible.",
+    "Análisis cuantitativo de acciones de cinco mercados sobre un motor determinista. La IA explica lo que el motor calculó; nunca produce una cifra.",
 };
 
-const CARACTERISTICAS = [
-  {
-    n: "01",
-    titulo: "Entiende una empresa en un minuto",
-    texto:
-      "Score, qué lo sostiene y qué lo lastra antes de cualquier tabla. Los fundamentales están debajo, cuando los necesites.",
-  },
-  {
-    n: "02",
-    titulo: "Descubre en lugar de buscar",
-    texto:
-      "Filtra por crecimiento, rentabilidad, valoración o riesgo y recibe una lista corta con el motivo por el que cada empresa aparece.",
-  },
-  {
-    n: "03",
-    titulo: "Vigila solo lo que cambia",
-    texto:
-      "El seguimiento no repite precios: destaca lo que se ha movido en el score, en la señal y en el precio.",
-  },
-  {
-    n: "04",
-    titulo: "Cada hueco dice por qué está vacío",
-    texto:
-      "Cuando un dato no existe, LaLonja lo declara con su motivo en lugar de rellenarlo. Un número inventado es peor que un hueco.",
-  },
+const LEYENDA: [string, string][] = [
+  ["SEÑAL", "glifo + texto, nunca solo color"],
+  ["MOTIVO", "por qué es esa y no otra"],
+  ["RÉGIMEN", "alcista · lateral · bajista · desconocido"],
+  ["CONFIANZA", "grado de acuerdo de los pilares, no probabilidad"],
+  ["HORIZONTE", "90 días"],
+  ["FECHA", "toda cifra dice de qué día es"],
 ];
-
-const ORO = "var(--oro)";
-
-function Boton({
-  href,
-  children,
-  principal = false,
-  grande = false,
-}: {
-  href: string;
-  children: React.ReactNode;
-  principal?: boolean;
-  grande?: boolean;
-}) {
-  return (
-    <Link
-      href={href}
-      style={{
-        background: principal ? ORO : "transparent",
-        color: principal ? "var(--fondo)" : "var(--tinta)",
-        border: principal ? "none" : "1px solid var(--borde-2)",
-        borderRadius: "var(--radio)",
-        padding: grande ? "14px 26px" : "10px 18px",
-        fontSize: grande ? 15 : 13,
-        fontWeight: principal ? 700 : 400,
-        display: "inline-block",
-      }}
-    >
-      {children}
-    </Link>
-  );
-}
 
 export default async function Portada() {
   // Quien ya ha entrado no quiere la portada: quiere su panel.
@@ -99,298 +40,108 @@ export default async function Portada() {
     intenta(api<Market[]>("/markets")),
     intenta(api<RespuestaRanking>("/rankings?tipo=mejor_score&n=1")),
   ]);
-
-  const nMercados = mercados?.length ?? null;
   const nValores = mercados?.reduce((t, m) => t + m.securities, 0) ?? null;
-  const destacado = mejores?.puestos?.[0] ?? null;
 
   return (
-    <div style={{ minHeight: "100vh", background: "var(--fondo)" }}>
-      <header
-        className="portada-cabecera"
-        style={{
-          display: "flex",
-          alignItems: "center",
-          gap: 20,
-          padding: "18px 48px",
-          borderBottom: "1px solid var(--borde)",
-          flexWrap: "wrap",
-        }}
-      >
+    <div className="grid-canvas">
+      <header className="pub-header">
         <MarcaConNombre />
-        <nav style={{ display: "flex", gap: 22, marginLeft: 20, flexWrap: "wrap" }}>
-          <a href="#producto" style={{ color: "var(--tinta-2)", fontSize: 13 }}>
-            Producto
+        <nav aria-label="Público">
+          <a href="/mercados" className="desk-only">
+            Mercados
           </a>
-          <a href="#datos" style={{ color: "var(--tinta-2)", fontSize: 13 }}>
-            Datos
+          <a href="/rankings" className="desk-only">
+            Rankings
           </a>
-          <a href="#empezar" style={{ color: "var(--tinta-2)", fontSize: 13 }}>
-            Empezar
+          <a className="btn btn-secondary" href="/entrar">
+            Entrar
           </a>
         </nav>
-        <div style={{ flex: 1 }} />
-        <Link href="/entrar" style={{ color: "var(--tinta-2)", fontSize: 13 }}>
-          Entrar
-        </Link>
-        <Boton href="/entrar?modo=registro" principal>
-          Probar LaLonja
-        </Boton>
       </header>
 
-      <section className="portada-seccion" style={{ paddingTop: 88, paddingBottom: 70, maxWidth: 1240 }}>
-        <div className="rotulo" style={{ letterSpacing: "0.2em", color: ORO }}>
-          Análisis cuantitativo de mercados
-          {nValores !== null ? ` · ${nValores} empresas` : null}
-        </div>
-        <h1
-          style={{
-            fontWeight: 600,
-            fontSize: "clamp(38px, 7vw, 64px)",
-            lineHeight: 1.06,
-            letterSpacing: "-0.03em",
-            margin: "24px 0 0",
-            maxWidth: "19ch",
-          }}
-        >
-          Todo el mercado, ya ordenado.
-        </h1>
-        <p
-          style={{
-            fontSize: 19,
-            color: "var(--tinta-3)",
-            lineHeight: 1.6,
-            margin: "26px 0 0",
-            maxWidth: "60ch",
-          }}
-        >
-          Invertir no falla por falta de datos: falla porque están dispersos en veinte pestañas.
-          LaLonja reúne fundamentales, técnico y valoración en una sola lectura, y te dice de dónde
-          sale cada número.
-        </p>
-        <div style={{ display: "flex", gap: 12, marginTop: 34, flexWrap: "wrap" }}>
-          <Boton href="/rankings" principal grande>
-            Explorar LaLonja
-          </Boton>
-          <Boton href="/entrar?modo=registro" grande>
-            Crear cuenta gratis
-          </Boton>
-        </div>
-        <div
-          className="mono"
-          style={{
-            display: "flex",
-            gap: 34,
-            marginTop: 30,
-            fontSize: 11,
-            letterSpacing: "0.1em",
-            color: "var(--tinta-4)",
-            flexWrap: "wrap",
-          }}
-        >
-          <span>SIN TARJETA</span>
-          {nMercados !== null ? <span>{nMercados} MERCADOS</span> : null}
-          <span>MOTOR REPRODUCIBLE</span>
-        </div>
-      </section>
-
-      <section id="producto" className="portada-seccion" style={{ paddingBottom: 80 }}>
-        <div
-          style={{
-            border: "1px solid var(--borde-2)",
-            borderRadius: 10,
-            background: "var(--superficie)",
-            overflow: "hidden",
-            maxWidth: 1240,
-          }}
-        >
-          <div
-            style={{
-              display: "flex",
-              alignItems: "center",
-              gap: 8,
-              padding: "12px 16px",
-              borderBottom: "1px solid var(--borde)",
-            }}
-          >
-            {[0, 1, 2].map((i) => (
-              <span
-                key={i}
-                style={{ width: 9, height: 9, borderRadius: "50%", background: "var(--borde-2)" }}
-              />
-            ))}
-            <span className="mono" style={{ fontSize: 10, color: "var(--tinta-4)", marginLeft: 12 }}>
-              lalonja-trading.com/valores/{destacado?.ticker ?? "…"}
-            </span>
+      <main>
+        <section className="hero">
+          <div className="hero-main">
+            <div className="kicker" style={{ letterSpacing: "0.16em" }}>
+              ANÁLISIS CUANTITATIVO · {mercados ? `${mercados.length} MERCADOS` : "VARIOS MERCADOS"}
+            </div>
+            <h1>Cada acción, medida contra sus iguales.</h1>
+            <p className="hero-lede">
+              Un motor determinista puntúa cada valor de 0 a 100 dentro de su cohorte y emite señales con motivo, régimen
+              y horizonte. La IA explica lo que el motor calculó; nunca produce una cifra.
+            </p>
+            <div className="actions">
+              <a className="btn btn-primary blueprint btn-lg" href="/entrar?modo=registro">
+                <Esquinas />
+                Crear cuenta
+              </a>
+              <a className="btn btn-secondary btn-lg" href="/rankings">
+                Ver el ranking de hoy
+              </a>
+            </div>
           </div>
+          <div className="hero-side">
+            <div className="label-mono">ESQUEMA · CÓMO SE LEE UNA FICHA</div>
+            <div className="blueprint schema">
+              <Esquinas />
+              <div className="schema-row">
+                <div style={{ display: "flex", justifyContent: "space-between", fontSize: 12 }}>
+                  <span>Score total</span>
+                  <span className="mono" style={{ color: "var(--tinta-3)" }}>
+                    0 — 100
+                  </span>
+                </div>
+                <span aria-hidden="true">
+                  <Celdas valor={100} alto={14} />
+                </span>
+                <div style={{ fontSize: 12, color: "var(--tinta-2)" }}>
+                  Percentil dentro de su cohorte. Un tono, de claro a oscuro. Nunca semáforo.
+                </div>
+              </div>
+              <dl className="schema-legend">
+                {LEYENDA.map(([k, v]) => (
+                  <div key={k} style={{ display: "contents" }}>
+                    <dt>{k}</dt>
+                    <dd>{v}</dd>
+                  </div>
+                ))}
+              </dl>
+            </div>
+          </div>
+        </section>
 
-          {destacado ? (
-            <MuestraReal puesto={destacado} fecha={mejores?.fecha_datos ?? null} />
+        <section className="stats" aria-label="Universo analizado">
+          {mercados ? (
+            <>
+              <div className="stat">
+                <span className="stat-n">{mercados.length}</span>
+                <span style={{ fontSize: 14 }}>mercados</span>
+                <span className="stat-src">API · configuración de mercados</span>
+              </div>
+              <div className="stat">
+                <span className="stat-n">{nValores}</span>
+                <span style={{ fontSize: 14 }}>valores en catálogo</span>
+                <span className="stat-src">
+                  {mejores?.fecha_datos ? `API · scores del ${fmtFecha(mejores.fecha_datos)}` : "API · aún sin scores calculados"}
+                </span>
+              </div>
+              <div className="stat">
+                <span style={{ fontSize: 14 }}>
+                  <strong>Años de histórico: no disponible.</strong> La API todavía no publica desde cuándo hay datos, y no
+                  lo escribimos a mano.
+                </span>
+              </div>
+            </>
           ) : (
-            // El motor no ha respondido. Se dice; no se pinta una captura.
-            <div style={{ padding: "48px 34px", color: "var(--tinta-3)" }}>
-              <div className="rotulo" style={{ color: ORO }}>Muestra no disponible</div>
-              <p style={{ margin: "12px 0 0", maxWidth: "70ch", lineHeight: 1.6 }}>
-                Esta tarjeta enseña el valor mejor puntuado del día, tomado del motor en el momento
-                de cargar la página. Ahora mismo el motor no responde, así que no hay nada que
-                enseñar — y preferimos decirlo a poner una captura antigua.
-              </p>
+            <div className="stats-none">
+              <strong>Cifras del universo no disponibles.</strong> La API no ha respondido y no mostramos aproximaciones en
+              su lugar.
             </div>
           )}
-        </div>
-      </section>
+        </section>
+      </main>
 
-      <section id="datos" className="portada-seccion" style={{ paddingBottom: 90, maxWidth: 1240 }}>
-        <h2 style={{ fontWeight: 600, fontSize: "clamp(26px, 4vw, 34px)", margin: "0 0 12px" }}>
-          Cuatro trabajos, una herramienta
-        </h2>
-        <p style={{ color: "var(--tinta-3)", fontSize: 16, maxWidth: "62ch", margin: "0 0 40px" }}>
-          Cada pantalla responde a una pregunta concreta. Si no responde a ninguna, no existe.
-        </p>
-        <div
-          style={{
-            display: "grid",
-            gridTemplateColumns: "repeat(auto-fit,minmax(250px,1fr))",
-            gap: 34,
-          }}
-        >
-          {CARACTERISTICAS.map((f) => (
-            <div key={f.n}>
-              <div className="mono" style={{ fontSize: 11, letterSpacing: "0.14em", color: ORO }}>
-                {f.n}
-              </div>
-              <div style={{ fontWeight: 600, fontSize: 19, marginTop: 14 }}>{f.titulo}</div>
-              <p
-                style={{
-                  color: "var(--tinta-3)",
-                  fontSize: 14,
-                  lineHeight: 1.65,
-                  margin: "10px 0 0",
-                }}
-              >
-                {f.texto}
-              </p>
-            </div>
-          ))}
-        </div>
-      </section>
-
-      <section id="empezar" className="portada-seccion" style={{ paddingBottom: 100 }}>
-        <div
-          style={{
-            borderTop: "1px solid var(--borde)",
-            paddingTop: 60,
-            maxWidth: 1240,
-            display: "flex",
-            alignItems: "flex-end",
-            justifyContent: "space-between",
-            gap: 40,
-            flexWrap: "wrap",
-          }}
-        >
-          <div>
-            <h2 style={{ fontWeight: 600, fontSize: "clamp(26px, 4.4vw, 38px)", margin: 0, maxWidth: "18ch" }}>
-              Empieza por una empresa que ya sigas.
-            </h2>
-            <p style={{ color: "var(--tinta-3)", fontSize: 16, margin: "16px 0 0", maxWidth: "54ch" }}>
-              Gratis para diez valores en seguimiento. Sin tarjeta y sin periodo de prueba que
-              caduca.
-            </p>
-          </div>
-          <div style={{ display: "flex", gap: 12 }}>
-            <Boton href="/rankings" principal grande>
-              Explorar LaLonja
-            </Boton>
-            <Boton href="/entrar?modo=registro" grande>
-              Crear cuenta
-            </Boton>
-          </div>
-        </div>
-
-        <footer
-          className="mono"
-          style={{
-            maxWidth: 1240,
-            marginTop: 70,
-            paddingTop: 26,
-            borderTop: "1px solid var(--borde)",
-            display: "flex",
-            justifyContent: "space-between",
-            gap: 20,
-            flexWrap: "wrap",
-            fontSize: 10,
-            letterSpacing: "0.12em",
-            color: "var(--tinta-4)",
-          }}
-        >
-          <span style={{ display: "flex", alignItems: "center", gap: 8 }}>
-            <Marca tamano={12} /> © 2026 LALONJA TRADING
-          </span>
-          {/* §44. No es letra pequeña de relleno: determina cómo se puede
-              presentar el producto. */}
-          <span style={{ maxWidth: "80ch", lineHeight: 1.7 }}>
-            INFORMACIÓN Y ANÁLISIS DE CARÁCTER GENERAL. NO ES ASESORAMIENTO FINANCIERO NI UNA
-            RECOMENDACIÓN PERSONALIZADA. RENTABILIDADES PASADAS NO GARANTIZAN RENTABILIDADES
-            FUTURAS.
-          </span>
-        </footer>
-      </section>
-    </div>
-  );
-}
-
-/** La tarjeta de muestra, con el valor mejor puntuado de hoy. */
-function MuestraReal({
-  puesto,
-  fecha,
-}: {
-  puesto: { ticker: string; nombre: string; mercado: string; sector: string | null; valor: number };
-  fecha: string | null;
-}) {
-  return (
-    <div
-      style={{
-        padding: "30px 34px",
-        display: "grid",
-        gridTemplateColumns: "minmax(0,1.4fr) minmax(0,1fr)",
-        gap: 30,
-        alignItems: "center",
-      }}
-    >
-      <div>
-        <div className="rotulo" style={{ fontSize: 10, letterSpacing: "0.14em" }}>
-          {puesto.mercado.toUpperCase()}
-          {puesto.sector ? ` · ${puesto.sector.replace(/_/g, " ")}` : null}
-        </div>
-        <div style={{ fontWeight: 600, fontSize: 26, marginTop: 10 }}>{puesto.nombre}</div>
-        <div className="mono" style={{ fontSize: 32, marginTop: 14 }}>
-          {puesto.ticker}
-        </div>
-        <p style={{ color: "var(--tinta-3)", fontSize: 14, lineHeight: 1.6, margin: "22px 0 0" }}>
-          El valor mejor puntuado del universo{fecha ? ` a ${fecha}` : null}. El score es un
-          percentil dentro de su cohorte comparable, no una nota absoluta.
-        </p>
-        <Link href={`/valores/${encodeURIComponent(puesto.ticker)}`} style={{ fontSize: 14 }}>
-          Ver su análisis completo →
-        </Link>
-      </div>
-      <div
-        style={{
-          background: "var(--fondo)",
-          border: "1px solid var(--borde-2)",
-          borderLeft: `2px solid ${ORO}`,
-          borderRadius: "var(--radio)",
-          padding: 20,
-        }}
-      >
-        <div className="rotulo" style={{ letterSpacing: "0.16em", color: ORO }}>
-          Score LaLonja · {puesto.valor.toFixed(0)}
-        </div>
-        <p style={{ fontSize: 14, lineHeight: 1.6, margin: "12px 0 0", color: "var(--tinta-2)" }}>
-          Mejor que el {puesto.valor.toFixed(0)}% de su cohorte —mismo mercado y mismo sector— en la
-          última fecha calculada.
-        </p>
-      </div>
+      <AvisoLegal fijo={false} />
     </div>
   );
 }

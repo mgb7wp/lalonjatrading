@@ -1,325 +1,326 @@
-// El panel. Implementa la pantalla `dashboard` del diseno.
+// El panel (v2): el universo de un vistazo.
 //
-// ## Lo que el diseno pide y lo que hay
+// Cinco mercados, la distribucion de senales, los mejor puntuados y lo que mas
+// ha subido y caido en 30 dias. Cada bloque se pide por separado y, si uno no
+// responde, se declara ese y se ensenan los demas.
 //
-// El diseno lo dibuja para un usuario con sesion: saludo, resumen escrito por la
-// IA, KPIs de su cartera, su watchlist y noticias. Aqui:
+// ## Lo que el diseno pide y la API no publica
 //
-// - Con sesion, los KPIs y la watchlist son SUYOS, de la API.
-// - Sin sesion se pinta la misma rejilla con el estado del universo, que es lo
-//   que si se puede saber de alguien que no ha entrado.
-// - El "RESUMEN LALONJA" es la FASE 16. Su bloque se queda, con el motivo
-//   escrito: rellenarlo con un parrafo de ejemplo seria exactamente lo que el
-//   producto promete no hacer.
-// - "Noticias que mueven tu radar" no tiene fuente y no la va a tener gratis.
-//   Mismo tratamiento.
+// - El REGIMEN de cada mercado: el motor lo calcula por valor, pero ningun
+//   endpoint lo sirve por mercado. Se declara no disponible, con el motivo; no
+//   se deduce aqui a partir de otra cosa.
+// - El SCORE MEDIANO de cada mercado es la mediana de los scores que devuelve
+//   el screener. Es un resumen de cifras del motor, no una cifra nueva, y solo
+//   se ensena si el screener ha devuelto el universo entero: con una muestra
+//   recortada la mediana saldria sesgada hacia arriba.
+// - La DISTRIBUCION DE SENALES se cuenta sobre las mismas filas, con la misma
+//   condicion, y dice sobre cuantos valores se ha contado.
 
-import Link from "next/link";
-
-import { Cabecera } from "@/components/armazon";
-import { Medidor, Panel, PildoraScore, Tarjeta, Variacion } from "@/components/piezas";
-import { api, intenta, type Health, type Market, type RespuestaRanking } from "@/lib/api";
-import { apiSesion, usuarioActual } from "@/lib/sesion";
-import type { CarteraResumen, Lista, ListaResumen, Valoracion } from "@/lib/api";
+import { Encabezado, InsigniaSenal, Celdas, ESTADO_SENAL, ORDEN_SENALES, Variacion } from "@/components/piezas";
+import { ErrorCarga, PrimerUso } from "@/components/estados";
+import {
+  api,
+  frescuraPorMercado,
+  intenta,
+  screener,
+  type FilaScreener,
+  type Market,
+  type Puesto,
+  type RespuestaRanking,
+  type SaludDatos,
+} from "@/lib/api";
+import { fechaConsulta } from "@/lib/consulta";
+import { conFecha, fmtFecha } from "@/lib/fecha";
 
 export const dynamic = "force-dynamic";
 
-export const metadata = { title: "Panel · LaLonja" };
+export const metadata = { title: "Panel" };
 
-const MOTIVO_IA =
-  "El resumen lo redacta la capa de IA sobre los scores ya calculados, y esa capa todavía no está construida. Nunca producirá un número: solo explica los que ya existen.";
+const TOPE_SCREENER = 200;
 
-const MOTIVO_NOTICIAS =
-  "No hay ninguna fuente de noticias gratuita con licencia para reproducirlas a escala, así que el pilar de sentimiento se declara no disponible y su peso se reparte entre los demás. No es un olvido: está en el registro de fuentes.";
+const MOTIVO_REGIMEN = "la API no publica el régimen por mercado";
 
-function Rejilla({ children, columnas = "repeat(auto-fit,minmax(200px,1fr))" }: { children: React.ReactNode; columnas?: string }) {
-  return <div style={{ display: "grid", gridTemplateColumns: columnas, gap: 14 }}>{children}</div>;
-}
-
-function Seccion({ children }: { children: React.ReactNode }) {
-  return <section style={{ marginBottom: 28 }}>{children}</section>;
+function mediana(xs: number[]): number | null {
+  if (!xs.length) return null;
+  const o = [...xs].sort((a, b) => a - b);
+  const m = Math.floor(o.length / 2);
+  return o.length % 2 ? o[m] : (o[m - 1] + o[m]) / 2;
 }
 
 export default async function PanelPagina() {
-  const usuario = await usuarioActual();
-  const hoy = new Date().toLocaleDateString("es-ES", {
-    weekday: "long",
-    day: "numeric",
-    month: "short",
-    year: "numeric",
-  });
-
-  const [salud, mercados, mejores, subidas, caidas] = await Promise.all([
-    intenta(api<Health>("/health")),
+  const fecha = fechaConsulta();
+  const [mercados, salud, universo, subidas, caidas] = await Promise.all([
     intenta(api<Market[]>("/markets")),
-    intenta(api<RespuestaRanking>("/rankings?tipo=mejor_score&n=6")),
-    intenta(api<RespuestaRanking>("/rankings?tipo=mas_mejorado&n=4")),
-    intenta(api<RespuestaRanking>("/rankings?tipo=mayor_caida&n=4")),
+    intenta(api<SaludDatos>("/health/data")),
+    intenta(screener({ orden: "overall", descendente: true, n: TOPE_SCREENER, ...(fecha ? { fecha } : {}) })),
+    intenta(api<RespuestaRanking>(`/rankings?tipo=mas_mejorado&n=100`)),
+    intenta(api<RespuestaRanking>(`/rankings?tipo=mayor_caida&n=100`)),
   ]);
 
-  // Lo del usuario, solo si ha entrado. Un fallo aqui no puede tumbar el panel.
-  const carteras = usuario ? await intenta(apiSesion<CarteraResumen[]>("/portfolios")) : null;
-  const listas = usuario ? await intenta(apiSesion<ListaResumen[]>("/watchlists")) : null;
-  const cartera =
-    carteras && carteras.length
-      ? await intenta(apiSesion<Valoracion>(`/portfolios/${carteras[0].id}`))
-      : null;
-  const lista =
-    listas && listas.length ? await intenta(apiSesion<Lista>(`/watchlists/${listas[0].id}`)) : null;
+  const filas = universo?.filas ?? [];
+  const completo = universo !== null && universo.total <= universo.n;
+  const fechaDatos = universo?.fecha_datos ?? subidas?.fecha_datos ?? null;
+  const href = (t: string) => conFecha(`/valores/${encodeURIComponent(t)}`, fecha);
+  const nombreMercado = new Map((mercados ?? []).map((m) => [m.id, m.name]));
 
-  const nValores = mercados?.reduce((t, m) => t + m.securities, 0) ?? null;
+  const encabezado = (
+    <Encabezado
+      rotulo="01 · PANEL"
+      titulo={fechaDatos ? `Universo al ${fmtFecha(fechaDatos)}` : "Universo"}
+      meta={universo && universo.total > 0 ? `${universo.total} valores puntuados · perfil ${universo.modelo}` : undefined}
+    />
+  );
+
+  if (!mercados && !universo && !subidas && !caidas) {
+    return (
+      <div className="page">
+        {encabezado}
+        <ErrorCarga que="el panel" detalle="la API no responde" reintentar={conFecha("/panel", fecha)} />
+      </div>
+    );
+  }
+
+  if (universo && universo.total === 0 && (mercados?.length ?? 0) > 0) {
+    return (
+      <div className="page">
+        {encabezado}
+        <PrimerUso
+          titulo="Aún no hay scores"
+          texto={
+            fecha
+              ? `El motor no tenía scores calculados el ${fmtFecha(fecha)}.`
+              : "El motor calcula los primeros scores tras la primera carga de precios y fundamentales."
+          }
+          accion="Ver los mercados"
+          href="/mercados"
+        />
+      </div>
+    );
+  }
+
+  // Variacion a 30 dias por valor: la unen las dos listas de variacion. Un valor
+  // que no aparece en ninguna no tiene score comparable hace 30 dias.
+  const delta = new Map<string, number>();
+  for (const p of [...(subidas?.puestos ?? []), ...(caidas?.puestos ?? [])]) delta.set(p.ticker, p.valor);
+
+  const precios = frescuraPorMercado(salud, "precios");
+  const top = filas.slice(0, 6);
 
   return (
-    <>
-      {usuario ? <Cabecera miga="Panel" /> : null}
+    <div className="page">
+      {encabezado}
 
-      <div style={{ padding: "30px 28px 60px" }}>
-        <Seccion>
-          <div className="rotulo">{hoy}</div>
-          <h1 style={{ fontSize: 30, margin: "10px 0 0" }}>
-            {usuario ? `Buenos días, ${usuario.email.split("@")[0]}` : "Todo el mercado, ya ordenado"}
-          </h1>
-          <p style={{ color: "var(--tinta-3)", margin: "8px 0 0", maxWidth: "60ch" }}>
-            {usuario
-              ? "Esto es lo que ha cambiado en el universo desde el último cálculo."
-              : "Estás viendo el panel público. Entra para seguir valores y llevar tu cartera."}
-          </p>
-        </Seccion>
+      {/* Los cinco mercados */}
+      {mercados ? (
+        <section className="markets-strip" aria-label="Mercados">
+          {mercados.map((m) => {
+            const scores = filas.filter((f) => f.mercado === m.id && f.overall !== null).map((f) => f.overall as number);
+            const med = completo ? mediana(scores) : null;
+            const f = precios.get(m.id);
+            return (
+              <a key={m.id} className="market-cell" href={conFecha("/mercados", fecha)}>
+                <div className="top">
+                  <span className="name">{m.name}</span>
+                  <span className="idx">{m.benchmark ?? "sin índice"}</span>
+                </div>
+                <div className="mid">
+                  <div style={{ display: "grid" }}>
+                    <span style={{ fontSize: 11, color: "var(--tinta-3)" }}>Score mediano</span>
+                    {med !== null ? (
+                      <span className="med">{med.toFixed(0)}</span>
+                    ) : (
+                      <span style={{ fontSize: 12 }} title={completo ? "sin valores puntuados" : "el screener no ha devuelto el universo completo"}>
+                        no disponible
+                      </span>
+                    )}
+                  </div>
+                  <span className="reg" title={MOTIVO_REGIMEN}>
+                    <span className="mono" aria-hidden="true">?</span>
+                    <br />
+                    régimen n/d
+                  </span>
+                </div>
+                <Celdas valor={med} alto={6} />
+                <div className="foot">
+                  {m.securities} valores ·{" "}
+                  {!f ? "sin precios" : f.is_stale ? `precios con ${f.days_behind ?? "?"} d de retraso` : `precios al ${fmtFecha(f.last_data_date, false)}`}
+                </div>
+              </a>
+            );
+          })}
+        </section>
+      ) : (
+        <p className="bloque-falta">
+          <strong>NO DISPONIBLE</strong>Mercados: la API no ha respondido.
+        </p>
+      )}
 
-        {/* El "RESUMEN LALONJA" del diseño, con su motivo en lugar de un párrafo
-            de ejemplo. El bloque se queda para que se vea que está previsto. */}
-        <Seccion>
-          <div
-            style={{
-              background: "var(--superficie)",
-              border: "1px solid var(--borde-2)",
-              borderLeft: "2px solid var(--borde-vivo)",
-              borderRadius: "var(--radio)",
-              padding: "22px 24px",
-            }}
-          >
-            <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 12 }}>
-              <span className="rotulo" style={{ letterSpacing: "0.18em", color: "var(--tinta-3)" }}>
-                Resumen LaLonja
-              </span>
-              <span className="mono" style={{ fontSize: 10, color: "var(--tinta-4)" }}>
-                TODAVÍA NO DISPONIBLE
-              </span>
-            </div>
-            <p style={{ margin: 0, fontSize: 15, lineHeight: 1.65, maxWidth: "92ch", color: "var(--tinta-3)" }}>
-              {MOTIVO_IA}
-            </p>
-          </div>
-        </Seccion>
-
-        <Seccion>
-          <Rejilla>
-            {cartera ? (
-              <>
-                <Tarjeta
-                  rotulo="Valor de la cartera"
-                  cifra={`${Number.parseFloat(cartera.totales.valor).toLocaleString("es-ES", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ${cartera.divisa_base}`}
-                  apunte={`${cartera.diversificacion.posiciones} posiciones`}
-                  acento
-                />
-                <Tarjeta
-                  rotulo="Resultado total"
-                  cifra={<Variacion valor={Number.parseFloat(cartera.totales.total)} sufijo={` ${cartera.divisa_base}`} />}
-                  apunte="realizado + no realizado + dividendos − gastos"
-                />
-                <Tarjeta
-                  rotulo="Score medio"
-                  cifra={cartera.score_medio.valor?.toFixed(0) ?? "—"}
-                  apunte={`ponderado, sobre el ${(cartera.score_medio.cobertura * 100).toFixed(0)} % del valor`}
-                />
-                <Tarjeta
-                  rotulo="Posiciones efectivas"
-                  cifra={cartera.diversificacion.posiciones_efectivas?.toFixed(2) ?? "—"}
-                  apunte="inverso del índice de concentración"
-                />
-              </>
-            ) : (
-              <>
-                <Tarjeta rotulo="Universo" cifra={nValores ?? "—"} apunte="valores en catálogo" acento />
-                <Tarjeta rotulo="Mercados" cifra={mercados?.length ?? "—"} apunte="con calendario y divisa propios" />
-                <Tarjeta
-                  rotulo="Último cálculo"
-                  cifra={<span style={{ fontSize: 18 }}>{mejores?.fecha_datos ?? "—"}</span>}
-                  apunte={mejores?.modelo ? `modelo ${mejores.modelo}` : "sin scores todavía"}
-                />
-                <Tarjeta
-                  rotulo="Motor"
-                  cifra={<span style={{ fontSize: 18 }}>{salud?.estado ?? "sin respuesta"}</span>}
-                  apunte={salud?.version ? `versión ${salud.version}` : null}
-                />
-              </>
-            )}
-          </Rejilla>
-        </Seccion>
-
-        <Seccion>
-          <div className="dos-columnas" style={{ "--izq": "1.55fr", gap: 18 } as React.CSSProperties}>
-            <Panel
-              titulo={lista ? lista.nombre : "Mejor puntuados"}
-              extra={
-                <Link href={lista ? "/seguimiento" : "/rankings"} style={{ fontSize: 12 }}>
-                  Ver todo →
-                </Link>
-              }
-              sinRelleno
-            >
-              {lista && lista.n > 0 ? (
-                <TablaSeguimiento lista={lista} />
-              ) : mejores && mejores.puestos.length ? (
-                <TablaRanking datos={mejores} />
-              ) : (
-                <p className="bloque-falta" style={{ margin: 18 }}>
-                  No disponible. Todavía no hay scores calculados.
-                </p>
-              )}
-            </Panel>
-
-            <div style={{ display: "flex", flexDirection: "column", gap: 18 }}>
-              <Panel titulo="Qué ha cambiado" extra={<span className="mono" style={{ fontSize: 10, color: "var(--tinta-4)" }}>30 DÍAS</span>}>
-                <Cambios subidas={subidas} caidas={caidas} />
-              </Panel>
-            </div>
-          </div>
-        </Seccion>
-
-        {/* "Noticias que mueven tu radar": el bloque del diseño, con su motivo. */}
-        <Seccion>
-          <h2 style={{ fontSize: 16, margin: "0 0 12px" }}>Noticias que mueven tu radar</h2>
+      {/* Distribucion de senales */}
+      <section style={{ display: "grid", gap: 10 }} aria-labelledby="h-senales">
+        <div className="section-head">
+          <h2 id="h-senales">Señales del universo</h2>
+          {universo && fechaDatos ? (
+            <span className="mono" style={{ fontSize: 11, color: "var(--tinta-3)" }}>
+              {completo ? `${universo.total} valores` : `los ${universo.n} primeros de ${universo.total}`} · horizonte 90 días ·{" "}
+              {fmtFecha(fechaDatos)}
+            </span>
+          ) : null}
+        </div>
+        {universo && filas.length ? (
+          <Senales filas={filas} />
+        ) : (
           <p className="bloque-falta">
-            <strong style={{ color: "var(--tinta-2)" }}>Todavía no disponible.</strong>{" "}
-            {MOTIVO_NOTICIAS}
+            <strong>NO DISPONIBLE</strong>Distribución de señales: {universo ? "no hay valores puntuados." : "la API no ha respondido."}
           </p>
-        </Seccion>
+        )}
+      </section>
+
+      <section className="cols-21">
+        {/* Mejor puntuados */}
+        <div className="panel-box">
+          <div className="panel-box-head">
+            <h2>Mejor puntuados</h2>
+            <a href={conFecha("/rankings", fecha)}>Ver ranking completo</a>
+          </div>
+          {top.length ? (
+            <>
+              <div className="rank-headrow" aria-hidden="true">
+                <span>#</span>
+                <span>Valor</span>
+                <span className="desk-only">Mercado</span>
+                <span>Score · percentil</span>
+                <span className="desk-only">Señal</span>
+                <span className="right">Δ 30 d</span>
+              </div>
+              <ol style={{ listStyle: "none", margin: 0, padding: 0 }}>
+                {top.map((r, i) => (
+                  <li key={r.ticker}>
+                    <a className="rank-row" href={href(r.ticker)}>
+                      <span className="rank">{String(i + 1).padStart(2, "0")}</span>
+                      <span className="stock-id">
+                        <span className="t">{r.ticker}</span>
+                        <span className="n">{r.nombre}</span>
+                      </span>
+                      <span className="desk-only" style={{ fontSize: 13 }}>
+                        {nombreMercado.get(r.mercado) ?? r.mercado.toUpperCase()}
+                      </span>
+                      <span className="score-cell">
+                        <span className="s">{r.overall?.toFixed(0) ?? "n/d"}</span>
+                        <Celdas valor={r.overall} />
+                      </span>
+                      <span className="desk-only">
+                        <InsigniaSenal senal={r.senal} />
+                      </span>
+                      <span className="right">
+                        <Variacion
+                          valor={delta.get(r.ticker) ?? null}
+                          sufijo=""
+                          decimales={0}
+                          motivo="no comparable: sin score hace 30 días o cambio de cohorte"
+                        />
+                      </span>
+                    </a>
+                  </li>
+                ))}
+              </ol>
+              <div className="note">
+                Percentil dentro de su cohorte sectorial
+                {cohortes(top)}. Perfil {universo?.modelo ?? "equilibrado"}.
+              </div>
+            </>
+          ) : (
+            <p className="bloque-falta" style={{ margin: 14 }}>
+              <strong>NO DISPONIBLE</strong>
+              {universo ? "Todavía no hay scores calculados." : "La API no ha respondido."}
+            </p>
+          )}
+        </div>
+
+        {/* Lo que mas cambia a 30 dias */}
+        <div className="stack">
+          <Movimientos titulo="Más mejoran" datos={subidas} href={href} />
+          <Movimientos titulo="Más caen" datos={caidas} href={href} />
+        </div>
+      </section>
+    </div>
+  );
+}
+
+function cohortes(filas: FilaScreener[]): string {
+  const n = filas.map((f) => f.campos.n_cohorte).filter((x): x is number => typeof x === "number");
+  if (!n.length) return "";
+  const min = Math.min(...n);
+  const max = Math.max(...n);
+  return min === max ? ` (de ${min} valores)` : ` (de ${min} a ${max} valores)`;
+}
+
+function Senales({ filas }: { filas: FilaScreener[] }) {
+  const cuenta = new Map<string, number>();
+  let sin = 0;
+  for (const f of filas) {
+    if (f.senal && ESTADO_SENAL[f.senal]) cuenta.set(f.senal, (cuenta.get(f.senal) ?? 0) + 1);
+    else sin++;
+  }
+  return (
+    <>
+      <div className="sig-bar" aria-hidden="true">
+        {ORDEN_SENALES.filter((k) => (cuenta.get(k) ?? 0) > 0).map((k) => {
+          const e = ESTADO_SENAL[k];
+          return (
+            <div key={k} style={{ flex: cuenta.get(k), background: e.solido ? e.color : "transparent", color: e.solido ? "var(--papel)" : e.color }}>
+              {e.glifo} {cuenta.get(k)}
+            </div>
+          );
+        })}
       </div>
+      <ul className="sig-legend">
+        {ORDEN_SENALES.map((k) => (
+          <li key={k}>
+            <span className="mono" aria-hidden="true">
+              {ESTADO_SENAL[k].glifo}
+            </span>{" "}
+            {ESTADO_SENAL[k].texto}{" "}
+            <span className="mono" style={{ color: "var(--tinta-3)" }}>
+              {cuenta.get(k) ?? 0}
+            </span>
+          </li>
+        ))}
+        <li style={{ color: "var(--tinta-3)" }}>
+          ○ Sin señal <span className="mono">{sin}</span>
+        </li>
+      </ul>
     </>
   );
 }
 
-function TablaSeguimiento({ lista }: { lista: Lista }) {
+function Movimientos({ titulo, datos, href }: { titulo: string; datos: RespuestaRanking | null; href: (t: string) => string }) {
+  const filas: Puesto[] = datos?.puestos.slice(0, 3) ?? [];
   return (
-    <div className="desliza">
-      <table>
-        <thead>
-          <tr>
-            <th style={{ paddingLeft: 20 }}>Valor</th>
-            <th className="num">Precio</th>
-            <th className="num">Δ precio</th>
-            <th className="num">Δ score</th>
-            <th className="num" style={{ paddingRight: 20 }}>Score</th>
-          </tr>
-        </thead>
-        <tbody>
-          {lista.valores.slice(0, 6).map((v) => (
-            <tr key={v.ticker}>
-              <td style={{ paddingLeft: 20 }}>
-                <Link href={`/valores/${encodeURIComponent(v.ticker)}`} className="mono" style={{ fontSize: 13 }}>
-                  {v.ticker}
-                </Link>
-                <div className="apunte">{v.nombre}</div>
-              </td>
-              <td className="num">{v.precio?.toLocaleString("es-ES", { minimumFractionDigits: 2, maximumFractionDigits: 2 }) ?? "—"}</td>
-              <td className="num">
-                <Variacion valor={v.variacion_precio} motivo={v.motivos.variacion_precio} />
-              </td>
-              <td className="num">
-                <Variacion valor={v.variacion_score} motivo={v.motivos.variacion_score} sufijo=" pts" decimales={1} />
-              </td>
-              <td className="num" style={{ paddingRight: 20 }}>
-                <PildoraScore valor={v.score} />
-              </td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
-    </div>
-  );
-}
-
-function TablaRanking({ datos }: { datos: RespuestaRanking }) {
-  return (
-    <div className="desliza">
-      <table>
-        <thead>
-          <tr>
-            <th style={{ paddingLeft: 20 }}>Valor</th>
-            <th>Mercado</th>
-            <th>Sector</th>
-            <th className="num" style={{ paddingRight: 20 }}>Score</th>
-          </tr>
-        </thead>
-        <tbody>
-          {datos.puestos.map((p) => (
-            <tr key={p.ticker}>
-              <td style={{ paddingLeft: 20 }}>
-                <Link href={`/valores/${encodeURIComponent(p.ticker)}`} className="mono" style={{ fontSize: 13 }}>
-                  {p.ticker}
-                </Link>
-                <div className="apunte">{p.nombre}</div>
-              </td>
-              <td className="apunte">{p.mercado.toUpperCase()}</td>
-              <td className="apunte">{p.sector?.replace(/_/g, " ") ?? "—"}</td>
-              <td className="num" style={{ paddingRight: 20 }}>
-                <PildoraScore valor={p.valor} />
-              </td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
-    </div>
-  );
-}
-
-function Cambios({ subidas, caidas }: { subidas: RespuestaRanking | null; caidas: RespuestaRanking | null }) {
-  const filas = [
-    ...(subidas?.puestos ?? []).map((p) => ({ ...p, sube: true })),
-    ...(caidas?.puestos ?? []).map((p) => ({ ...p, sube: false })),
-  ];
-
-  if (!filas.length) {
-    return (
-      <p className="apunte" style={{ margin: 0, lineHeight: 1.6 }}>
-        Sin comparación posible: hace falta que el motor haya puntuado en dos fechas separadas por
-        30 días. No es un cero, es que todavía no se puede calcular.
-      </p>
-    );
-  }
-
-  return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
-      {filas.map((p) => (
-        <div key={`${p.sube}-${p.ticker}`} style={{ display: "flex", gap: 12, alignItems: "flex-start" }}>
-          <span
-            style={{
-              width: 6,
-              height: 6,
-              borderRadius: "50%",
-              marginTop: 6,
-              flex: "0 0 6px",
-              background: p.sube ? "var(--sube)" : "var(--baja)",
-            }}
-            aria-hidden
-          />
-          <div style={{ flex: 1, minWidth: 0 }}>
-            <div style={{ fontSize: 13, lineHeight: 1.45 }}>
-              <Link href={`/valores/${encodeURIComponent(p.ticker)}`} className="mono" style={{ fontSize: 12 }}>
-                {p.ticker}
-              </Link>{" "}
-              <span style={{ color: "var(--tinta-2)" }}>
-                {p.sube ? "sube" : "baja"} <Variacion valor={p.valor} sufijo=" pts" decimales={1} /> de score
-              </span>
-            </div>
-            <div className="mono" style={{ fontSize: 10, color: "var(--tinta-4)", marginTop: 4 }}>
-              {p.anterior !== null ? `DESDE ${p.anterior.toFixed(0)}` : null}
-              {p.overall !== null ? ` · AHORA ${p.overall.toFixed(0)}` : null}
-            </div>
-          </div>
-        </div>
-      ))}
+    <div className="panel-box">
+      <div className="panel-box-head">
+        <h2 className="sm">{titulo}</h2>
+        <span className="mono" style={{ fontSize: 11, color: "var(--tinta-3)" }}>
+          score · 30 d
+        </span>
+      </div>
+      {filas.length ? (
+        filas.map((p) => (
+          <a key={p.ticker} className="move-row" href={href(p.ticker)}>
+            <span className="t">{p.ticker}</span>
+            <span className="from">
+              {p.anterior?.toFixed(0) ?? "n/d"} → {p.overall?.toFixed(0) ?? "n/d"}
+            </span>
+            <Variacion valor={p.valor} sufijo="" decimales={0} />
+          </a>
+        ))
+      ) : (
+        <p className="bloque-falta" style={{ margin: 14 }}>
+          <strong>NO DISPONIBLE</strong>
+          {datos
+            ? "Sin comparación posible: hace falta que el motor haya puntuado en dos fechas separadas por 30 días."
+            : "La API no ha respondido."}
+        </p>
+      )}
     </div>
   );
 }

@@ -2,78 +2,76 @@ import type { ReactNode } from "react";
 
 import type { Bloque as TipoBloque, Frescura } from "@/lib/api";
 
-/** Medidor de un score 0-100.
+/** Medidor de un score 0-100 (v2): diez celdas de UN solo tono que se
+ * oscurecen al subir.
  *
- * UN solo tono, del oro tenue al oro pleno. Nada de semaforo: pintar de rojo un
- * 20 y de verde un 80 convierte un percentil —"esta por debajo de sus
- * comparables"— en un juicio de valor que el numero no hace. Ese juicio lo emite
- * el motor de senales, llega aparte y va etiquetado.
- *
- * El diseno hace lo mismo en su pildora de score, asi que aqui no hay conflicto
- * entre lo que pedia el sistema anterior y lo que pide el nuevo. */
+ * Nada de semaforo: pintar de rojo un 20 y de verde un 80 convierte un
+ * percentil —"esta por debajo de sus comparables"— en un juicio de valor que el
+ * numero no hace. Ese juicio lo emite el motor de senales, llega aparte y va
+ * etiquetado. */
+export function Celdas({ valor, alto = 10 }: { valor: number | null; alto?: number }) {
+  return (
+    <span
+      className="meter"
+      role="img"
+      aria-label={valor === null ? "Score no disponible" : `Score ${valor.toFixed(0)} sobre 100, percentil en su cohorte`}
+      style={{ ["--h" as string]: `${alto}px` }}
+    >
+      {Array.from({ length: 10 }, (_, i) => (
+        <span key={i} style={valor !== null && valor > i * 10 ? { background: `var(--tono-${i})` } : undefined} />
+      ))}
+    </span>
+  );
+}
+
 export function Medidor({ valor }: { valor: number | null }) {
   if (valor === null || Number.isNaN(valor)) {
     return <span className="apunte">no disponible</span>;
   }
   const acotado = Math.max(0, Math.min(100, valor));
-  const tono =
-    acotado >= 75
-      ? "var(--escala-600)"
-      : acotado >= 50
-        ? "var(--escala-450)"
-        : acotado >= 25
-          ? "var(--escala-300)"
-          : "var(--escala-100)";
   return (
-    <span className="medidor">
-      <span className="medidor-canal">
-        <span className="medidor-relleno" style={{ width: `${acotado}%`, background: tono }} />
-      </span>
-      <span className="medidor-valor">{acotado.toFixed(0)}</span>
+    <span className="score-cell">
+      <span className="s">{acotado.toFixed(0)}</span>
+      <Celdas valor={acotado} />
     </span>
   );
 }
 
-/** La pildora de score del diseno: oro pleno arriba, oro tenue en medio, gris
- * abajo. Sigue siendo un solo tono. */
+/** Score compacto para tablas: la cifra y un medidor corto. */
 export function PildoraScore({ valor }: { valor: number | null }) {
-  if (valor === null) return <span className="apunte">—</span>;
-  const alto = valor >= 85;
-  const medio = valor >= 70;
+  if (valor === null || Number.isNaN(valor)) return <span className="apunte" title="sin score">n/d</span>;
   return (
-    <span
-      className="mono"
-      style={{
-        fontSize: 13,
-        padding: "3px 9px",
-        borderRadius: "var(--radio-2)",
-        color: alto ? "var(--fondo)" : "var(--tinta)",
-        background: alto ? "var(--oro)" : medio ? "var(--oro-16)" : "var(--borde)",
-      }}
-    >
-      {valor.toFixed(0)}
+    <span className="score-pill">
+      <span className="mono">{valor.toFixed(0)}</span>
+      <Celdas valor={valor} alto={8} />
     </span>
   );
 }
 
-/** Colores de ESTADO, reservados, y siempre con glifo + texto.
+/** Senales: glifo + texto + color, siempre los tres.
  *
  * Una recomendacion de inversion tiene que poder leerse sin interpretar un
  * color: ni el daltonismo ni una pantalla mala pueden cambiar lo que dice. */
-const ESTADO_SENAL: Record<string, { texto: string; glifo: string; color: string }> = {
-  strong_buy: { texto: "Compra fuerte", glifo: "▲▲", color: "var(--bueno)" },
-  buy: { texto: "Compra", glifo: "▲", color: "var(--bueno)" },
-  hold: { texto: "Mantener", glifo: "●", color: "var(--aviso)" },
-  sell: { texto: "Venta", glifo: "▼", color: "var(--serio)" },
-  strong_sell: { texto: "Venta fuerte", glifo: "▼▼", color: "var(--critico)" },
+export const ESTADO_SENAL: Record<string, { texto: string; glifo: string; color: string; fondo: string; solido: boolean }> = {
+  strong_buy: { texto: "Compra fuerte", glifo: "▲▲", color: "var(--sube)", fondo: "var(--sube-tinte)", solido: true },
+  buy: { texto: "Compra", glifo: "▲", color: "var(--sube)", fondo: "transparent", solido: false },
+  hold: { texto: "Mantener", glifo: "=", color: "var(--tinta-2)", fondo: "transparent", solido: false },
+  sell: { texto: "Venta", glifo: "▼", color: "var(--baja)", fondo: "transparent", solido: false },
+  strong_sell: { texto: "Venta fuerte", glifo: "▼▼", color: "var(--baja)", fondo: "var(--baja-tinte)", solido: true },
 };
+export const ORDEN_SENALES = ["strong_buy", "buy", "hold", "sell", "strong_sell"];
 
 export function InsigniaSenal({ senal }: { senal: string | null }) {
-  if (!senal) return <span className="apunte">—</span>;
-  const e = ESTADO_SENAL[senal] ?? { texto: senal, glifo: "●", color: "var(--tinta-3)" };
+  if (!senal)
+    return (
+      <span className="sig-chip" style={{ borderColor: "var(--color-neutral-500)", borderStyle: "dashed", color: "var(--tinta-3)" }}>
+        <span className="g" aria-hidden="true">○</span>Sin señal
+      </span>
+    );
+  const e = ESTADO_SENAL[senal] ?? { texto: senal, glifo: "·", color: "var(--tinta-3)", fondo: "transparent", solido: false };
   return (
-    <span className="insignia" style={{ color: e.color, borderColor: e.color }}>
-      <span className="insignia-glifo" aria-hidden="true">
+    <span className="sig-chip" style={{ color: e.color, borderColor: e.color, background: e.fondo }}>
+      <span className="g" aria-hidden="true">
         {e.glifo}
       </span>
       {e.texto}
@@ -81,33 +79,26 @@ export function InsigniaSenal({ senal }: { senal: string | null }) {
   );
 }
 
-const ESTADO_REGIMEN: Record<string, { texto: string; glifo: string; color: string }> = {
-  alcista: { texto: "Alcista", glifo: "↗", color: "var(--bueno)" },
-  lateral: { texto: "Lateral", glifo: "→", color: "var(--aviso)" },
-  bajista: { texto: "Bajista", glifo: "↘", color: "var(--critico)" },
-  desconocido: { texto: "Desconocido", glifo: "?", color: "var(--tinta-3)" },
-};
+export const GLIFO_REGIMEN: Record<string, string> = { alcista: "↗", lateral: "→", bajista: "↘", desconocido: "?" };
 
+/** Regimen del mercado: glifo y texto, sin color. Es contexto, no un juicio. */
 export function InsigniaRegimen({ regimen }: { regimen: string | null }) {
-  const e = ESTADO_REGIMEN[regimen ?? "desconocido"] ?? ESTADO_REGIMEN.desconocido;
+  const r = regimen && GLIFO_REGIMEN[regimen] ? regimen : "desconocido";
   return (
-    <span className="insignia" style={{ color: e.color, borderColor: e.color }}>
-      <span className="insignia-glifo" aria-hidden="true">
-        {e.glifo}
+    <span className="tag tag-neutral" style={{ gap: 5 }}>
+      <span className="mono" aria-hidden="true">
+        {GLIFO_REGIMEN[r]}
       </span>
-      {e.texto}
+      {r.charAt(0).toUpperCase() + r.slice(1)}
     </span>
   );
 }
 
-/** Variacion con signo y glifo delante.
+/** Variacion con glifo delante: el color es refuerzo, no el portador del dato.
  *
- * El diseno trae un interruptor `signalGlyphs` que antepone ▲/▼ justo para que
- * la direccion se lea sin interpretar el color. Aqui van siempre: el color es
- * refuerzo, no el portador del dato.
- *
- * `null` NO se pinta como cero. Un cero afirma "no se movio", que es una
- * afirmacion sobre datos que no existen. */
+ * `null` NO se pinta como cero ni como un guion mudo: se escribe «n/d» y el
+ * motivo va en el titulo. Un cero afirma "no se movio", que es una afirmacion
+ * sobre datos que no existen. */
 export function Variacion({
   valor,
   motivo,
@@ -122,13 +113,17 @@ export function Variacion({
   if (valor === null || Number.isNaN(valor)) {
     return (
       <span className="apunte" title={motivo ?? "no se puede calcular"}>
-        —
+        ○ n/d
       </span>
     );
   }
-  const signo = valor > 0 ? "▲ +" : valor < 0 ? "▼ −" : "· ";
+  const glifo = valor > 0 ? "▲" : valor < 0 ? "▼" : "=";
+  const signo = valor > 0 ? "+" : valor < 0 ? "−" : "";
   return (
-    <span className={`mono ${valor > 0 ? "sube" : valor < 0 ? "baja" : ""}`} style={{ fontSize: 12 }}>
+    <span className={`delta ${valor > 0 ? "sube" : valor < 0 ? "baja" : ""}`}>
+      <span className="g" aria-hidden="true">
+        {glifo}
+      </span>{" "}
       {signo}
       {Math.abs(valor).toLocaleString("es-ES", {
         minimumFractionDigits: decimales,
@@ -172,7 +167,8 @@ export function Bloque<T>({
         children(bloque.datos)
       ) : (
         <p className="bloque-falta">
-          No disponible. {mayuscula(bloque.motivo) ?? "Sin motivo indicado."}
+          <strong>NO DISPONIBLE</strong>
+          {mayuscula(bloque.motivo) ?? "Sin motivo indicado."}
         </p>
       )}
     </section>
@@ -189,7 +185,8 @@ export function Pendiente({ titulo, motivo }: { titulo: string; motivo: string }
     <section>
       <h2>{titulo}</h2>
       <p className="bloque-falta">
-        <strong style={{ color: "var(--tinta-2)" }}>Todavía no disponible.</strong> {motivo}
+        <strong>TODAVÍA NO DISPONIBLE</strong>
+        {motivo}
       </p>
     </section>
   );
@@ -226,7 +223,7 @@ function mayuscula(texto: string | null): string | null {
 }
 
 export function numero(v: number | null | undefined, decimales = 2): string {
-  if (v === null || v === undefined || Number.isNaN(v)) return "—";
+  if (v === null || v === undefined || Number.isNaN(v)) return "n/d";
   return v.toLocaleString("es-ES", {
     minimumFractionDigits: decimales,
     maximumFractionDigits: decimales,
@@ -234,14 +231,14 @@ export function numero(v: number | null | undefined, decimales = 2): string {
 }
 
 export function millones(v: number | null | undefined): string {
-  if (v === null || v === undefined || Number.isNaN(v)) return "—";
+  if (v === null || v === undefined || Number.isNaN(v)) return "n/d";
   const abs = Math.abs(v);
   if (abs >= 1e9) return `${(v / 1e9).toFixed(2)} MM`;
   if (abs >= 1e6) return `${(v / 1e6).toFixed(1)} M`;
   return numero(v, 0);
 }
 
-/** Tarjeta de cifra del diseno: rotulo, cifra grande en monoespaciada y apunte. */
+/** Tarjeta de cifra (v2): rotulo en mono, cifra grande y de donde sale. */
 export function Tarjeta({
   rotulo,
   cifra,
@@ -254,30 +251,15 @@ export function Tarjeta({
   acento?: boolean;
 }) {
   return (
-    <div
-      style={{
-        background: "var(--superficie)",
-        border: "1px solid var(--borde-2)",
-        borderLeft: acento ? "2px solid var(--oro)" : undefined,
-        borderRadius: "var(--radio)",
-        padding: "18px 18px 16px",
-        display: "flex",
-        flexDirection: "column",
-        gap: 10,
-      }}
-    >
-      <div className="rotulo" style={{ fontSize: 10, letterSpacing: "0.14em" }}>
-        {rotulo}
-      </div>
-      <div className="mono" style={{ fontSize: 26, letterSpacing: "-0.02em" }}>
-        {cifra}
-      </div>
-      {apunte ? <div style={{ fontSize: 11, color: "var(--tinta-4)" }}>{apunte}</div> : null}
+    <div className={`kpi${acento ? " is-accent" : ""}`}>
+      <div className="label-mono">{rotulo}</div>
+      <div className="kpi-n">{cifra}</div>
+      {apunte ? <div className="kpi-note">{apunte}</div> : null}
     </div>
   );
 }
 
-/** Panel del diseno: superficie con borde y, opcionalmente, cabecera. */
+/** Panel (v2): caja de borde fino con cabecera subrayada en tinta. */
 export function Panel({
   titulo,
   extra,
@@ -292,31 +274,54 @@ export function Panel({
   sinRelleno?: boolean;
 }) {
   return (
-    <div
-      style={{
-        background: "var(--superficie)",
-        border: "1px solid var(--borde-2)",
-        borderLeft: acento ? "2px solid var(--oro)" : undefined,
-        borderRadius: "var(--radio)",
-        overflow: "hidden",
-      }}
-    >
+    <div className={`panel-box${acento ? " is-accent" : ""}`}>
       {titulo ? (
-        <div
-          style={{
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "space-between",
-            gap: 14,
-            padding: "16px 20px",
-            borderBottom: "1px solid var(--borde)",
-          }}
-        >
-          <span style={{ fontWeight: 600, fontSize: 14 }}>{titulo}</span>
+        <div className="panel-box-head">
+          <h2>{titulo}</h2>
           {extra}
         </div>
       ) : null}
-      <div style={sinRelleno ? undefined : { padding: "18px 20px" }}>{children}</div>
+      <div style={sinRelleno ? undefined : { padding: "14px" }}>{children}</div>
     </div>
+  );
+}
+
+/** Las cuatro marcas de registro «+» del marco blueprint de Industry. */
+export function Esquinas() {
+  return (
+    <>
+      <i className="corner tl" />
+      <i className="corner tr" />
+      <i className="corner bl" />
+      <i className="corner br" />
+    </>
+  );
+}
+
+/** Cabecera de pagina (v2): numero y seccion en mono, titulo condensado, dato de contexto. */
+export function Encabezado({ rotulo, titulo, meta }: { rotulo: string; titulo: ReactNode; meta?: ReactNode }) {
+  return (
+    <div className="page-head">
+      <div>
+        <span className="kicker">{rotulo}</span>
+        <h1>{titulo}</h1>
+      </div>
+      {meta ? <span className="meta">{meta}</span> : null}
+    </div>
+  );
+}
+
+/** Las dos vistas de Descubrir: rankings y screener. Enlaces, no pestañas con estado. */
+export function PestanasDescubrir({ activa, fecha }: { activa: "rankings" | "screener"; fecha: string | null }) {
+  const sufijo = fecha ? `?fecha=${fecha}` : "";
+  return (
+    <nav className="seg" aria-label="Descubrir" style={{ marginBottom: 20 }}>
+      <a className={`seg-opt${activa === "rankings" ? " is-on" : ""}`} href={`/rankings${sufijo}`} aria-current={activa === "rankings" ? "page" : undefined}>
+        Rankings · 10 vistas
+      </a>
+      <a className={`seg-opt${activa === "screener" ? " is-on" : ""}`} href={`/screener${sufijo}`} aria-current={activa === "screener" ? "page" : undefined}>
+        Screener · filtros
+      </a>
+    </nav>
   );
 }

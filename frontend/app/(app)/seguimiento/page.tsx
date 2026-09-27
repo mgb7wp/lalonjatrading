@@ -1,11 +1,10 @@
 import Link from "next/link";
 
-import { Cabecera } from "@/components/armazon";
 import { redirect } from "next/navigation";
 
 import { anadirASeguimiento, borrarLista, crearLista, quitarDeSeguimiento } from "@/app/acciones";
 import { BotonAccion, Formulario } from "@/components/formularios";
-import { InsigniaSenal, Medidor, numero } from "@/components/piezas";
+import { InsigniaSenal, Medidor, numero, Encabezado } from "@/components/piezas";
 import type { Lista, ListaResumen } from "@/lib/api";
 import { apiSesion, usuarioActual } from "@/lib/sesion";
 
@@ -77,9 +76,8 @@ export default async function Seguimiento({
 
   return (
     <>
-      <Cabecera miga="Seguimiento" />
       <div className="pagina">
-      <h1>Seguimiento</h1>
+      <Encabezado rotulo="05 · SEGUIMIENTO" titulo="Seguimiento" />
 
       {fallo ? <p className="bloque-falta">No disponible. {fallo}</p> : null}
 

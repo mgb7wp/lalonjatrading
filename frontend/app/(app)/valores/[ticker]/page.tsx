@@ -21,7 +21,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 
 import { anadirASeguimiento } from "@/app/acciones";
-import { Cabecera } from "@/components/armazon";
+import { ErrorCarga } from "@/components/estados";
 import { Formulario } from "@/components/formularios";
 import {
   Bloque,
@@ -43,6 +43,8 @@ import {
   type RespuestaExplicacion,
 } from "@/lib/api";
 import { apiSesion, usuarioActual } from "@/lib/sesion";
+import { fechaConsulta } from "@/lib/consulta";
+import { conFecha } from "@/lib/fecha";
 
 export const dynamic = "force-dynamic";
 
@@ -101,9 +103,8 @@ export default async function Valor({
   } catch (e) {
     if (e instanceof ApiError && e.status === 404) notFound();
     return (
-      <div style={{ padding: "30px 28px" }}>
-        <h1>No se ha podido cargar {ticker.toUpperCase()}</h1>
-        <p className="apunte">El motor no ha respondido. Inténtalo de nuevo en un momento.</p>
+      <div className="page">
+        <ErrorCarga que={ticker.toUpperCase()} detalle="la API no responde" reintentar={conFecha(`/valores/${encodeURIComponent(ticker)}`, fechaConsulta())} />
       </div>
     );
   }
@@ -115,17 +116,15 @@ export default async function Valor({
 
   return (
     <>
-      {dentro ? <Cabecera miga={`Mercados / ${v.market_id.toUpperCase()} / ${v.ticker}`} /> : null}
-
       <div style={{ padding: "26px 28px 0" }}>
         <div style={{ display: "flex", alignItems: "flex-start", gap: 28, flexWrap: "wrap" }}>
           <div style={{ flex: 1, minWidth: "min(300px, 100%)" }}>
-            <div className="rotulo" style={{ fontSize: 10, letterSpacing: "0.14em" }}>
-              {v.market_id.toUpperCase()} · {v.currency_code}
+            <div className="kicker">
+              FICHA · {v.market_id.toUpperCase()} · {v.currency_code}
               {v.sector ? ` · ${v.sector.replace(/_/g, " ")}` : null}
             </div>
             <div style={{ display: "flex", alignItems: "baseline", gap: 14, marginTop: 10, flexWrap: "wrap" }}>
-              <h1 style={{ fontSize: 32, margin: 0 }}>{v.name}</h1>
+              <h1 className="ficha-titulo">{v.name}</h1>
               <span className="mono" style={{ fontSize: 16, color: "var(--tinta-3)" }}>
                 {v.ticker}
               </span>
@@ -244,7 +243,7 @@ export default async function Valor({
             return (
               <Link
                 key={p.id}
-                href={`/valores/${encodeURIComponent(v.ticker)}?tab=${p.id}`}
+                href={conFecha(`/valores/${encodeURIComponent(v.ticker)}?tab=${p.id}`, fechaConsulta())}
                 aria-current={sel ? "page" : undefined}
                 style={{
                   padding: "10px 14px",
@@ -270,7 +269,7 @@ export default async function Valor({
       <div style={{ padding: "26px 28px 60px" }}>
         {activa.motivo ? (
           <p className="bloque-falta" style={{ maxWidth: "80ch" }}>
-            <strong style={{ color: "var(--tinta-2)" }}>Todavía no disponible.</strong>{" "}
+            <strong>TODAVÍA NO DISPONIBLE</strong>
             {activa.motivo}
           </p>
         ) : activa.id === "resumen" ? (

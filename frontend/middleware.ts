@@ -27,16 +27,33 @@
 
 import { NextResponse, type NextRequest } from "next/server";
 
+// Literal y no importado de lib/fecha: el middleware corre en el runtime edge y
+// conviene que no arrastre modulos de la aplicacion.
+const CABECERA_FECHA = "x-lalonja-fecha";
 const COOKIE_ACCESO = "lonja_acceso";
 const COOKIE_REFRESCO = "lonja_refresco";
 const DIAS_REFRESCO = 30;
 
 const BASE = process.env.API_URL ?? "http://localhost:8000";
 
+/** Reenvia `?fecha=` como cabecera para que los layouts sepan si es una
+ * consulta pasada (App Router no les da `searchParams`). Se borra antes la que
+ * pudiera traer el navegador: la cabecera solo la escribe este middleware. */
+function marcarFecha(peticion: NextRequest) {
+  peticion.headers.delete(CABECERA_FECHA);
+  const fecha = peticion.nextUrl.searchParams.get("fecha");
+  if (fecha) peticion.headers.set(CABECERA_FECHA, fecha);
+}
+
+function seguir(peticion: NextRequest) {
+  return NextResponse.next({ request: { headers: peticion.headers } });
+}
+
 export async function middleware(peticion: NextRequest) {
+  marcarFecha(peticion);
   const acceso = peticion.cookies.get(COOKIE_ACCESO)?.value;
   const refresco = peticion.cookies.get(COOKIE_REFRESCO)?.value;
-  if (acceso || !refresco) return NextResponse.next();
+  if (acceso || !refresco) return seguir(peticion);
 
   const opciones = {
     httpOnly: true,
@@ -56,7 +73,7 @@ export async function middleware(peticion: NextRequest) {
       // El refresco ya no vale (caducado, revocado o robado y rotado). Se
       // borran las dos cookies: dejar la de refresco haria que cada navegacion
       // reintentara un token muerto.
-      const fuera = NextResponse.next();
+      const fuera = seguir(peticion);
       fuera.cookies.delete(COOKIE_ACCESO);
       fuera.cookies.delete(COOKIE_REFRESCO);
       return fuera;
@@ -74,9 +91,7 @@ export async function middleware(peticion: NextRequest) {
     // construye la respuesta a partir de sus cabeceras. Al reves, la copia de
     // cabeceras se hace antes de la mutacion y no lleva la cookie nueva.
     peticion.cookies.set(COOKIE_ACCESO, tokens.acceso);
-    const siguiente = NextResponse.next({
-      request: { headers: peticion.headers },
-    });
+    const siguiente = seguir(peticion);
     siguiente.cookies.set(COOKIE_ACCESO, tokens.acceso, {
       ...opciones,
       maxAge: tokens.caduca_en,
@@ -89,7 +104,7 @@ export async function middleware(peticion: NextRequest) {
   } catch {
     // Si la API no responde, seguir sin sesion es mejor que devolver un error:
     // las paginas publicas siguen funcionando.
-    return NextResponse.next();
+    return seguir(peticion);
   }
 }
 

@@ -21,6 +21,7 @@
 import { cookies } from "next/headers";
 
 import { ApiError } from "./api";
+import { rutaConFecha } from "./consulta";
 
 export const COOKIE_ACCESO = "lonja_acceso";
 export const COOKIE_REFRESCO = "lonja_refresco";
@@ -71,7 +72,7 @@ export async function tokenActual(): Promise<string | null> {
  * que mas cuesta depurar despues. */
 export async function apiSesion<T>(ruta: string, init?: RequestInit): Promise<T> {
   const token = await tokenActual();
-  const res = await fetch(`${BASE}/api/v1${ruta}`, {
+  const res = await fetch(`${BASE}/api/v1${rutaConFecha(ruta, init)}`, {
     ...init,
     headers: {
       "Content-Type": "application/json",
@@ -114,3 +115,4 @@ export async function usuarioActual(): Promise<Usuario | null> {
     return null;
   }
 }
+

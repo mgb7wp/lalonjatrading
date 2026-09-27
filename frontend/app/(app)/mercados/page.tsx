@@ -1,185 +1,154 @@
-// Mercados. Implementa la pantalla `markets` del diseno.
+// Mercados (v2): los cinco, con su bloque, divisa, indice, numero de valores y
+// la frescura de precios y fundamentales de cada uno.
 //
-// El diseno la llena de indices con su variacion del dia, sectores y mayores
-// movimientos. Aqui se pinta lo que se sabe de verdad de cada mercado —su
-// divisa, su calendario, su indice de referencia, cuantos valores tiene y si
-// hay datos cargados— porque eso es lo que la API sirve hoy.
-//
-// El bloque de variacion diaria de los indices NO se inventa: los indices estan
-// en el universo pero el endpoint de mercados no publica su cotizacion, y
-// calcularla aqui a partir de otra llamada seria construir un numero en el
-// frontend que el motor no ha validado.
+// La cobertura es la real: un mercado dado de alta no es un mercado con datos.
+// El REGIMEN, que el diseno pide aqui, no lo publica la API por mercado, y se
+// declara asi en lugar de deducirlo en el frontend.
 
-import Link from "next/link";
-
-import { Cabecera } from "@/components/armazon";
-import { Panel, Tarjeta } from "@/components/piezas";
-import { api, intenta, type Market, type RespuestaRanking } from "@/lib/api";
-import { usuarioActual } from "@/lib/sesion";
+import { ErrorCarga, PrimerUso } from "@/components/estados";
+import { Encabezado } from "@/components/piezas";
+import { api, frescuraPorMercado, intenta, screener, type FrescuraDatos, type Market, type SaludDatos } from "@/lib/api";
+import { fechaConsulta } from "@/lib/consulta";
+import { conFecha, fmtFecha } from "@/lib/fecha";
 
 export const dynamic = "force-dynamic";
 
-export const metadata = { title: "Mercados · LaLonja" };
+export const metadata = { title: "Mercados" };
 
-type Frescura = {
-  dataset: string;
-  market_id: string | null;
-  last_data_date: string | null;
-  source: string | null;
-  securities_covered: number | null;
-  securities_expected: number | null;
-  coverage: number | null;
-  days_behind: number | null;
-  is_stale: boolean;
+const BLOQUE: Record<string, string> = {
+  developed: "Desarrollado",
+  desarrollado: "Desarrollado",
+  emerging: "Emergente",
+  emergente: "Emergente",
 };
 
-type SaludDatos = { estado: string; datasets: Frescura[] };
-
-export default async function Mercados() {
-  const dentro = (await usuarioActual()) !== null;
-  const [mercados, salud, mejores] = await Promise.all([
-    intenta(api<Market[]>("/markets")),
-    intenta(api<SaludDatos>("/health/data")),
-    intenta(api<RespuestaRanking>("/rankings?tipo=mejor_score&n=100")),
-  ]);
-
-  const porMercado = new Map<string, Frescura[]>();
-  for (const d of salud?.datasets ?? []) {
-    if (!d.market_id) continue;
-    porMercado.set(d.market_id, [...(porMercado.get(d.market_id) ?? []), d]);
-  }
-
-  // Cuántos valores de cada mercado tienen score. Sale de un ranking amplio, que
-  // ya viene deduplicado por empresa.
-  const puntuados = new Map<string, number>();
-  for (const p of mejores?.puestos ?? []) {
-    puntuados.set(p.mercado, (puntuados.get(p.mercado) ?? 0) + 1);
-  }
-
-  const total = mercados?.reduce((t, m) => t + m.securities, 0) ?? 0;
-  const conDatos = (mercados ?? []).filter((m) => (porMercado.get(m.id)?.length ?? 0) > 0).length;
-
-  return (
-    <>
-      {dentro ? <Cabecera miga="Mercados" /> : null}
-
-      <div style={{ padding: "30px 28px 60px" }}>
-        <h1 style={{ fontSize: 28 }}>Mercados</h1>
-        <p style={{ color: "var(--tinta-3)", margin: "8px 0 24px", maxWidth: "70ch" }}>
-          Cada mercado tiene su calendario, su huso y su divisa. La cobertura de abajo es la real:
-          un mercado dado de alta no es un mercado con datos.
-        </p>
-
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(200px,1fr))", gap: 14, marginBottom: 28 }}>
-          <Tarjeta rotulo="Mercados" cifra={mercados?.length ?? "—"} apunte="dados de alta" acento />
-          <Tarjeta
-            rotulo="Con datos cargados"
-            cifra={mercados ? `${conDatos} de ${mercados.length}` : "—"}
-            apunte="el resto está en catálogo pero vacío"
-          />
-          <Tarjeta rotulo="Valores" cifra={total || "—"} apunte="en catálogo" />
-          <Tarjeta
-            rotulo="Puntuados"
-            cifra={mejores?.puestos.length ?? "—"}
-            apunte={mejores?.fecha_datos ? `a ${mejores.fecha_datos}` : "sin scores"}
-          />
-        </div>
-
-        {!mercados ? (
-          <p className="bloque-falta">No disponible. El motor no ha respondido.</p>
-        ) : (
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(330px,1fr))", gap: 18 }}>
-            {mercados.map((m) => {
-              const conjuntos = porMercado.get(m.id) ?? [];
-              const precios = conjuntos.find((c) => c.dataset === "precios");
-              const fundamentales = conjuntos.find((c) => c.dataset === "fundamentales");
-              return (
-                <Panel
-                  key={m.id}
-                  titulo={m.name}
-                  extra={
-                    <span className="mono" style={{ fontSize: 10, color: "var(--tinta-4)" }}>
-                      {m.id.toUpperCase()} · {m.currency}
-                    </span>
-                  }
-                >
-                  <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-                    <Linea k="Valores en catálogo" v={String(m.securities)} />
-                    <Linea k="Con score" v={String(puntuados.get(m.id) ?? 0)} />
-                    <Linea k="Calendario" v={m.trading_calendar} />
-                    <Linea
-                      k="Índice de referencia"
-                      v={
-                        <>
-                          {m.benchmark ?? "—"}
-                          {m.benchmark && !m.benchmark_is_total_return ? (
-                            <span className="apunte" style={{ marginLeft: 8 }}>
-                              índice de precio
-                            </span>
-                          ) : null}
-                        </>
-                      }
-                    />
-                    <Cobertura titulo="Precios" f={precios} />
-                    <Cobertura titulo="Fundamentales" f={fundamentales} />
-                  </div>
-
-                  {m.benchmark && !m.benchmark_is_total_return ? (
-                    // D-5, y no es un detalle: importa a quien vaya a comparar.
-                    <p className="apunte" style={{ marginTop: 14, lineHeight: 1.6 }}>
-                      El índice no incluye dividendos y las acciones sí. Comparar uno contra otras
-                      regala a cada acción la rentabilidad por dividendo del índice, así que sirve
-                      para leer el régimen del mercado pero no para medir si un valor lo bate.
-                    </p>
-                  ) : null}
-                </Panel>
-              );
-            })}
-          </div>
-        )}
-
-        <p className="apunte" style={{ marginTop: 24 }}>
-          ¿Buscas un valor concreto? <Link href="/buscar">Búscalo por nombre, ticker o ISIN</Link>.
-        </p>
-      </div>
-    </>
-  );
-}
-
-function Linea({ k, v }: { k: string; v: React.ReactNode }) {
-  return (
-    <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", gap: 14 }}>
-      <span style={{ fontSize: 13, color: "var(--tinta-3)" }}>{k}</span>
-      <span className="mono" style={{ fontSize: 13, textAlign: "right" }}>
-        {v}
-      </span>
-    </div>
-  );
-}
-
-function Cobertura({ titulo, f }: { titulo: string; f: Frescura | undefined }) {
-  if (!f) {
+function Frescura({ f, clave }: { f: FrescuraDatos | undefined; clave: string }) {
+  if (!f || !f.last_data_date) {
     return (
-      <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", gap: 14 }}>
-        <span style={{ fontSize: 13, color: "var(--tinta-3)" }}>{titulo}</span>
-        <span className="apunte" style={{ color: "var(--baja)" }}>
-          sin cargar
-        </span>
-      </div>
+      <span className="fresh is-none" title={`${clave}: sin cargar`}>
+        ⊘ sin cargar
+      </span>
+    );
+  }
+  const cobertura = f.securities_expected ? ` · ${f.securities_covered ?? 0}/${f.securities_expected}` : "";
+  if (f.is_stale) {
+    return (
+      <span className="fresh is-late">
+        ◷ {fmtFecha(f.last_data_date, false)} · {f.days_behind ?? "?"} d tarde{cobertura}
+      </span>
     );
   }
   return (
-    <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", gap: 14 }}>
-      <span style={{ fontSize: 13, color: "var(--tinta-3)" }}>{titulo}</span>
-      <span style={{ textAlign: "right" }}>
-        <span className="mono" style={{ fontSize: 13 }}>
-          {f.securities_covered}/{f.securities_expected}
-        </span>
-        <span className="apunte" style={{ display: "block", fontSize: 11 }}>
-          {f.last_data_date}
-          {f.is_stale ? " · rancio" : null}
-        </span>
-      </span>
+    <span className="fresh">
+      ✓ {fmtFecha(f.last_data_date, false)}
+      {cobertura}
+    </span>
+  );
+}
+
+export default async function Mercados() {
+  const fecha = fechaConsulta();
+  const [mercados, salud, universo] = await Promise.all([
+    intenta(api<Market[]>("/markets")),
+    intenta(api<SaludDatos>("/health/data")),
+    intenta(screener({ orden: "overall", n: 200, ...(fecha ? { fecha } : {}) })),
+  ]);
+
+  const total = mercados?.reduce((t, m) => t + m.securities, 0) ?? null;
+  const encabezado = (
+    <Encabezado
+      rotulo="02 · MERCADOS"
+      titulo={mercados ? `${mercados.length === 5 ? "Cinco" : mercados.length} mercados` : "Mercados"}
+      meta={total !== null ? `${total} valores · precios y fundamentales por mercado` : undefined}
+    />
+  );
+
+  if (!mercados) {
+    return (
+      <div className="page">
+        {encabezado}
+        <ErrorCarga que="los mercados" detalle="la API no responde" reintentar={conFecha("/mercados", fecha)} />
+      </div>
+    );
+  }
+  if (!mercados.length) {
+    return (
+      <div className="page">
+        {encabezado}
+        <PrimerUso titulo="Ningún mercado cargado" texto="Los mercados aparecerán cuando se carguen desde la configuración." />
+      </div>
+    );
+  }
+
+  const precios = frescuraPorMercado(salud, "precios");
+  const fundamentales = frescuraPorMercado(salud, "fundamentales");
+  const puntuados = new Map<string, number>();
+  for (const f of universo?.filas ?? []) puntuados.set(f.mercado, (puntuados.get(f.mercado) ?? 0) + 1);
+  const conteoCompleto = universo !== null && universo.total <= universo.n;
+
+  return (
+    <div className="page">
+      {encabezado}
+      <section className="mk-table" aria-label="Mercados">
+        <div className="mk-headrow desk-only" aria-hidden="true">
+          <span>Mercado</span>
+          <span>Bloque</span>
+          <span>Divisa</span>
+          <span>Índice</span>
+          <span>Valores</span>
+          <span>Régimen</span>
+          <span>Precios</span>
+          <span>Fundamentales</span>
+        </div>
+        {mercados.map((m) => (
+          <div key={m.id} className="mk-row">
+            <span className="name">{m.name}</span>
+            <span>
+              <span className="tag tag-neutral">{BLOQUE[m.classification?.toLowerCase()] ?? m.classification}</span>
+            </span>
+            <span className="mono">
+              <span className="k">Divisa</span>
+              {m.currency}
+            </span>
+            <span className="mono">
+              <span className="k">Índice</span>
+              {m.benchmark ?? "sin índice"}
+            </span>
+            <span className="mono" title={conteoCompleto ? undefined : "recuento de puntuados no disponible"}>
+              {m.securities} valores
+              {conteoCompleto ? (
+                <span style={{ display: "block", fontSize: 11, color: "var(--tinta-3)" }}>{puntuados.get(m.id) ?? 0} con score</span>
+              ) : null}
+            </span>
+            <span title="la API no publica el régimen por mercado">
+              <span className="k">Régimen</span>
+              <span className="mono" aria-hidden="true">
+                ?
+              </span>{" "}
+              n/d
+            </span>
+            <span className="wide">
+              <span className="k">Precios</span>
+              <Frescura f={precios.get(m.id)} clave="precios" />
+            </span>
+            <span className="wide">
+              <span className="k">Fundamentales</span>
+              <Frescura f={fundamentales.get(m.id)} clave="fundamentales" />
+            </span>
+          </div>
+        ))}
+      </section>
+      <p className="explainer">
+        El régimen se calcula sobre el índice de referencia de cada mercado y limita las señales de sus valores; la API
+        todavía no lo publica por mercado, así que aquí se declara «n/d» en lugar de deducirlo. Los cinco índices de
+        referencia son de precio, sin dividendos: sirven para leer el régimen del mercado, no para medir si un valor lo
+        bate.
+      </p>
+      {!salud ? (
+        <p className="bloque-falta">
+          <strong>NO DISPONIBLE</strong>Frescura de los datos: la API no ha respondido.
+        </p>
+      ) : null}
     </div>
   );
 }

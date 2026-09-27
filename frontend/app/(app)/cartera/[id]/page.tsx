@@ -1,11 +1,10 @@
 import Link from "next/link";
 
-import { Cabecera } from "@/components/armazon";
 import { notFound, redirect } from "next/navigation";
 
 import { anadirTransaccion, borrarCartera, borrarTransaccion } from "@/app/acciones";
 import { BotonAccion, Formulario } from "@/components/formularios";
-import { Medidor, numero } from "@/components/piezas";
+import { Medidor, numero, Encabezado } from "@/components/piezas";
 import { ApiError, type TransaccionFila, type Valoracion } from "@/lib/api";
 import { apiSesion, usuarioActual } from "@/lib/sesion";
 
@@ -64,12 +63,11 @@ export default async function Cartera({ params }: { params: Promise<{ id: string
 
   return (
     <>
-      <Cabecera miga="Cartera" />
       <div className="pagina">
       <p className="apunte">
         <Link href="/cartera">← Mis carteras</Link>
       </p>
-      <h1>{v.nombre}</h1>
+      <Encabezado rotulo="06 · CARTERA" titulo={v.nombre} />
 
       <div className="rejilla">
         <div className="tarjeta">

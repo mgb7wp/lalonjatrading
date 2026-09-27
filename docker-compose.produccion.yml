@@ -62,6 +62,8 @@ services:
       # Vacio = mismo origen. Caddy enruta /api a la API, asi que el navegador
       # no necesita saber donde vive.
       NEXT_PUBLIC_API_URL: ""
+      # D-6: el grupo «Operar» (hoja de ordenes, alertas) solo aparece con esto activo.
+      PERSONALIZATION_ENABLED: ${PERSONALIZATION_ENABLED:-false}
     depends_on:
       api: {condition: service_healthy}
 

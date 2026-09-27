@@ -13,10 +13,10 @@ import type { ReactNode } from "react";
 
 import type { Resultado } from "@/app/acciones";
 
-function Boton({ children }: { children: ReactNode }) {
+function Boton({ children, className }: { children: ReactNode; className?: string }) {
   const { pending } = useFormStatus();
   return (
-    <button type="submit" disabled={pending} aria-busy={pending}>
+    <button type="submit" disabled={pending} aria-busy={pending} className={className}>
       {pending ? "Enviando…" : children}
     </button>
   );
@@ -28,17 +28,19 @@ export function Formulario({
   etiquetaBoton,
   children,
   className = "formulario",
+  claseBoton,
 }: {
   accion: (previo: Resultado, datos: FormData) => Promise<Resultado>;
   etiquetaBoton: string;
   children: ReactNode;
   className?: string;
+  claseBoton?: string;
 }) {
   const [estado, enviar] = useFormState(accion, {});
   return (
     <form action={enviar} className={className}>
       {children}
-      <Boton>{etiquetaBoton}</Boton>
+      <Boton className={claseBoton}>{etiquetaBoton}</Boton>
       {estado.error ? (
         // `role="alert"` para que un lector de pantalla lo anuncie: un mensaje
         // que aparece sin avisar no existe para quien no lo esta mirando.
