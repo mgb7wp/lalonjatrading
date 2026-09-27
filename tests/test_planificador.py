@@ -327,7 +327,7 @@ def test_solo_un_dia_sin_sesion_en_ningun_mercado_se_salta_la_puntuacion(
 
 
 def test_las_senales_de_la_tarea_diaria_quedan_guardadas(monkeypatch, cfg):
-    """La tarea de las 18:30 emitia las senales y las perdia al cerrar la sesion.
+    """La tarea de puntuar emitia las senales y las perdia al cerrar la sesion.
 
     `senales.ejecutar` escribe y NO confirma: la transaccion es de quien abre la
     sesion, igual que en `scripts/calculate_signals.py`, que si confirmaba. La
