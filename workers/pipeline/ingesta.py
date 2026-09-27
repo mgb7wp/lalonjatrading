@@ -356,12 +356,16 @@ def ejecutar(
     hecha con el ultimo tipo publicado —el de ayer— y las de la tarde la
     saltarian: el tipo de hoy no entraria hasta manana. Por eso el planificador
     la pide aparte, despues de que el BCE publique.
+
+    `mercados=None` son todos; `mercados=[]` es NINGUNO, que es lo que pide la
+    tarea de divisas. Tratar las dos igual la hacia descargar los cinco
+    mercados a las 16:45 de Madrid, con cuatro de ellos todavia abiertos.
     """
     hoy = dt.date.today()
     dia = dia or hoy
     fin = dia
     inicio = dt.date(fin.year - anos, fin.month, fin.day)
-    ids_mercado = mercados or [m.id for m in cfg.reglas.universo.mercados]
+    ids_mercado = [m.id for m in cfg.reglas.universo.mercados] if mercados is None else mercados
     # Antes de descargar nada: media hora de descarga para acabar rechazando la
     # escritura no le sirve a nadie.
     comprobar_procedencia(sesion, enrutador.nombre_de("precios"))

@@ -398,6 +398,36 @@ def test_una_etapa_ya_terminada_se_salta(bd_ingesta, cfg):
     assert all(r.estado == "skipped" for r in segunda), [str(r) for r in segunda]
 
 
+def test_sin_mercados_solo_se_descargan_las_divisas(bd_ingesta, cfg):
+    """La tarea de divisas pide `mercados=[]`, y eso tiene que querer decir NINGUNO.
+
+    Se leia como "todos": `mercados or [todos]` trata la lista vacia igual que
+    `None`. A las 16:45 de Madrid, cuando corre esa tarea, Madrid, Frankfurt,
+    Nueva York y Sao Paulo siguen abiertos, asi que se guardaba el precio de
+    media sesion como cierre del dia, la etapa quedaba hecha y la descarga de
+    verdad, tras el cierre, se la saltaba. Los scores de la noche salian con
+    precios de las 16:45 en cuatro de los cinco mercados.
+    """
+    import sqlalchemy as sa
+    from estrategia.datos.enrutador import Enrutador
+
+    from workers.pipeline import ingesta
+
+    cfg_uno = cfg.con_fuente_unica("sintetico")
+    with sa.orm.Session(bd_ingesta) as s:
+        resultados = ingesta.ejecutar(
+            s, cfg_uno, Enrutador(cfg_uno), mercados=[], anos=2, con_divisas=True
+        )
+
+    assert {r.etapa for r in resultados} == {"divisas"}, [str(r) for r in resultados]
+    with sa.orm.Session(bd_ingesta) as s:
+        assert s.execute(text("SELECT count(*) FROM price")).scalar() == 0
+        hechas = s.execute(
+            text("SELECT count(*) FROM pipeline_run WHERE market_id IS NOT NULL")
+        ).scalar()
+    assert hechas == 0, "ninguna etapa de mercado puede quedar marcada como hecha"
+
+
 def test_el_fallo_de_un_mercado_no_tumba_el_resto(bd_ingesta, cfg):
     """§48: un proveedor caido degrada el servicio, no lo tumba.
 
