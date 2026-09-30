@@ -383,13 +383,24 @@ def _bloque_tecnico(bd: Session, valor: Security, corte: dt.date) -> Bloque[Tecn
     )
 
 
-def _score_en(bd: Session, valor: Security, modelo: str, corte: dt.date) -> Score | None:
-    return bd.scalars(
+def _score_en(
+    bd: Session, valor: Security, modelo: str, corte: dt.date, version_id: int | None = None
+) -> Score | None:
+    """El ultimo score del valor en o antes del corte.
+
+    Con `version_id`, solo de esa version: dos versiones de un perfil puntuan
+    con reglas distintas, y restar una de otra no mide ningun cambio del valor.
+    Si un mismo dia hay scores de dos versiones, manda la mas reciente.
+    """
+    consulta = (
         select(Score)
         .join(ModelVersion, ModelVersion.id == Score.model_version_id)
         .where(Score.security_id == valor.id, Score.date <= corte, ModelVersion.name == modelo)
-        .order_by(Score.date.desc())
-        .limit(1)
+    )
+    if version_id is not None:
+        consulta = consulta.where(Score.model_version_id == version_id)
+    return bd.scalars(
+        consulta.order_by(Score.date.desc(), Score.model_version_id.desc()).limit(1)
     ).first()
 
 
@@ -472,7 +483,11 @@ def _bloque_explicacion(
     a_favor.sort(key=lambda f: -f.valor)
     en_contra.sort(key=lambda f: f.valor)
 
-    previo = _score_en(bd, valor, modelo, actual.date - dt.timedelta(days=DIAS_CAMBIO))
+    # De la MISMA version que el actual: tras un cambio de version, la
+    # diferencia con el score viejo solo diria que han cambiado las reglas.
+    previo = _score_en(
+        bd, valor, modelo, actual.date - dt.timedelta(days=DIAS_CAMBIO), actual.model_version_id
+    )
     cambio: dict[str, float] = {}
     no_comparable: list[str] = []
     for nombre in ("overall", *PILARES):

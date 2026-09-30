@@ -24,6 +24,8 @@ from backend.main import crear_app
 
 HOY = dt.date(2026, 4, 15)
 HACE_UN_MES = dt.date(2026, 3, 16)
+#: Primer dia con scores de la version nueva del perfil (ver `version_nueva`).
+DESPUES = dt.date(2026, 4, 20)
 VERSION = "0.0.9-rank"
 
 
@@ -170,14 +172,15 @@ def entorno(bd_con_referencia):
 
     with sa.orm.Session(bd_con_referencia) as s:
         s.execute(sa.text("DELETE FROM price WHERE source = 'prueba-rank'"))
+        # Con LIKE: tambien la version nueva que da de alta `version_nueva`.
         s.execute(
             sa.text(
                 "DELETE FROM score WHERE model_version_id IN "
-                "(SELECT id FROM model_version WHERE version = :v)"
+                "(SELECT id FROM model_version WHERE version LIKE :v)"
             ),
-            {"v": VERSION},
+            {"v": f"{VERSION}%"},
         )
-        s.execute(sa.text("DELETE FROM model_version WHERE version = :v"), {"v": VERSION})
+        s.execute(sa.text("DELETE FROM model_version WHERE version LIKE :v"), {"v": f"{VERSION}%"})
         s.execute(sa.text("DELETE FROM security WHERE ticker LIKE 'ZZ%'"))
         s.commit()
 
@@ -304,6 +307,64 @@ def test_no_se_usan_scores_posteriores_al_corte(entorno):
     r = _ranking(cliente, mercado=mercado, fecha=HACE_UN_MES.isoformat())
 
     assert r["fecha_datos"] == HACE_UN_MES.isoformat()
+
+
+# --- Dos versiones del mismo perfil ----------------------------------------
+
+
+@pytest.fixture
+def version_nueva(entorno, bd_con_referencia):
+    """Una version posterior de `equilibrado`, con scores solo desde DESPUES.
+
+    Es lo que pasa cada vez que sube la version de `modelos.yaml` (la 1.1.0 de
+    v0.5.0, por ejemplo): `cargar_modelos` da de alta la nueva y esta solo tiene
+    scores desde ese dia. Las dos conviven en `model_version`.
+    """
+    cliente, mercado = entorno
+    with sa.orm.Session(bd_con_referencia) as s:
+        mv = ModelVersion(
+            name="equilibrado", version=f"{VERSION}-nueva", kind=ModelKind.RULES.value
+        )
+        s.add(mv)
+        s.flush()
+        otra = s.scalars(sa.select(Security).where(Security.ticker == "ZZOTRA")).one()
+        _puntuar(s, otra, mv, DESPUES, 50)
+        s.commit()
+    return cliente, mercado
+
+
+def test_un_ranking_pasado_sale_con_la_version_que_puntuo_ese_dia(version_nueva):
+    """Se cogia la version de id mas alto aunque no tuviera ni un score de esa
+    fecha: el ranking de cualquier dia anterior al cambio de version salia
+    vacio, aunque ese dia se publicara uno."""
+    cliente, mercado = version_nueva
+    r = _ranking(cliente, mercado=mercado)
+
+    assert r["fecha_datos"] == HOY.isoformat()
+    assert r["puestos"][0]["ticker"] == "ZZLOCAL"
+
+
+def test_desde_que_puntua_manda_la_version_nueva(version_nueva):
+    cliente, mercado = version_nueva
+    r = _ranking(cliente, mercado=mercado, fecha=DESPUES.isoformat())
+
+    assert r["fecha_datos"] == DESPUES.isoformat()
+    assert [p["ticker"] for p in r["puestos"]] == ["ZZOTRA"]
+
+
+def test_el_screener_de_una_fecha_pasada_tampoco_sale_vacio(version_nueva):
+    cliente, _ = version_nueva
+    r = cliente.post("/api/v1/screener", json={"fecha": HOY.isoformat()}).json()
+
+    assert r["fecha_datos"] == HOY.isoformat()
+    assert r["total"] >= 3
+
+
+def test_un_modelo_que_no_existe_sigue_siendo_un_404(entorno):
+    cliente, _ = entorno
+    r = cliente.get("/api/v1/rankings", params={"modelo": "no-existe"})
+
+    assert r.status_code == 404
 
 
 # --- Screener --------------------------------------------------------------

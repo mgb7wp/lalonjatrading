@@ -106,9 +106,32 @@ class RespuestaRanking(BaseModel):
 
 
 def _version(bd: Session, modelo: str) -> ModelVersion | None:
+    """Si el perfil existe, en cualquier version. Solo decide el 404."""
     return bd.scalars(
         select(ModelVersion).where(ModelVersion.name == modelo).order_by(ModelVersion.id.desc())
     ).first()
+
+
+def version_puntuada(
+    bd: Session, modelo: str, corte: dt.date
+) -> tuple[ModelVersion | None, dt.date | None]:
+    """La version del perfil con los scores mas recientes en o antes del corte, y su fecha.
+
+    No vale "la version mas nueva". `cargar_modelos` da de alta una fila por
+    (nombre, version), asi que conviven varias, y la nueva solo tiene scores
+    desde el dia en que entro: con ella, cualquier consulta de una fecha
+    anterior salia vacia aunque ese dia se hubiera publicado un ranking. Si un
+    mismo dia tiene scores de dos versiones, manda la mas reciente. Es el mismo
+    criterio con el que `workers/pipeline/senales.py` elige version al emitir.
+    """
+    fila = bd.execute(
+        select(ModelVersion, Score.date)
+        .join(Score, Score.model_version_id == ModelVersion.id)
+        .where(ModelVersion.name == modelo, Score.date <= corte)
+        .order_by(Score.date.desc(), ModelVersion.id.desc())
+        .limit(1)
+    ).first()
+    return (None, None) if fila is None else (fila[0], fila[1])
 
 
 def _fecha_datos(bd: Session, version_id: int, corte: dt.date) -> dt.date | None:
@@ -208,12 +231,11 @@ def ranking(
         puestos=[],
     )
 
-    version = _version(bd, modelo)
-    if version is None:
+    if _version(bd, modelo) is None:
         raise HTTPException(status_code=404, detail=f"no existe el modelo '{modelo}'")
 
-    dia = _fecha_datos(bd, version.id, corte)
-    if dia is None:
+    version, dia = version_puntuada(bd, modelo, corte)
+    if version is None or dia is None:
         return vacio
 
     filas = [(s, v) for s, v in bd.execute(_base(version.id, dia, mercado)).all()]

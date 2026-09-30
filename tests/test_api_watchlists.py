@@ -202,6 +202,49 @@ def test_la_lista_trae_score_variaciones_y_senal(cliente):
     assert fila["motivo_senal"] == "score_alto"
 
 
+def test_una_version_nueva_del_modelo_no_vacia_la_lista_en_fechas_pasadas(
+    cliente, bd_con_referencia
+):
+    """La vista cogia la version de id mas alto del perfil aunque no tuviera
+    scores de la fecha pedida. Tras un cambio de version, mirar la lista a una
+    fecha anterior la dejaba sin score, sin variacion y sin senal."""
+    with sa.orm.Session(bd_con_referencia) as s:
+        aapl = s.scalars(sa.select(Security.id).where(Security.ticker == "AAPL")).one()
+        mv = ModelVersion(
+            name="equilibrado", version="0.0.14-listas-nueva", kind=ModelKind.RULES.value
+        )
+        s.add(mv)
+        s.flush()
+        s.add(
+            Score(
+                security_id=aapl,
+                date=CORTE + dt.timedelta(days=20),
+                model_version_id=mv.id,
+                overall=D("10"),
+                cohort_used=Cohort.MARKET_SECTOR.value,
+                n_cohort=30,
+                available_pillars=4,
+            )
+        )
+        s.commit()
+        nueva = mv.id
+
+    try:
+        cab = _cabeceras(cliente, "versiones@pruebas.example.com")
+        lista = _lista(cliente, cab)
+        _anadir(cliente, cab, lista, "AAPL")
+        fila = _por_ticker(_ver(cliente, cab, lista))["AAPL"]
+    finally:
+        with sa.orm.Session(bd_con_referencia) as s:
+            s.execute(sa.delete(Score).where(Score.model_version_id == nueva))
+            s.execute(sa.delete(ModelVersion).where(ModelVersion.id == nueva))
+            s.commit()
+
+    assert fila["score"] == 75.0
+    assert fila["variacion_score"] == 15.0
+    assert fila["senal"] == "buy"
+
+
 def test_una_variacion_que_no_se_puede_calcular_no_es_cero(cliente):
     """Un cero afirma «no se movió», que es una afirmación sobre datos que no
     existen. Sale `None` y con el motivo escrito al lado."""

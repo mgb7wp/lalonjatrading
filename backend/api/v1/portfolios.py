@@ -60,7 +60,6 @@ from sqlalchemy.orm import Session
 from ...carteras import CERO, Transaccion, derivar, exposicion
 from ...db.models import (
     Market,
-    ModelVersion,
     Portfolio,
     PortfolioPosition,
     Price,
@@ -72,6 +71,7 @@ from ...db.models import (
 from ...db.models.enums import TransactionType
 from ...db.models.market_data import FxRate
 from ..deps import BD, Actual, MisLimites, comprobar_cupo
+from .rankings import version_puntuada
 
 router = APIRouter(prefix="/portfolios", tags=["carteras"])
 
@@ -269,7 +269,14 @@ def _fx_del_dia(bd: Session, divisa: str, base: str, fecha: dt.date) -> Decimal 
 def _ultimos_precios(
     bd: Session, ids: list[int], corte: dt.date
 ) -> dict[int, tuple[Decimal, dt.date]]:
-    """Ultimo cierre de cada valor en o antes del corte. Nunca posterior."""
+    """Ultimo cierre de cada valor en o antes del corte. Nunca posterior.
+
+    Es el cierre de MERCADO (`close_raw`), no el ajustado (`close`): el ajustado
+    rebaja los precios pasados en los dividendos que se repartieron despues, asi
+    que una cartera valorada con el a una fecha pasada valdria menos de lo que
+    valia, y ademas descontaria un dividendo que ya entra como transaccion. Si
+    la fuente no da el bruto, se usa el ajustado.
+    """
     if not ids:
         return {}
     ultimo = (
@@ -279,7 +286,7 @@ def _ultimos_precios(
         .subquery()
     )
     filas = bd.execute(
-        select(Price.security_id, Price.close, Price.date).join(
+        select(Price.security_id, func.coalesce(Price.close_raw, Price.close), Price.date).join(
             ultimo,
             and_(Price.security_id == ultimo.c.security_id, Price.date == ultimo.c.fecha),
         )
@@ -293,25 +300,14 @@ def _ultimos_scores(
     """Scores de la ultima fecha puntuada en o antes del corte."""
     if not ids:
         return {}, None
-    version = bd.scalars(
-        select(ModelVersion.id)
-        .where(ModelVersion.name == modelo)
-        .order_by(ModelVersion.id.desc())
-        .limit(1)
-    ).first()
-    if version is None:
-        return {}, None
-    fecha = bd.scalars(
-        select(Score.date)
-        .where(Score.model_version_id == version, Score.date <= corte)
-        .order_by(Score.date.desc())
-        .limit(1)
-    ).first()
-    if fecha is None:
+    # La version que DE VERDAD tiene scores en esa fecha, no la ultima dada de
+    # alta: ver `version_puntuada`.
+    version, fecha = version_puntuada(bd, modelo, corte)
+    if version is None or fecha is None:
         return {}, None
     filas = bd.execute(
         select(Score.security_id, Score.overall).where(
-            Score.model_version_id == version,
+            Score.model_version_id == version.id,
             Score.date == fecha,
             Score.security_id.in_(ids),
         )

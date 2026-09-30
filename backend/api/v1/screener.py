@@ -29,10 +29,10 @@ from pydantic import BaseModel, Field
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from ...db.models import ModelVersion, Score, Security, Signal
+from ...db.models import Score, Security, Signal
 from ...db.models.enums import AssetType
 from ...db.session import sesion
-from .rankings import _deduplicar, _fecha_datos, _volumenes
+from .rankings import _deduplicar, _version, _volumenes, version_puntuada
 
 router = APIRouter(prefix="/screener", tags=["screener"])
 
@@ -154,12 +154,7 @@ def _condicion(f: Filtro):
 def filtrar(peticion: Peticion, bd: BD) -> Respuesta:
     corte = peticion.fecha or dt.date.today()
 
-    version = bd.scalars(
-        select(ModelVersion)
-        .where(ModelVersion.name == peticion.modelo)
-        .order_by(ModelVersion.id.desc())
-    ).first()
-    if version is None:
+    if _version(bd, peticion.modelo) is None:
         raise HTTPException(status_code=404, detail=f"no existe el modelo '{peticion.modelo}'")
 
     if peticion.orden not in CAMPOS:
@@ -169,8 +164,8 @@ def filtrar(peticion: Peticion, bd: BD) -> Respuesta:
             f"{', '.join(sorted(CAMPOS))}",
         )
 
-    dia = _fecha_datos(bd, version.id, corte)
-    if dia is None:
+    version, dia = version_puntuada(bd, peticion.modelo, corte)
+    if version is None or dia is None:
         return Respuesta(
             fecha=corte, fecha_datos=None, modelo=peticion.modelo, n=0, total=0, filas=[]
         )

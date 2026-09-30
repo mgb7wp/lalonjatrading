@@ -47,7 +47,6 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from ...db.models import (
-    ModelVersion,
     Price,
     Score,
     Security,
@@ -57,6 +56,7 @@ from ...db.models import (
     WatchlistItem,
 )
 from ..deps import BD, Actual, MisLimites, comprobar_cupo
+from .rankings import version_puntuada
 
 router = APIRouter(prefix="/watchlists", tags=["watchlists"])
 
@@ -415,14 +415,10 @@ def ver(
     ).all()
     ids = [v.id for v in valores]
 
-    version = bd.scalars(
-        select(ModelVersion.id)
-        .where(ModelVersion.name == modelo)
-        .order_by(ModelVersion.id.desc())
-        .limit(1)
-    ).first()
-
-    dia = _fecha_con_scores(bd, version, corte) if version else None
+    # La version que DE VERDAD tiene scores en esa fecha, no la ultima dada de
+    # alta: ver `version_puntuada`. La variacion y la senal salen de la misma.
+    puntuada, dia = version_puntuada(bd, modelo, corte)
+    version = puntuada.id if puntuada is not None else None
     # La foto anterior se busca desde `dia` y no desde `corte`: si el ultimo
     # calculo es de hace una semana, comparar contra hace 30 dias naturales
     # mediria 37 dias y no 30. La variacion tiene que significar lo mismo
