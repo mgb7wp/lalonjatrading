@@ -326,6 +326,49 @@ def test_solo_un_dia_sin_sesion_en_ningun_mercado_se_salta_la_puntuacion(
         runner.ejecutar_scores()
 
 
+def test_las_senales_de_la_tarea_diaria_quedan_guardadas(monkeypatch, cfg):
+    """La tarea de puntuar emitia las senales y las perdia al cerrar la sesion.
+
+    `senales.ejecutar` escribe y NO confirma: la transaccion es de quien abre la
+    sesion, igual que en `scripts/calculate_signals.py`, que si confirmaba. La
+    tarea programada no lo hacia, y cerrar una sesion sin confirmar deshace lo
+    escrito: el log decia "senales/score_alto: 12" y la tabla `signal` seguia
+    con las del dia en que alguien lanzo el script a mano.
+
+    Se comprueba con una base de verdad (SQLite en memoria) y no mirando si se
+    llama a `commit`: lo que importa es que la fila siga ahi al cerrar.
+    """
+    import sqlalchemy as sa
+    from estrategia import config as core_config
+    from sqlalchemy.orm import sessionmaker
+    from sqlalchemy.pool import StaticPool
+
+    from backend.db import session as db
+    from workers import planificador, runner
+    from workers.pipeline import scores, senales
+
+    motor = sa.create_engine("sqlite://", poolclass=StaticPool)
+    with motor.begin() as c:
+        c.execute(sa.text("CREATE TABLE signal (security_id INTEGER)"))
+
+    def senales_como_la_etapa(sesion, _cfg, fecha):
+        # Igual que la etapa de verdad: escribe y deja la confirmacion a quien
+        # abrio la sesion.
+        sesion.execute(sa.text("INSERT INTO signal (security_id) VALUES (1)"))
+        return {"score_alto": 1}
+
+    monkeypatch.setattr(core_config, "cargar", lambda *_a, **_k: cfg)
+    monkeypatch.setattr(planificador, "ha_negociado", lambda *_: True)
+    monkeypatch.setattr(db, "_fabrica", lambda: sessionmaker(bind=motor))
+    monkeypatch.setattr(scores, "ejecutar", lambda *_a, **_k: {"equilibrado": 1})
+    monkeypatch.setattr(senales, "ejecutar", senales_como_la_etapa)
+
+    runner.ejecutar_scores()
+
+    with motor.connect() as c:
+        assert c.execute(sa.text("SELECT count(*) FROM signal")).scalar() == 1
+
+
 # --- Un festivo no es un fallo --------------------------------------------
 
 

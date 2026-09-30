@@ -152,6 +152,11 @@ def ejecutar_scores() -> None:
     with _fabrica()() as sesion:
         puntuados = scores.ejecutar(sesion, cfg, fecha=hoy)
         emitidas = senales.ejecutar(sesion, cfg, fecha=hoy)
+        # `senales.ejecutar` escribe pero no confirma: la transaccion es de
+        # quien abre la sesion. Sin esto, cerrarla deshacia las senales del dia
+        # y la tabla se quedaba con las de la ultima vez que alguien lanzo
+        # `calculate_signals.py` a mano.
+        sesion.commit()
 
     for modelo, n in puntuados.items():
         log.info("scores/%s: %s filas", modelo, n)

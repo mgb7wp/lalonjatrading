@@ -109,13 +109,14 @@ def entorno(bd_con_referencia):
     with sa.orm.Session(bd_con_referencia) as s:
         s.execute(sa.text("DELETE FROM signal WHERE author = 'prueba'"))
         s.execute(sa.text("DELETE FROM price WHERE source = 'prueba'"))
+        # Con LIKE: tambien la version nueva que da de alta algun test.
         s.execute(
             sa.text(
                 "DELETE FROM score WHERE model_version_id IN "
-                "(SELECT id FROM model_version WHERE version = '0.0.9-api')"
+                "(SELECT id FROM model_version WHERE version LIKE '0.0.9-api%')"
             )
         )
-        s.execute(sa.text("DELETE FROM model_version WHERE version = '0.0.9-api'"))
+        s.execute(sa.text("DELETE FROM model_version WHERE version LIKE '0.0.9-api%'"))
         s.commit()
 
 
@@ -240,6 +241,42 @@ def test_un_cambio_que_no_se_puede_calcular_se_declara(entorno):
     ).json()["explicacion"]["datos"]
 
     assert exp["cambio_30d"] == {}
+    assert "overall" in exp["cambio_no_comparable"]
+
+
+def test_el_cambio_a_30_dias_no_compara_dos_versiones_del_modelo(entorno, bd_con_referencia):
+    """Una version nueva del perfil puntua distinto por construccion.
+
+    El score "de hace 30 dias" se buscaba por el NOMBRE del modelo, asi que
+    tras un cambio de version se restaba el score nuevo del viejo y salia una
+    caida o una subida que solo decia que habian cambiado las reglas. Los
+    scores de versiones distintas no se mezclan (registro de cambios, v0.5.0).
+    """
+    cliente, ticker = entorno
+    despues = HOY + dt.timedelta(days=40)
+    with sa.orm.Session(bd_con_referencia) as s:
+        valor = s.scalars(sa.select(Security).where(Security.ticker == ticker)).one()
+        mv = ModelVersion(name="equilibrado", version="0.0.9-api-nueva", kind=ModelKind.RULES.value)
+        s.add(mv)
+        s.flush()
+        s.add(
+            Score(
+                security_id=valor.id,
+                date=despues,
+                model_version_id=mv.id,
+                overall=50,
+                cohort_used=Cohort.MARKET.value,
+                n_cohort=30,
+                available_pillars=["fundamental"],
+            )
+        )
+        s.commit()
+
+    exp = cliente.get(
+        f"/api/v1/stocks/{ticker}/analysis", params={"fecha": despues.isoformat()}
+    ).json()["explicacion"]["datos"]
+
+    assert "overall" not in exp["cambio_30d"], "88 -> 50 no es una caida: es otra version"
     assert "overall" in exp["cambio_no_comparable"]
 
 

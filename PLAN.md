@@ -13,7 +13,7 @@
 
 Lo comercial (cobrar a suscriptores) queda aparcado hasta el final.
 
-**De dónde viene este plan.** El 23/09/2026 la plataforma pasó a `main` e incorporó los arreglos del motor B1–B10. Antes vivía en ramas separadas. Las fases del producto están en [`docs/ROADMAP.md`](docs/ROADMAP.md), y las decisiones de diseño (D-1 a D-14), en [`docs/PROJECT_PLAN.md`](docs/PROJECT_PLAN.md).
+**De dónde viene este plan.** El 25/09/2026 la plataforma pasó a `main` e incorporó los arreglos del motor B1–B10. Antes vivía en ramas separadas. Las fases del producto están en [`docs/ROADMAP.md`](docs/ROADMAP.md), y las decisiones de diseño (D-1 a D-14), en [`docs/PROJECT_PLAN.md`](docs/PROJECT_PLAN.md).
 
 ## Cómo usar este plan
 
@@ -29,12 +29,7 @@ Lo comercial (cobrar a suscriptores) queda aparcado hasta el final.
 
 ## Fase 1 — Unificar (en curso)
 
-**I1 🤖 Integración.** Terminada en la rama `claude/gallant-lamport-saaeo8`; falta fusionarla.
-- La plataforma incorpora B1–B10.
-- Se arreglan dos choques: los sectores del backtest desde la base de datos, y la sesión del día en la descarga programada.
-- 648 tests en verde.
-
-**I2 🤖 `main` pasa a ser la plataforma.** Hay que fusionar la pull request de I1 y cerrar la PR #1, cuyo contenido llega por I1.
+I1 e I2 están hechas (ver "Hecho"). Quedan I3 e I4.
 
 **I3 👤🖥️ El servidor pasa a `main`.**
 - Es una vez. Los comandos están en [`docs/DEPLOYMENT.md`](docs/DEPLOYMENT.md), sección 1: `git checkout main`, `desplegar.sh` y el recálculo de scores y señales.
@@ -53,22 +48,26 @@ Lo comercial (cobrar a suscriptores) queda aparcado hasta el final.
 
 ## Fase 2 — Que no falle en silencio
 
-**S1 🤖 Vigilar scores y señales.**
-- Hoy `/health/data` vigila la frescura de precios, fundamentales y divisas, pero no la de scores y señales.
+**S1 🤖 Vigilar scores, señales y divisas.**
+- Hoy `/health/data` vigila la frescura de precios y fundamentales, pero no la de scores, señales ni divisas.
+  - Divisas: `data_freshness` exige un mercado y la etapa de divisas, que es global, nunca escribe en ella. El umbral `"divisas"` de `DIAS_PARA_RANCIO` (`workers/pipeline/ingesta.py`) no marca nada.
 - Eso es justo lo que falló el 22/09: los rankings enseñaban scores viejos y nada avisó.
 - Hay que añadirlo, y conectar un aviso externo gratuito (UptimeRobot o similar) que te escriba si `/health/data` no está en verde.
 
 **S2 🤝🖥️ Copias de seguridad fuera del servidor.**
 - Hoy viven en el mismo disco que la base de datos (`despliegue/copia_seguridad.sh`).
 - Subirlas a Cloudflare R2, que tiene 10 GB gratis. Tú creas el bucket y el token; Claude, el script.
+- De paso: el script añade `docker-compose.tunel.yml` siempre que el fichero exista (existe siempre). En un servidor sin túnel fallaría por no tener `CLOUDFLARE_TUNNEL_TOKEN`; el tuyo usa túnel, así que hoy no te afecta.
 
 **S3 🤝 Cerrar la web con Cloudflare Access.**
 - Solo tu email entra, incluido `/docs`.
 - Es de uso propio, los datos de yfinance no se pueden redistribuir, y así nadie gasta tu cuota de IA.
 - Se hace en el panel de Cloudflare (Zero Trust → Access); Claude te guía.
+- También cubre esto: detrás del túnel, todas las peticiones le llegan a la API desde la misma IP (la de `cloudflared`), así que los límites de login y registro de `backend/limites.py` son de todos a la vez y no de cada IP. Un desconocido puede dejarte sin poder entrar cinco minutos. Con Access no llega nadie más; si algún día se abre, Caddy tiene que pasar `CF-Connecting-IP` (`trusted_proxies`).
 
 **S4 🤖 Despliegue automático desde el CI (opcional).**
 - Hoy es `git pull` por SSH.
+- De paso: `despliegue/desplegar.sh` dice "Listo" aunque la API no llegue a responder en los dos minutos de espera; debería terminar con error.
 
 ## Fase 3 — Que los números sean correctos
 
@@ -120,6 +119,7 @@ Tests de anticipación como los de `tests/test_anti_sesgo.py`.
 **O1 🤖 Cartera.**
 - Poder corregir una transacción y renombrar la cartera. Hoy la API lo permite, pero la web no.
 - Permitir una comisión de custodia sin valor asociado: hoy `portfolio_transaction.security_id` es obligatorio, así que hace falta una migración.
+- Los splits: la cartera multiplica las acciones que compraste por un precio que el proveedor ya ajusta por splits. Tras un split 10:1, una posición saldría valiendo la décima parte. Hay que ajustar las cantidades con `corporate_action` (la tabla existe y no se llena).
 
 **O2 🤖 Hoja de órdenes semanal sobre tu cartera.** Es el corazón de "operar".
 - Qué vender, a qué nivel mover cada stop y qué comprar, con el importe en €.
@@ -173,7 +173,7 @@ Todo esto es necesario antes de cobrar, y no antes:
 
 - **Datos:** un proveedor con licencia comercial (riesgo RD-1: yfinance no la tiene).
 - **Legal:** revisión de MAR y MiFID (decisión D-6).
-- **Cuentas y cobro:** pagos, verificación de email, 2FA, borrar la cuenta, páginas de privacidad y términos, y límites de peticiones por plan.
+- **Cuentas y cobro:** pagos, verificación de email, 2FA, borrar la cuenta, páginas de privacidad y términos, y límites de peticiones por plan. Al cambiar la contraseña, cerrar las demás sesiones (hoy siguen vivas hasta que caduca su token de refresco).
 - **Más producto:**
   - machine learning (FASE 8: necesita 1.000 valores; hoy hay 138);
   - más mercados;
@@ -201,4 +201,14 @@ Todo esto es necesario antes de cobrar, y no antes:
   - B9: corte fijo entre diseño y validación;
   - B10: limpieza.
 
-**I1: integración de B1–B10 en la plataforma** (motor v0.5.0), pendiente de fusionar en `main`.
+**I1: integración de B1–B10 en la plataforma** (motor v0.5.0). Fusionada en `main` el 25/09/2026 (PR #3).
+
+**I2: `main` pasa a ser la plataforma.** Con la PR #3; la PR #1 está cerrada.
+
+**R: revisión completa del código (27/09/2026).** Lo que ya estaba en este plan (M1, M2, M7, O2…) sigue en su sitio; lo nuevo que se podía arreglar sin tocar resultados de la estrategia, arreglado, cada uno con su test:
+- R1: la tarea diaria de puntuar (de noche, tras el cierre de São Paulo) calculaba las señales y no las guardaba. La tabla `signal` se quedaba con las de la última ejecución manual.
+- R2: la tarea de divisas (16:45, hora de Madrid) descargaba también los cinco mercados, con cuatro de ellos todavía abiertos. Guardaba el precio de media sesión como cierre y la descarga de después del cierre se la saltaba: los scores del día salían con precios de las 16:45.
+- R3: la descarga fallaba un 29 de febrero con un número de años que no fuera múltiplo de 4.
+- R4: rankings, screener, cartera y listas elegían la versión más nueva del modelo aunque no tuviera scores de la fecha pedida; tras un cambio de versión, las consultas de fechas anteriores salían vacías. La ficha comparaba el score con el de otra versión como si fuera un cambio del valor.
+- R5: la cartera valorada a una fecha pasada usaba el precio ajustado por dividendos posteriores en lugar del de mercado.
+- Anotado en S1, S2, S3, S4, O1 y "Aparcado" lo que queda pendiente.

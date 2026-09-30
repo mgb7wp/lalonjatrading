@@ -499,6 +499,93 @@ def test_el_score_medio_se_pondera_por_peso_y_no_es_la_media_aritmetica(cliente)
     assert medio["valor"] != pytest.approx(50.0, abs=0.01), "no es la media aritmetica"
 
 
+def test_la_cartera_se_valora_al_precio_de_mercado_y_no_al_ajustado(cliente, bd_con_referencia):
+    """`close` es el cierre ajustado por los dividendos POSTERIORES a esa fecha.
+
+    Para las senales es el bueno, pero una cartera valorada con el a una fecha
+    pasada sale por debajo de lo que valia, y ademas descuenta un dividendo que
+    ya se cuenta aparte como transaccion. Lo que valia la posicion es el precio
+    al que cotizaba: `close_raw`. Aqui el ajustado es 200 y el de mercado 210.
+    """
+    with sa.orm.Session(bd_con_referencia) as s:
+        s.execute(
+            sa.update(Price)
+            .where(Price.source == "prueba-carteras", Price.date == CORTE, Price.close == 210)
+            .values(close=200)
+        )
+        s.commit()
+
+    cab = _cabeceras(cliente, "bruto@pruebas.example.com")
+    cartera = _cartera(cliente, cab)
+    _mover(
+        cliente,
+        cab,
+        cartera,
+        ticker="AAPL",
+        tipo="buy",
+        cantidad="30",
+        precio="150",
+        fx="0.90",
+        fecha="2024-01-10",
+    )
+
+    (pos,) = _valorar(cliente, cab, cartera)["posiciones"]
+    assert D(pos["precio"]) == D("210")
+    assert D(pos["valor"]) == D("30") * D("210") * FX_USD_EUR
+
+
+def test_una_version_nueva_del_modelo_no_borra_el_score_de_una_fecha_pasada(
+    cliente, bd_con_referencia
+):
+    """El score medio se buscaba en la version de id mas alto del perfil, tuviera
+    o no scores de la fecha pedida. Tras un cambio de version, valorar la
+    cartera a una fecha anterior salia sin score."""
+    with sa.orm.Session(bd_con_referencia) as s:
+        aapl = s.scalars(sa.select(Security.id).where(Security.ticker == "AAPL")).one()
+        mv = ModelVersion(
+            name="equilibrado", version="0.0.13-carteras-nueva", kind=ModelKind.RULES.value
+        )
+        s.add(mv)
+        s.flush()
+        s.add(
+            Score(
+                security_id=aapl,
+                date=DESPUES,
+                model_version_id=mv.id,
+                overall=D("10"),
+                cohort_used=Cohort.MARKET_SECTOR.value,
+                n_cohort=30,
+                available_pillars=4,
+            )
+        )
+        s.commit()
+        nueva = mv.id
+
+    try:
+        cab = _cabeceras(cliente, "versiones@pruebas.example.com")
+        cartera = _cartera(cliente, cab)
+        _mover(
+            cliente,
+            cab,
+            cartera,
+            ticker="AAPL",
+            tipo="buy",
+            cantidad="30",
+            precio="150",
+            fx="0.90",
+            fecha="2024-01-10",
+        )
+        medio = _valorar(cliente, cab, cartera)["score_medio"]
+    finally:
+        with sa.orm.Session(bd_con_referencia) as s:
+            s.execute(sa.delete(Score).where(Score.model_version_id == nueva))
+            s.execute(sa.delete(ModelVersion).where(ModelVersion.id == nueva))
+            s.commit()
+
+    assert medio["valor"] == pytest.approx(80.0)
+    assert medio["fecha_datos"] == str(CORTE)
+
+
 def test_lo_que_no_tiene_score_no_se_imputa_a_50_y_la_cobertura_lo_declara(cliente):
     """AENA.MC tiene precio pero no score.
 
