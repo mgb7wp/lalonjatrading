@@ -17,6 +17,10 @@ ajustar, descargas robustas, sectores, corte fijo entre diseño y validación. L
 perfiles de puntuación pasan a la versión 1.1.0. La plataforma es, de momento,
 de uso propio; las tareas siguientes, por orden, están en [`PLAN.md`](../PLAN.md).
 
+**30/09/2026 — el servidor funciona con `main`**, con los arreglos R1–R5 de la
+revisión del código. Con eso termina la fase 1 de
+`PLAN.md` (unificar); la siguiente es la fase 2 (que no falle en silencio).
+
 ---
 
 ## FASE 0 — Análisis y diseño ✅ COMPLETADA

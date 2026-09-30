@@ -27,18 +27,9 @@ Lo comercial (cobrar a suscriptores) queda aparcado hasta el final.
 
 ---
 
-## Fase 1 — Unificar (en curso)
+## Fase 1 — Unificar ✅ terminada (30/09/2026)
 
-I1, I2 e I3 están hechas (ver "Hecho"). Queda I4.
-
-**I4 🤖 Ramas viejas.**
-- Borrar las ramas que ya no se usan:
-  - `claude/saas-investment-analysis-ai-rix1km`;
-  - `claude/affectionate-goodall-5zkcyd`;
-  - `claude/tarea-a2-plan-3vkpwa`;
-  - `claude/tarea-b1-plan-upatwu`.
-- `claude/blissful-faraday-mi75sr` se borra después de M3 y M4, que aprovechan dos de sus commits.
-- Solo con tu permiso.
+I1–I4 están hechas (ver "Hecho"). Queda una rama por borrar, `claude/blissful-faraday-mi75sr`, que se borra después de M3 y M4, porque aprovechan dos de sus commits.
 
 ## Fase 2 — Que no falle en silencio
 
@@ -200,6 +191,8 @@ Todo esto es necesario antes de cobrar, y no antes:
 **I2: `main` pasa a ser la plataforma.** Con la PR #3; la PR #1 está cerrada.
 
 **I3: el servidor pasa a `main` (30/09/2026).** Ya estaba en `main`; se trajo lo último (frontend v2, PR #4), se desplegó y se recalcularon scores y señales. Comprobado: los rankings dan la fecha del día y la pestaña "Análisis IA" aparece en la ficha de un valor.
+
+**I4: ramas viejas (30/09/2026).** Borradas, con permiso del dueño, las cuatro que ya estaban enteras en `main`: `claude/saas-investment-analysis-ai-rix1km`, `claude/affectionate-goodall-5zkcyd`, `claude/tarea-a2-plan-3vkpwa` y `claude/tarea-b1-plan-upatwu`.
 
 **R: revisión completa del código (27/09/2026).** Lo que ya estaba en este plan (M1, M2, M7, O2…) sigue en su sitio; lo nuevo que se podía arreglar sin tocar resultados de la estrategia, arreglado, cada uno con su test:
 - R1: la tarea diaria de puntuar (de noche, tras el cierre de São Paulo) calculaba las señales y no las guardaba. La tabla `signal` se quedaba con las de la última ejecución manual.
