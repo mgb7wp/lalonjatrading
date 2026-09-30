@@ -377,6 +377,8 @@ export type Lista = {
 export type FrescuraDatos = {
   dataset: string;
   market_id: string | null;
+  /** Solo en `divisas`, que no son de ningun mercado. */
+  currency?: string | null;
   last_data_date: string | null;
   last_success_at?: string | null;
   source: string | null;
