@@ -356,9 +356,32 @@ Para que avise solo, con UptimeRobot (gratis, cada 5 minutos, avisa por email):
 4. Keyword: `"estado":"ok"` (con las comillas), y que avise cuando **no** esté.
 5. Intervalo: 5 minutos. Contacto de alerta: tu email.
 
-Con Cloudflare Access delante de la web (tarea S3), UptimeRobot no puede
-entrar: hay que dejar fuera de Access la ruta `/api/v1/health` con una
-política *Bypass*. Solo dice si los datos están al día, no enseña ninguno.
+### Acceso: solo el dueño (Cloudflare Access)
+
+La web entera está detrás de Cloudflare Access (Cloudflare One → Access
+controls → Applications): antes de ver nada, Cloudflare pide un email autorizado
+y manda un código de un solo uso. Son dos aplicaciones:
+
+| Aplicación | Destino | Política |
+|------------|---------|----------|
+| Salud | `lalonja-trading.com/api/v1/health` | `Abierto`: *Bypass*, Everyone |
+| La Lonja | `lalonja-trading.com` y `www.lalonja-trading.com` | `Solo yo`: *Allow*, el email del dueño |
+
+Cloudflare aplica la regla más concreta, así que `/api/v1/health` (y
+`/health/data`) queda abierta para UptimeRobot y todo lo demás, `/docs`
+incluido, cerrado. La salud solo dice si los datos están al día, no enseña
+ninguno.
+
+La web no se rompe por esto: el frontend pide los datos a la API por la red
+interna de Docker (`API_URL=http://api:8000`), sin pasar por Cloudflare, y lo
+que pide el navegador va al mismo dominio con la cookie de Access.
+
+Para comprobarlo desde el servidor:
+
+```bash
+curl -s -o /dev/null -w "salud: %{http_code}\n" https://lalonja-trading.com/api/v1/health/data   # 200
+curl -s -o /dev/null -w "resto: %{http_code}\n" https://lalonja-trading.com/api/v1/markets       # 302
+```
 
 ### Qué se ve hoy
 

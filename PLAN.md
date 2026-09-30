@@ -42,13 +42,6 @@ I1–I4 están hechas (ver "Hecho"). Queda una rama por borrar, `claude/blissful
 - Subirlas a Cloudflare R2, que tiene 10 GB gratis. Tú creas el bucket y el token; Claude, el script.
 - De paso: el script añade `docker-compose.tunel.yml` siempre que el fichero exista (existe siempre). En un servidor sin túnel fallaría por no tener `CLOUDFLARE_TUNNEL_TOKEN`; el tuyo usa túnel, así que hoy no te afecta.
 
-**S3 🤝 Cerrar la web con Cloudflare Access.**
-- Solo tu email entra, incluido `/docs`.
-- Es de uso propio, los datos de yfinance no se pueden redistribuir, y así nadie gasta tu cuota de IA.
-- Se hace en el panel de Cloudflare (Zero Trust → Access); Claude te guía.
-- Hay que dejar fuera de Access la ruta `/api/v1/health` (política *Bypass*), o UptimeRobot (S1) no podrá comprobarla.
-- También cubre esto: detrás del túnel, todas las peticiones le llegan a la API desde la misma IP (la de `cloudflared`), así que los límites de login y registro de `backend/limites.py` son de todos a la vez y no de cada IP. Un desconocido puede dejarte sin poder entrar cinco minutos. Con Access no llega nadie más; si algún día se abre, Caddy tiene que pasar `CF-Connecting-IP` (`trusted_proxies`).
-
 **S4 🤖 Despliegue automático desde el CI (opcional).**
 - Hoy es `git pull` por SSH.
 - De paso: `despliegue/desplegar.sh` dice "Listo" aunque la API no llegue a responder en los dos minutos de espera; debería terminar con error.
@@ -157,6 +150,7 @@ Todo esto es necesario antes de cobrar, y no antes:
 
 - **Datos:** un proveedor con licencia comercial (riesgo RD-1: yfinance no la tiene).
 - **Legal:** revisión de MAR y MiFID (decisión D-6).
+- **Abrir la web a otros** (quitar Cloudflare Access, ver S3): detrás del túnel todas las peticiones le llegan a la API desde la misma IP, la de `cloudflared`, así que los límites de login y registro de `backend/limites.py` serían de todos a la vez y no de cada IP. Caddy tiene que pasar `CF-Connecting-IP` (`trusted_proxies`).
 - **Cuentas y cobro:** pagos, verificación de email, 2FA, borrar la cuenta, páginas de privacidad y términos, y límites de peticiones por plan. Al cambiar la contraseña, cerrar las demás sesiones (hoy siguen vivas hasta que caduca su token de refresco).
 - **Más producto:**
   - machine learning (FASE 8: necesita 1.000 valores; hoy hay 138);
@@ -197,6 +191,12 @@ Todo esto es necesario antes de cobrar, y no antes:
 - Scores y señales, por mercado; divisas, por moneda. Se calculan al leer, no los escribe la tarea que se vigila: una tarea que no corre no puede avisar de que no ha corrido.
 - Se comparan con el último día que tenía que haber datos: un día laborable sin scores ya sale rancio, y un Viernes Santo o un 25 de diciembre (sin ningún mercado abierto) no dan falsa alarma. Las divisas siguen los festivos del BCE.
 - Tests en `tests/test_api_salud.py`. Falta conectar UptimeRobot (tarea S1 de la fase 2).
+
+**S3: la web, cerrada con Cloudflare Access (30/09/2026).**
+- Dos aplicaciones en Cloudflare One → Access controls → Applications:
+  - `lalonja-trading.com/api/v1/health` con la política `Abierto` (*Bypass*, para UptimeRobot);
+  - `lalonja-trading.com` y `www.lalonja-trading.com` con la política `Solo yo` (*Allow*, un solo email, código por correo).
+- Comprobado desde el servidor: la salud da 200; la web, `www` y `/docs` redirigen al login de Cloudflare (302).
 
 **R: revisión completa del código (27/09/2026).** Lo que ya estaba en este plan (M1, M2, M7, O2…) sigue en su sitio; lo nuevo que se podía arreglar sin tocar resultados de la estrategia, arreglado, cada uno con su test:
 - R1: la tarea diaria de puntuar (de noche, tras el cierre de São Paulo) calculaba las señales y no las guardaba. La tabla `signal` se quedaba con las de la última ejecución manual.
