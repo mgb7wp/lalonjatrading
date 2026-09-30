@@ -33,11 +33,9 @@ I1–I4 están hechas (ver "Hecho"). Queda una rama por borrar, `claude/blissful
 
 ## Fase 2 — Que no falle en silencio
 
-**S1 🤖 Vigilar scores, señales y divisas.**
-- Hoy `/health/data` vigila la frescura de precios y fundamentales, pero no la de scores, señales ni divisas.
-  - Divisas: `data_freshness` exige un mercado y la etapa de divisas, que es global, nunca escribe en ella. El umbral `"divisas"` de `DIAS_PARA_RANCIO` (`workers/pipeline/ingesta.py`) no marca nada.
-- Eso es justo lo que falló el 22/09: los rankings enseñaban scores viejos y nada avisó.
-- Hay que añadirlo, y conectar un aviso externo gratuito (UptimeRobot o similar) que te escriba si `/health/data` no está en verde.
+**S1 👤 Conectar el aviso externo.** La parte de código está hecha (ver "Hecho"). Falta lo tuyo:
+- desplegar (`git pull && ./despliegue/desplegar.sh --tunel`);
+- crear el monitor de UptimeRobot con los pasos de [`docs/DEPLOYMENT.md`](docs/DEPLOYMENT.md), "Aviso si algo falla".
 
 **S2 🤝🖥️ Copias de seguridad fuera del servidor.**
 - Hoy viven en el mismo disco que la base de datos (`despliegue/copia_seguridad.sh`).
@@ -48,6 +46,7 @@ I1–I4 están hechas (ver "Hecho"). Queda una rama por borrar, `claude/blissful
 - Solo tu email entra, incluido `/docs`.
 - Es de uso propio, los datos de yfinance no se pueden redistribuir, y así nadie gasta tu cuota de IA.
 - Se hace en el panel de Cloudflare (Zero Trust → Access); Claude te guía.
+- Hay que dejar fuera de Access la ruta `/api/v1/health` (política *Bypass*), o UptimeRobot (S1) no podrá comprobarla.
 - También cubre esto: detrás del túnel, todas las peticiones le llegan a la API desde la misma IP (la de `cloudflared`), así que los límites de login y registro de `backend/limites.py` son de todos a la vez y no de cada IP. Un desconocido puede dejarte sin poder entrar cinco minutos. Con Access no llega nadie más; si algún día se abre, Caddy tiene que pasar `CF-Connecting-IP` (`trusted_proxies`).
 
 **S4 🤖 Despliegue automático desde el CI (opcional).**
@@ -193,6 +192,11 @@ Todo esto es necesario antes de cobrar, y no antes:
 **I3: el servidor pasa a `main` (30/09/2026).** Ya estaba en `main`; se trajo lo último (frontend v2, PR #4), se desplegó y se recalcularon scores y señales. Comprobado: los rankings dan la fecha del día y la pestaña "Análisis IA" aparece en la ficha de un valor.
 
 **I4: ramas viejas (30/09/2026).** Borradas, con permiso del dueño, las cuatro que ya estaban enteras en `main`: `claude/saas-investment-analysis-ai-rix1km`, `claude/affectionate-goodall-5zkcyd`, `claude/tarea-a2-plan-3vkpwa` y `claude/tarea-b1-plan-upatwu`.
+
+**S1: `/health/data` vigila scores, señales y divisas (30/09/2026).**
+- Scores y señales, por mercado; divisas, por moneda. Se calculan al leer, no los escribe la tarea que se vigila: una tarea que no corre no puede avisar de que no ha corrido.
+- Se comparan con el último día que tenía que haber datos: un día laborable sin scores ya sale rancio, y un Viernes Santo o un 25 de diciembre (sin ningún mercado abierto) no dan falsa alarma. Las divisas siguen los festivos del BCE.
+- Tests en `tests/test_api_salud.py`. Falta conectar UptimeRobot (tarea S1 de la fase 2).
 
 **R: revisión completa del código (27/09/2026).** Lo que ya estaba en este plan (M1, M2, M7, O2…) sigue en su sitio; lo nuevo que se podía arreglar sin tocar resultados de la estrategia, arreglado, cada uno con su test:
 - R1: la tarea diaria de puntuar (de noche, tras el cierre de São Paulo) calculaba las señales y no las guardaba. La tabla `signal` se quedaba con las de la última ejecución manual.

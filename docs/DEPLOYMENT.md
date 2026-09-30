@@ -332,6 +332,34 @@ frecuentes, pero **no de perder el servidor**. Sacarlas de la máquina es el
 siguiente paso: Cloudflare R2 tiene 10 GB gratis y encaja bien, a cambio de
 gestionar un token.
 
+### Aviso si algo falla
+
+`/api/v1/health/data` dice si los datos están al día: precios y fundamentales
+por mercado, scores y señales por mercado, y tipos de cambio por moneda. Scores
+y señales se comparan con el último día que **tenía** que haberlos (la tarea
+corre de lunes a viernes tras el último cierre, y no en los días en que no
+negocia ningún mercado); los tipos de cambio, con el último día hábil del BCE.
+Si todo está al día, la respuesta empieza por `{"estado":"ok"`. Si no, dice
+`degradado` o `caido`, y la lista `stale` dice qué falta.
+
+Para comprobarlo a mano:
+
+```bash
+curl -s https://$DOMINIO/api/v1/health/data | python3 -c "import json,sys; d=json.load(sys.stdin); print(d['estado'], d['stale'])"
+```
+
+Para que avise solo, con UptimeRobot (gratis, cada 5 minutos, avisa por email):
+
+1. Crea una cuenta en https://uptimerobot.com.
+2. **New monitor**, de tipo **Keyword**.
+3. URL: `https://lalonja-trading.com/api/v1/health/data`.
+4. Keyword: `"estado":"ok"` (con las comillas), y que avise cuando **no** esté.
+5. Intervalo: 5 minutos. Contacto de alerta: tu email.
+
+Con Cloudflare Access delante de la web (tarea S3), UptimeRobot no puede
+entrar: hay que dejar fuera de Access la ruta `/api/v1/health` con una
+política *Bypass*. Solo dice si los datos están al día, no enseña ninguno.
+
 ### Qué se ve hoy
 
 La interfaz de la FASE 17: panel, mercados, descubrir (screener), rankings,
@@ -344,8 +372,6 @@ La lista de tareas al día está en [`PLAN.md`](../PLAN.md). Lo propio del
 despliegue:
 
 - Sacar las copias de seguridad de la máquina (Cloudflare R2)
-- Monitorización y alertas sobre `/health` y `/health/data`, incluida la
-  frescura de scores y señales
 - Rotación de secretos
 - Despliegue automático desde CI en lugar de `git pull` por SSH
 - **Cambio de proveedor de datos a uno con licencia comercial** (riesgo RD-1 de
