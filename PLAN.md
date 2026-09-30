@@ -29,13 +29,7 @@ Lo comercial (cobrar a suscriptores) queda aparcado hasta el final.
 
 ## Fase 1 — Unificar (en curso)
 
-I1 e I2 están hechas (ver "Hecho"). Quedan I3 e I4.
-
-**I3 👤🖥️ El servidor pasa a `main`.**
-- Es una vez. Los comandos están en [`docs/DEPLOYMENT.md`](docs/DEPLOYMENT.md), sección 1: `git checkout main`, `desplegar.sh` y el recálculo de scores y señales.
-- *Hecho cuando:*
-  - `/api/v1/rankings` da la fecha de hoy;
-  - la pestaña "Análisis IA" aparece en la ficha de un valor.
+I1, I2 e I3 están hechas (ver "Hecho"). Queda I4.
 
 **I4 🤖 Ramas viejas.**
 - Borrar las ramas que ya no se usan:
@@ -204,6 +198,8 @@ Todo esto es necesario antes de cobrar, y no antes:
 **I1: integración de B1–B10 en la plataforma** (motor v0.5.0). Fusionada en `main` el 25/09/2026 (PR #3).
 
 **I2: `main` pasa a ser la plataforma.** Con la PR #3; la PR #1 está cerrada.
+
+**I3: el servidor pasa a `main` (30/09/2026).** Ya estaba en `main`; se trajo lo último (frontend v2, PR #4), se desplegó y se recalcularon scores y señales. Comprobado: los rankings dan la fecha del día y la pestaña "Análisis IA" aparece en la ficha de un valor.
 
 **R: revisión completa del código (27/09/2026).** Lo que ya estaba en este plan (M1, M2, M7, O2…) sigue en su sitio; lo nuevo que se podía arreglar sin tocar resultados de la estrategia, arreglado, cada uno con su test:
 - R1: la tarea diaria de puntuar (de noche, tras el cierre de São Paulo) calculaba las señales y no las guardaba. La tabla `signal` se quedaba con las de la última ejecución manual.
