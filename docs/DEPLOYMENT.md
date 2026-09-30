@@ -324,13 +324,48 @@ Retención: 14 copias (`LALONJA_BACKUP_RETENCION`). Destino:
 
 Pide escribir el nombre de la base para confirmar antes de sobrescribir nada.
 
-#### Lo que esto todavía NO cubre
+#### Fuera del servidor: Cloudflare R2
 
-Las copias viven **en el mismo disco que la base de datos**. Eso protege de un
-borrado accidental o de una migración que sale mal, que son los casos
-frecuentes, pero **no de perder el servidor**. Sacarlas de la máquina es el
-siguiente paso: Cloudflare R2 tiene 10 GB gratis y encaja bien, a cambio de
-gestionar un token.
+Las copias locales protegen de un borrado o de una migración que sale mal, pero
+no de perder el servidor. Por eso cada copia verificada se sube además a
+Cloudflare R2 (`despliegue/copia_remota.sh`), y se comprueba que lo que hay en
+R2 ocupa exactamente lo mismo que lo que se mandó. Solo entonces se deja la
+marca `ultima-subida-correcta`. Si la subida falla, la copia local sigue siendo
+buena, pero el servicio de systemd acaba en error para que se vea en el journal.
+
+No hay que instalar nada: se usa la CLI oficial de AWS (R2 habla el mismo
+protocolo que S3) desde su imagen de Docker.
+
+Configuración, una vez:
+
+1. En el panel de Cloudflare, **R2 → Create bucket**: nombre `lalonja-copias`,
+   ubicación automática.
+2. En ese bucket, **Settings → Object lifecycle rules → Add rule**: borrar los
+   objetos a los **30 días**. Es lo que evita llenar los 10 GB gratuitos; así el
+   script no necesita borrar nada y una copia que falla no puede empujar fuera
+   a las buenas.
+3. **R2 → Manage API tokens → Create API token**: permiso **Object Read &
+   Write**, aplicado **solo al bucket `lalonja-copias`**. Al crearlo, Cloudflare
+   enseña una única vez el *Access Key ID* y el *Secret Access Key*.
+4. En el `.env` del servidor, las cuatro variables de `.env.produccion.example`:
+   `R2_ACCOUNT_ID` (el identificador de cuenta, que aparece en la página de R2 y
+   en la dirección `https://<ID>.r2.cloudflarestorage.com`), `R2_BUCKET`,
+   `R2_ACCESS_KEY_ID` y `R2_SECRET_ACCESS_KEY`.
+5. Probarlo: `systemctl start lalonja-copia.service` y después
+   `journalctl -u lalonja-copia.service -n 20`. Tiene que terminar con
+   `En R2: ... comprobado.`
+
+Para ver lo que hay en R2 y traer una copia (por ejemplo, a un servidor nuevo
+con el repositorio y el `.env`):
+
+```bash
+./despliegue/copia_remota.sh listar
+./despliegue/copia_remota.sh bajar lalonja-FECHA.dump
+./despliegue/copia_seguridad.sh --restaurar /var/backups/lalonja/lalonja-FECHA.dump
+```
+
+Lo que todavía no está: nada avisa si la copia de una noche falla. El journal lo
+dice, pero hay que mirarlo.
 
 ### Aviso si algo falla
 
@@ -394,7 +429,6 @@ ficha de cada valor, seguimiento, cartera y buscador. Las explicaciones con IA
 La lista de tareas al día está en [`PLAN.md`](../PLAN.md). Lo propio del
 despliegue:
 
-- Sacar las copias de seguridad de la máquina (Cloudflare R2)
 - Rotación de secretos
 - Despliegue automático desde CI en lugar de `git pull` por SSH
 - **Cambio de proveedor de datos a uno con licencia comercial** (riesgo RD-1 de

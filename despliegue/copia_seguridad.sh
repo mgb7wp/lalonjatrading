@@ -48,7 +48,10 @@ if (( local_ )); then
   pg() { "$@"; }
 else
   COMPOSE=(docker compose -f docker-compose.yml -f docker-compose.produccion.yml)
-  [[ -f docker-compose.tunel.yml ]] && COMPOSE+=(-f docker-compose.tunel.yml)
+  # El fichero del tunel esta siempre en el repositorio; lo que dice si este
+  # servidor usa tunel es el token. Sin el, `docker compose` se negaria a
+  # arrancar el servicio cloudflared y la copia fallaria sin haber empezado.
+  [[ -n "${CLOUDFLARE_TUNNEL_TOKEN:-}" ]] && COMPOSE+=(-f docker-compose.tunel.yml)
   pg() { "${COMPOSE[@]}" exec -T postgres "$@"; }
 fi
 
@@ -159,6 +162,11 @@ fi
 # Marca para que la monitorizacion pueda saber CUANDO fue la ultima copia buena.
 # Sin esto, un cron que dejo de ejecutarse no se distingue de uno que funciona.
 date -u +%Y-%m-%dT%H:%M:%SZ > "$DESTINO/ultima-copia-correcta"
+
+# --- Fuera del servidor ----------------------------------------------------
+# Despues de verificar y de dejar la marca: si la subida falla, la copia local
+# sigue siendo buena, pero el servicio acaba en error para que se vea.
+./despliegue/copia_remota.sh subir "$fichero"
 
 ok ""
 ok "Listo. Copias en $DESTINO (se guardan las $RETENCION mas recientes):"
