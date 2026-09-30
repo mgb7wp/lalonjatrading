@@ -37,10 +37,9 @@ I1–I4 están hechas (ver "Hecho"). Queda una rama por borrar, `claude/blissful
 - desplegar (`git pull && ./despliegue/desplegar.sh --tunel`);
 - crear el monitor de UptimeRobot con los pasos de [`docs/DEPLOYMENT.md`](docs/DEPLOYMENT.md), "Aviso si algo falla".
 
-**S2 🤝🖥️ Copias de seguridad fuera del servidor.**
-- Hoy viven en el mismo disco que la base de datos (`despliegue/copia_seguridad.sh`).
-- Subirlas a Cloudflare R2, que tiene 10 GB gratis. Tú creas el bucket y el token; Claude, el script.
-- De paso: el script añade `docker-compose.tunel.yml` siempre que el fichero exista (existe siempre). En un servidor sin túnel fallaría por no tener `CLOUDFLARE_TUNNEL_TOKEN`; el tuyo usa túnel, así que hoy no te afecta.
+**S2 👤🖥️ Configurar R2.** El script está hecho (ver "Hecho"). Falta lo tuyo: crear el bucket, su regla de 30 días y el token, ponerlos en `.env` y probar una copia. Los pasos están en [`docs/DEPLOYMENT.md`](docs/DEPLOYMENT.md), "Fuera del servidor: Cloudflare R2".
+
+**S5 🤖 Avisar si falla la copia nocturna.** Hoy solo lo dice el journal. Se podría publicar la fecha de `ultima-copia-correcta` y `ultima-subida-correcta` en `/health/data`, para que UptimeRobot (S1) lo vigile también.
 
 **S4 🤖 Despliegue automático desde el CI (opcional).**
 - Hoy es `git pull` por SSH.
@@ -197,6 +196,12 @@ Todo esto es necesario antes de cobrar, y no antes:
   - `lalonja-trading.com/api/v1/health` con la política `Abierto` (*Bypass*, para UptimeRobot);
   - `lalonja-trading.com` y `www.lalonja-trading.com` con la política `Solo yo` (*Allow*, un solo email, código por correo).
 - Comprobado desde el servidor: la salud da 200; la web, `www` y `/docs` redirigen al login de Cloudflare (302).
+
+**S2: copias fuera del servidor, en Cloudflare R2 (30/09/2026).**
+- `despliegue/copia_remota.sh` sube cada copia ya verificada y comprueba que en R2 ocupa lo mismo que en local; también lista y baja copias para restaurar. Usa la CLI de AWS en Docker: no hay que instalar nada.
+- La antigüedad la decide una regla de ciclo de vida del bucket (30 días), no el script.
+- De paso: `copia_seguridad.sh` solo usa `docker-compose.tunel.yml` si hay `CLOUDFLARE_TUNNEL_TOKEN`.
+- Tests en `tests/test_copias.py`, con un `docker` falso. Falta que configures R2 (tarea S2 de la fase 2).
 
 **R: revisión completa del código (27/09/2026).** Lo que ya estaba en este plan (M1, M2, M7, O2…) sigue en su sitio; lo nuevo que se podía arreglar sin tocar resultados de la estrategia, arreglado, cada uno con su test:
 - R1: la tarea diaria de puntuar (de noche, tras el cierre de São Paulo) calculaba las señales y no las guardaba. La tabla `signal` se quedaba con las de la última ejecución manual.
