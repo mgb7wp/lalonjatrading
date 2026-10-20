@@ -101,17 +101,32 @@ def serie_periodica(curva: pd.DataFrame, periodicidad: str) -> pd.Series:
     return s.resample("W").last().dropna() if periodicidad == "semanal" else s
 
 
-def sharpe(curva: pd.DataFrame, tasa_libre_riesgo_anual: float, periodicidad: str) -> float:
-    """Ratio de Sharpe sobre las rentabilidades del periodo elegido."""
+def rentabilidades_periodicas(
+    curva: pd.DataFrame, tasa_libre_riesgo_anual: float, periodicidad: str
+) -> tuple[pd.Series, float, float]:
+    """Rentabilidad de cada periodo, la del activo sin riesgo y periodos por ano.
+
+    Es la base comun del Sharpe, del Sortino y del remuestreo de
+    `validacion.robustez`: los tres tienen que medir exactamente lo mismo para
+    que el intervalo de confianza se pueda leer junto al Sharpe del informe.
+    Con menos de tres periodos devuelve una serie vacia.
+    """
     serie = serie_periodica(curva, periodicidad)
     if len(serie) < 3:
-        return 0.0
+        return pd.Series(dtype=float), 0.0, 0.0
     retornos = serie.pct_change().dropna()
-    if retornos.empty or float(retornos.std()) == 0.0:
-        return 0.0
-
     por_ano = SEMANAS_POR_ANO if periodicidad == "semanal" else _sesiones_por_ano(curva)
     rf_periodo = (1.0 + tasa_libre_riesgo_anual) ** (1.0 / por_ano) - 1.0
+    return retornos, rf_periodo, por_ano
+
+
+def sharpe(curva: pd.DataFrame, tasa_libre_riesgo_anual: float, periodicidad: str) -> float:
+    """Ratio de Sharpe sobre las rentabilidades del periodo elegido."""
+    retornos, rf_periodo, por_ano = rentabilidades_periodicas(
+        curva, tasa_libre_riesgo_anual, periodicidad
+    )
+    if retornos.empty or float(retornos.std()) == 0.0:
+        return 0.0
     exceso = retornos - rf_periodo
     return float(exceso.mean() / exceso.std() * np.sqrt(por_ano))
 
@@ -130,15 +145,11 @@ def sortino(curva: pd.DataFrame, tasa_libre_riesgo_anual: float, periodicidad: s
     malos solos— y daria un numero que sube cuando la estrategia pierde menos
     veces, aunque pierda mas.
     """
-    serie = serie_periodica(curva, periodicidad)
-    if len(serie) < 3:
-        return float("nan")
-    retornos = serie.pct_change().dropna()
+    retornos, rf_periodo, por_ano = rentabilidades_periodicas(
+        curva, tasa_libre_riesgo_anual, periodicidad
+    )
     if retornos.empty:
         return float("nan")
-
-    por_ano = SEMANAS_POR_ANO if periodicidad == "semanal" else _sesiones_por_ano(curva)
-    rf_periodo = (1.0 + tasa_libre_riesgo_anual) ** (1.0 / por_ano) - 1.0
     exceso = retornos - rf_periodo
 
     bajistas = np.minimum(exceso.to_numpy(dtype=float), 0.0)

@@ -250,6 +250,26 @@ decidir no es consultarlos: lo que gasta la validacion es mirar como le fue al
 sistema (curva, resultados, historial de operaciones), y eso solo se ensena con
 la consulta anotada.
 
+**La robustez estadistica se mide sobre el diseno, y sin veredicto todavia**
+(v0.5, tarea V1). El documento pide comprobar que "los resultados no se
+desmoronan" moviendo parametros; la sensibilidad lo hace. `estrategia validar`
+anade dos lecturas de la misma curva que no necesitan backtests nuevos:
+
+- *Intervalo de confianza del Sharpe*: se remuestrean las rentabilidades
+  semanales (las mismas del Sharpe del informe) por **bloques de semanas
+  seguidas** (`bootstrap_bloque_periodos`), no sueltas. Una semana se parece a
+  la anterior; remuestrearlas sueltas trata cada una como independiente y
+  estrecha el intervalo de mentira. Si incluye el cero, el informe avisa de que
+  no se puede descartar que el resultado sea suerte.
+- *Tramos*: el periodo se parte en `walk_forward_tramos` tramos seguidos de la
+  misma longitud. No se reoptimiza nada en cada tramo, porque la estrategia no
+  se ajusta a los datos; lo que se mira es si gana en todos o en uno solo.
+
+Las dos se calculan sobre el periodo de diseno, como la sensibilidad: sobre el
+de validacion serian una consulta mas. El **veredicto** "robusta / no robusta"
+que pide V1 queda por decidir: que combinacion de sensibilidad, intervalo y
+tramos lo da es una regla de la estrategia, y va al registro cuando se fije.
+
 ## Metricas
 
 **El Sharpe se calcula sobre rentabilidades semanales** por defecto

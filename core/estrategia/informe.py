@@ -27,6 +27,7 @@ from typing import Any
 import pandas as pd
 
 from . import metricas as metricas_mod
+from . import validacion as validacion_mod
 from .backtest import Resultado
 from .config import Config
 from .tipos import Aviso
@@ -49,6 +50,7 @@ class Informe:
     avisos: list[Aviso]
     rechazos_top: pd.DataFrame
     sensibilidad: pd.DataFrame | None = None
+    robustez: validacion_mod.Robustez | None = None
     meta: dict[str, Any] = field(default_factory=dict)
 
     @property
@@ -100,6 +102,7 @@ def construir(
     instantanea,
     sensibilidad: pd.DataFrame | None = None,
     consultas_validacion: int = 0,
+    robustez: validacion_mod.Robustez | None = None,
 ) -> Informe:
     """Ensambla el informe a partir de un resultado de backtest."""
     operaciones = resultado.operaciones_df
@@ -132,6 +135,17 @@ def construir(
     avisos += _aviso_periodo_muerto(resultado, operaciones, cfg)
     avisos += _aviso_cohortes(eventos, cfg)
     avisos += _avisos_de_suficiencia(operaciones, cfg)
+    if robustez is not None and robustez.intervalo_incluye_cero:
+        avisos.append(
+            Aviso(
+                "sharpe_incierto",
+                f"El intervalo de confianza del Sharpe (al {robustez.confianza:.0%}) va "
+                f"de {robustez.sharpe_inferior:.2f} a {robustez.sharpe_superior:.2f} e "
+                f"incluye el cero: con este periodo no se puede descartar que el "
+                f"resultado sea suerte.",
+                gravedad="importante",
+            )
+        )
     if consultas_validacion:
         avisos.append(
             Aviso(
@@ -162,6 +176,7 @@ def construir(
         avisos=avisos,
         rechazos_top=_rechazos_top(eventos),
         sensibilidad=sensibilidad,
+        robustez=robustez,
         meta={
             "origen": instantanea.origen,
             "fecha_descarga": str(instantanea.fecha_descarga or "desconocida"),
@@ -520,6 +535,9 @@ def a_markdown(informe: Informe) -> str:
             "",
         ]
 
+    if informe.robustez is not None:
+        lineas += _robustez_markdown(informe.robustez, r.periodicidad_sharpe)
+
     if informe.sensibilidad is not None and not informe.sensibilidad.empty:
         lineas += [
             "## Sensibilidad",
@@ -535,3 +553,47 @@ def a_markdown(informe: Informe) -> str:
     lineas.append("")
 
     return "\n".join(lineas)
+
+
+def unidad_periodo(periodicidad: str) -> str:
+    """Como se llama en plural el periodo del Sharpe."""
+    return "semanas" if periodicidad == "semanal" else "sesiones"
+
+
+def _robustez_markdown(rob: validacion_mod.Robustez, periodicidad: str) -> list[str]:
+    lineas = ["## Robustez (periodo de diseño)", ""]
+    if rob.motivo is not None:
+        return lineas + [f"No se ha podido calcular: {rob.motivo}.", ""]
+    unidad = unidad_periodo(periodicidad)
+    lineas += [
+        f"- Sharpe ({periodicidad}): {rob.sharpe:.2f}",
+        f"- Intervalo al {rob.confianza:.0%}: de {rob.sharpe_inferior:.2f} a "
+        f"{rob.sharpe_superior:.2f} ({rob.muestras} remuestreos por bloques de "
+        f"{rob.bloque} {unidad}, sobre {rob.periodos} {unidad})",
+        f"- Probabilidad de que el Sharpe sea positivo: {rob.prob_sharpe_positivo:.0%}",
+        f"- Tramos con rentabilidad positiva: {rob.tramos_positivos} de {len(rob.tramos)}",
+        "",
+        "Si el intervalo incluye el cero, con estos datos no se puede descartar",
+        "que el resultado sea suerte. Si solo gana un tramo, no es una estrategia:",
+        "es un periodo bueno.",
+        "",
+        _tramos_legibles(rob.tramos).to_markdown(index=False),
+        "",
+    ]
+    return lineas
+
+
+def _tramos_legibles(tramos: pd.DataFrame) -> pd.DataFrame:
+    """La tabla de tramos con porcentajes, no con tantos por uno de seis cifras."""
+    return pd.DataFrame(
+        {
+            "Tramo": tramos["tramo"],
+            "Desde": tramos["desde"],
+            "Hasta": tramos["hasta"],
+            "Rentabilidad": tramos["rentabilidad"].map(lambda v: f"{v:+.1%}"),
+            "Anualizada": tramos["anualizada"].map(lambda v: f"{v:+.1%}"),
+            "Sharpe": tramos["sharpe"].map(lambda v: f"{v:.2f}"),
+            "Drawdown": tramos["drawdown_maximo"].map(lambda v: f"{v:.1%}"),
+            "Operaciones": tramos["operaciones"],
+        }
+    )

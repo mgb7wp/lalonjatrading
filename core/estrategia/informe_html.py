@@ -28,7 +28,7 @@ from datetime import date
 import pandas as pd
 
 from . import metricas as metricas_mod
-from .informe import Informe
+from .informe import Informe, unidad_periodo
 
 
 @dataclass(frozen=True, slots=True)
@@ -694,6 +694,53 @@ def a_html(informe: Informe, titulo: str = "Estrategia mixta") -> str:
                 "no <code>riesgo.por_operacion</code>. Si la sensibilidad de ese "
                 "segundo parámetro sale plana, no es que la estrategia sea robusta: "
                 "es que el parámetro no estaba actuando.</p>"
+            )
+
+    rob = informe.robustez
+    if rob is not None:
+        partes.append("<h2>Robustez (periodo de diseño)</h2>")
+        if rob.motivo is not None:
+            partes.append(f"<p>No se ha podido calcular: {_e(rob.motivo)}.</p>")
+        else:
+            unidad = unidad_periodo(informe.resumen.periodicidad_sharpe)
+            partes.append(
+                '<div class="rejilla-tarjetas">'
+                + "".join(
+                    f'<div class="dato"><span class="etq">{_e(e)}</span>'
+                    f'<span class="val">{_e(v)}</span></div>'
+                    for e, v in (
+                        ("Sharpe", f"{rob.sharpe:.2f}"),
+                        (
+                            f"Intervalo al {rob.confianza:.0%}",
+                            f"{rob.sharpe_inferior:.2f} a {rob.sharpe_superior:.2f}",
+                        ),
+                        ("Sharpe positivo", _pct(rob.prob_sharpe_positivo, signo=False)),
+                        ("Tramos en positivo", f"{rob.tramos_positivos} de {len(rob.tramos)}"),
+                    )
+                )
+                + "</div>"
+            )
+            partes.append(
+                f'<p class="sub">{rob.muestras} remuestreos por bloques de {rob.bloque} '
+                f"{unidad}. Si el intervalo incluye el cero, con estos datos no se "
+                "puede descartar que el resultado sea suerte; si solo gana un tramo, "
+                "no es una estrategia: es un periodo bueno.</p>"
+            )
+            partes.append(
+                _tabla(
+                    rob.tramos,
+                    {
+                        "tramo": ("Tramo", _f_entero),
+                        "desde": ("Desde", _f_texto),
+                        "hasta": ("Hasta", _f_texto),
+                        "rentabilidad": ("Rentabilidad", _f_pct_signo),
+                        "anualizada": ("Anualizada", _f_pct_signo),
+                        "sharpe": ("Sharpe", lambda v: f"{float(v):.2f}"),
+                        "drawdown_maximo": ("Drawdown", _f_pct),
+                        "operaciones": ("Operaciones", _f_entero),
+                    },
+                    colorear={"rentabilidad", "anualizada"},
+                )
             )
 
     if not informe.rechazos_top.empty:

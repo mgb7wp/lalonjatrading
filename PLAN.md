@@ -139,6 +139,7 @@ Tests de anticipación como los de `tests/test_anti_sesgo.py`.
 ## Fase 6 — Validación y cierre de versión
 
 **V1 🤖 Sensibilidad.**
+- Hecho: intervalo de confianza del Sharpe y análisis por tramos en `estrategia validar` (ver "Hecho").
 - Mover los parámetros que hoy no se mueven (`core/estrategia/validacion.py`).
 - Informar de las variantes inválidas en vez de saltarlas en silencio.
 - Dar un veredicto de "robusta / no robusta".
@@ -231,3 +232,8 @@ Todo esto es necesario antes de cobrar, y no antes:
 - La lista de respaldo queda vacía hasta verificar Tiingo en el servidor (ver M5 arriba).
 
 **M5 (código): Yahoo directo (20/10/2026).** Fuente `yahoo`: el gráfico v8 de Yahoo sin la librería yfinance, para los cinco mercados, los índices de régimen y las referencias. Adaptada del cliente de Vibe-Trading. Respalda si se rompe la librería, no si Yahoo bloquea. `verify_sources.py --fuente yahoo`.
+
+**V1 (parte): robustez estadística (20/10/2026).** `estrategia validar` añade al informe, sobre el periodo de diseño y sin backtests nuevos:
+- el intervalo de confianza del Sharpe, remuestreando por bloques de semanas seguidas, y la probabilidad de que sea positivo; si el intervalo incluye el cero, un aviso de que el resultado puede ser suerte;
+- la curva partida en tramos seguidos, con la rentabilidad, el Sharpe, el drawdown y las operaciones de cada uno.
+Parámetros en `validacion` de `reglas.yaml`; criterio en `SUPUESTOS.md`. Ideas de Vibe-Trading (licencia MIT, ver `docs/TERCEROS.md`). Falta el resto de V1, veredicto incluido.
