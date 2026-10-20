@@ -350,7 +350,7 @@ a la vez el respaldo de precios y los fundamentales de España e India.
 
 ## 5. Reglas que no dependen del proveedor
 
-1. **Ningún dato entra sin pasar el contrato** (`core/datos/contrato.py`),
+1. **Ningún dato entra sin pasar el contrato** (`core/estrategia/datos/contrato.py`),
    aplicado en el enrutador. Ninguna columna obligatoria puede venir entera a
    nulo: un hueco suelto es normal, una columna vacía es un mapeo roto.
 2. **Cada fila lleva su procedencia** (`fuente`, `fecha_descarga`). Sin eso, al
