@@ -416,7 +416,6 @@ class ProveedorSintetico(Proveedor):
                     # EBIT negativo: un percentil inverso ingenuo la pondria
                     # como la mas barata del mercado.
                     ebit = -abs(ebit) * 0.4
-                    ev = abs(ev)
                 elif especial == "ebitda_negativo" and ano >= ano_ini + 1:
                     # EBITDA negativo: deuda/EBITDA sale negativo y pasaria un
                     # "<= 3.0" ingenuo.

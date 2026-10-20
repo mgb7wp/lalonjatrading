@@ -39,8 +39,6 @@ class Calendarios:
 
     def __init__(self, cfg: Config, inicio: date, fin: date) -> None:
         self._cfg = cfg
-        self._inicio = inicio
-        self._fin = fin
         self._cal: dict[str, xc.ExchangeCalendar] = {}
         self._sesiones: dict[str, list[date]] = {}
         self._cierres: dict[str, np.ndarray] = {}
@@ -117,12 +115,6 @@ class Calendarios:
         sesiones = self.sesiones(mercado_id)
         idx = _primer_indice_mayor(sesiones, fecha)
         return sesiones[idx] if idx < len(sesiones) else None
-
-    def sesion_anterior(self, mercado_id: str, fecha: date) -> date | None:
-        """Ultima sesion de ese mercado estrictamente anterior a `fecha`."""
-        sesiones = self.sesiones(mercado_id)
-        idx = _primer_indice_mayor_igual(sesiones, fecha)
-        return sesiones[idx - 1] if idx > 0 else None
 
     # -- ciclo semanal ----------------------------------------------------
 

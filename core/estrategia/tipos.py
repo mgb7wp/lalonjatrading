@@ -28,8 +28,6 @@ class MotivoRechazo(enum.StrEnum):
 
     YA_EN_CARTERA = "ya_en_cartera"
     REGIMEN_APAGADO = "regimen_apagado"
-    HISTORIAL_INSUFICIENTE = "historial_insuficiente"
-    FALLA_TECNICO = "falla_tecnico"
     FALLA_FUNDAMENTAL = "falla_fundamental"
     SIN_DATO_FUNDAMENTAL = "sin_dato_fundamental"
     FUNDAMENTAL_CADUCADO = "fundamental_caducado"

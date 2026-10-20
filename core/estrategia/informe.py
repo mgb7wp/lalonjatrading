@@ -22,7 +22,6 @@ from __future__ import annotations
 
 import re
 from dataclasses import dataclass, field
-from datetime import date
 from typing import Any
 
 import pandas as pd
@@ -129,7 +128,7 @@ def construir(
             comparaciones.append(comp)
 
     avisos = _avisos_permanentes()
-    avisos += _avisos_de_datos(resultado, cfg, instantanea, operaciones, referencias)
+    avisos += _avisos_de_datos(resultado, cfg, instantanea, referencias)
     avisos += _aviso_periodo_muerto(resultado, operaciones, cfg)
     avisos += _aviso_cohortes(eventos, cfg)
     avisos += _avisos_de_suficiencia(operaciones, cfg)
@@ -176,7 +175,7 @@ def construir(
 
 
 def _avisos_de_datos(
-    resultado: Resultado, cfg: Config, instantanea, operaciones, referencias
+    resultado: Resultado, cfg: Config, instantanea, referencias
 ) -> list[Aviso]:
     avisos: list[Aviso] = []
 

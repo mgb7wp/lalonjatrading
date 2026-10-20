@@ -99,9 +99,6 @@ MAGNITUDES_OPCIONALES = (
     "gastos_financieros",
 )
 
-#: Todo lo que puede traer una fila de fundamentales.
-COLUMNAS_FUNDAMENTALES_TODAS = COLUMNAS_FUNDAMENTALES + list(MAGNITUDES_OPCIONALES)
-
 COLUMNAS_FX = ["fecha", "divisa", "tasa"]
 
 

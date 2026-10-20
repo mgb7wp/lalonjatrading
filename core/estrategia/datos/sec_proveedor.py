@@ -139,18 +139,6 @@ CONCEPTOS: dict[str, tuple[str, ...]] = {
     ),
 }
 
-#: Magnitudes de balance: se declaran en un instante, sin fecha de inicio.
-INSTANTANEAS = {
-    "patrimonio_neto",
-    "deuda_largo",
-    "deuda_corto",
-    "efectivo",
-    "acciones",
-    "activos_totales",
-    "activo_corriente",
-    "pasivo_corriente",
-}
-
 
 def _fecha(texto: Any) -> date | None:
     if not texto:

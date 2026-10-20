@@ -20,7 +20,3 @@ MESES_POR_ANO = 12
 # valor por defecto benigno: un sector sin traducir rompe a la vez la exclusion
 # de financieras y el limite por sector, asi que se trata como rechazo.
 SECTOR_DESCONOCIDO = "desconocido"
-
-# Tolerancia para comparar importes en divisa base. Por debajo de un centimo no
-# hay diferencia economica y si ruido de coma flotante.
-EPSILON_MONETARIO = 1e-9

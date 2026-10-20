@@ -30,16 +30,6 @@ import pandas as pd
 from . import metricas as metricas_mod
 from .informe import Informe
 
-# --------------------------------------------------------------------------
-# Paleta
-# --------------------------------------------------------------------------
-
-#: Ranuras categoricas 1-3: la estrategia y sus dos referencias. Validadas en
-#: los dos modos (peor par adyacente, deuteranopia: dE 9,2 claro / 9,4 oscuro).
-SERIES_CLARO = ("#2a78d6", "#eb6834", "#1baf7a")
-SERIES_OSCURO = ("#3987e5", "#d95926", "#199e70")
-
-
 @dataclass(frozen=True, slots=True)
 class Lienzo:
     """Medidas de un grafico. Todo en coordenadas de `viewBox`."""
@@ -301,6 +291,9 @@ def barras_svg(
 # --------------------------------------------------------------------------
 
 
+#: `--s1` a `--s3` son las ranuras categoricas: la estrategia y sus dos
+#: referencias. Validadas en los dos modos (peor par adyacente, deuteranopia:
+#: dE 9,2 claro / 9,4 oscuro).
 ESTILO = """
 :root {
   color-scheme: light;

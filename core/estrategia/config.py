@@ -423,7 +423,6 @@ class Implementacion(_Base):
     referencias: dict[str, ReferenciaCfg]
     divisas: dict[str, str | None]
     sectores: dict[str, str]
-    equivalencias_excepciones: dict[str, str]
 
     def sector(self, sector_proveedor: str | None) -> str:
         """Traduce el sector del proveedor a la categoria del documento.

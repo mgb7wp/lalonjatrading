@@ -166,12 +166,11 @@ class Instantanea:
 class VistaPuntual:
     """Lo que se sabia en una fecha. No devuelve nada posterior."""
 
-    __slots__ = ("_inst", "_corte", "_corte_ord", "_maxima")
+    __slots__ = ("_inst", "_corte", "_maxima")
 
     def __init__(self, instantanea: Instantanea, fecha_corte: date) -> None:
         self._inst = instantanea
         self._corte = fecha_corte
-        self._corte_ord = fecha_corte.toordinal()
         self._maxima: date | None = None
 
     @property
@@ -267,11 +266,6 @@ class VistaPuntual:
             }
         )
 
-    def tickers_con_precio(self) -> list[str]:
-        return sorted(
-            t for t in self._inst.series if self._inst.series[t].posicion(self._corte) >= 0
-        )
-
     # -- fundamentales -----------------------------------------------------
 
     def fundamentales(self, ticker: str) -> pd.DataFrame:
@@ -287,13 +281,6 @@ class VistaPuntual:
         if not recorte.empty:
             self._anotar(recorte["fecha_publicacion"].max())
         return recorte.reset_index(drop=True)
-
-    def ultimo_fundamental(self, ticker: str, periodo: str = "anual") -> pd.Series | None:
-        df = self.fundamentales(ticker)
-        if df.empty:
-            return None
-        df = df[df["periodo"] == periodo]
-        return None if df.empty else df.iloc[-1]
 
     # -- divisas -----------------------------------------------------------
 
