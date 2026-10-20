@@ -174,9 +174,7 @@ def construir(
     )
 
 
-def _avisos_de_datos(
-    resultado: Resultado, cfg: Config, instantanea, referencias
-) -> list[Aviso]:
+def _avisos_de_datos(resultado: Resultado, cfg: Config, instantanea, referencias) -> list[Aviso]:
     avisos: list[Aviso] = []
 
     # Sesgo de supervivencia: con yfinance salta siempre, porque no da
@@ -448,7 +446,8 @@ def a_markdown(informe: Informe) -> str:
         f"Periodo: {informe.meta['inicio']} a {informe.meta['fin']} "
         f"({r.anos:.1f} años) | Origen de los datos: {informe.meta['origen']} "
         f"| Descarga: {informe.meta['fecha_descarga']}",
-        f"Filtro fundamental: {'activo' if informe.meta['fundamental_activo'] else 'DESACTIVADO (solo pata tecnica)'}",
+        "Filtro fundamental: "
+        + ("activo" if informe.meta["fundamental_activo"] else "DESACTIVADO (solo pata tecnica)"),
         "",
         "## Resumen",
         "",
@@ -475,8 +474,7 @@ def a_markdown(informe: Informe) -> str:
                 f"- Anualizada estrategia: {c.anualizada_estrategia:+.2%}",
                 f"- Anualizada referencia: {c.anualizada_referencia:+.2%}",
                 f"- Exceso anualizado: {c.exceso_anualizado:+.2%}",
-                f"- Alfa de Jensen (anualizada): "
-                f"{metricas_mod.como_texto(c.alfa_jensen * 100)}%",
+                f"- Alfa de Jensen (anualizada): {metricas_mod.como_texto(c.alfa_jensen * 100)}%",
                 f"- Beta: {metricas_mod.como_texto(c.beta)}",
                 f"- Correlacion: {metricas_mod.como_texto(c.correlacion)}",
                 f"- Drawdown máximo estrategia: {c.drawdown_estrategia:.2%}",

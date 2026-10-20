@@ -80,9 +80,7 @@ def _o_none(v) -> float | None:
     return None if np.isnan(f) else f
 
 
-def _sesiones_recientes(
-    serie, i: int, fecha: date, necesarias: int, cfg: Config
-) -> bool:
+def _sesiones_recientes(serie, i: int, fecha: date, necesarias: int, cfg: Config) -> bool:
     """Que las `necesarias` sesiones esten dentro de una ventana razonable.
 
     Se admiten `holgura_historial_factor` veces mas dias naturales que sesiones
@@ -97,9 +95,7 @@ def _sesiones_recientes(
     return bool(serie.fechas[i + 1 - necesarias] >= limite)
 
 
-def regimen_por_mercado(
-    fecha: date, vista: VistaPuntual, cfg: Config
-) -> dict[str, bool]:
+def regimen_por_mercado(fecha: date, vista: VistaPuntual, cfg: Config) -> dict[str, bool]:
     """Si cada mercado admite posiciones nuevas.
 
     El documento pide comprobar el regimen por bloque y no con un unico indice

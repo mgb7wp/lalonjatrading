@@ -30,6 +30,7 @@ import pandas as pd
 from . import metricas as metricas_mod
 from .informe import Informe
 
+
 @dataclass(frozen=True, slots=True)
 class Lienzo:
     """Medidas de un grafico. Todo en coordenadas de `viewBox`."""
@@ -116,10 +117,13 @@ def curva_svg(informe: Informe, lienzo: Lienzo | None = None) -> str:
         return "<p class='vacio'>No hay curva que pintar.</p>"
 
     series: list[tuple[str, pd.Series]] = [
-        ("Estrategia", pd.Series(
-            curva["valor"].to_numpy(dtype=float),
-            index=pd.Index(list(curva["fecha"])),
-        ))
+        (
+            "Estrategia",
+            pd.Series(
+                curva["valor"].to_numpy(dtype=float),
+                index=pd.Index(list(curva["fecha"])),
+            ),
+        )
     ]
     nombres = {
         "msci_world_eur": "MSCI World",
@@ -160,7 +164,7 @@ def curva_svg(informe: Informe, lienzo: Lienzo | None = None) -> str:
         partes.append(
             f'<line x1="{lz.x0}" y1="{y:.1f}" x2="{lz.x1}" y2="{y:.1f}" class="rejilla"/>'
             f'<text x="{lz.x0 - 8}" y="{y + 4:.1f}" class="tick tick-y">'
-            f'{_e(f"{m:,.0f}".replace(",", "."))}</text>'
+            f"{_e(f'{m:,.0f}'.replace(',', '.'))}</text>"
         )
 
     # Eje de tiempo: un anio por marca, sin abarrotar.
@@ -170,19 +174,14 @@ def curva_svg(informe: Informe, lienzo: Lienzo | None = None) -> str:
             ultimo_anio = f.year
             if i > 0:
                 partes.append(
-                    f'<text x="{px(i):.1f}" y="{lz.y1 + 20}" class="tick tick-x">'
-                    f"{f.year}</text>"
+                    f'<text x="{px(i):.1f}" y="{lz.y1 + 20}" class="tick tick-x">{f.year}</text>'
                 )
 
-    partes.append(
-        f'<line x1="{lz.x0}" y1="{lz.y1}" x2="{lz.x1}" y2="{lz.y1}" class="eje"/>'
-    )
+    partes.append(f'<line x1="{lz.x0}" y1="{lz.y1}" x2="{lz.x1}" y2="{lz.y1}" class="eje"/>')
 
     for idx, (nombre, serie) in enumerate(reducidas):
         valores = [float(v) if pd.notna(v) else None for v in serie.to_numpy()]
-        puntos = [
-            f"{px(i):.1f},{py(v):.1f}" for i, v in enumerate(valores) if v is not None
-        ]
+        puntos = [f"{px(i):.1f},{py(v):.1f}" for i, v in enumerate(valores) if v is not None]
         if not puntos:
             continue
         partes.append(
@@ -199,8 +198,7 @@ def curva_svg(informe: Informe, lienzo: Lienzo | None = None) -> str:
         # Etiqueta directa: ademas de la leyenda, y obligatoria porque una de
         # las series no llega a 3:1 de contraste sobre el fondo claro.
         partes.append(
-            f'<text x="{x_fin + 10:.1f}" y="{y_fin + 4:.1f}" class="etiqueta">'
-            f"{_e(nombre)}</text>"
+            f'<text x="{x_fin + 10:.1f}" y="{y_fin + 4:.1f}" class="etiqueta">{_e(nombre)}</text>'
         )
 
     partes.append("</svg>")
@@ -241,7 +239,7 @@ def barras_svg(
         f'<svg viewBox="0 0 {ancho} {alto}" role="img" '
         f'aria-label="{_e(titulo_accesible)}" class="gr">'
     ]
-    for i, (etq, val) in enumerate(zip(etiquetas, valores)):
+    for i, (etq, val) in enumerate(zip(etiquetas, valores, strict=True)):
         # Barra de 18px: por debajo del tope de 24, y el resto de la banda es aire.
         y = 12 + i * alto_fila
         grosor = 18
@@ -279,9 +277,7 @@ def barras_svg(
             f'class="valor" text-anchor="{anclaje}">{_e(formato(val))}</text>'
         )
 
-    partes.append(
-        f'<line x1="{cero:.1f}" y1="6" x2="{cero:.1f}" y2="{alto - 6}" class="eje"/>'
-    )
+    partes.append(f'<line x1="{cero:.1f}" y1="6" x2="{cero:.1f}" y2="{alto - 6}" class="eje"/>')
     partes.append("</svg>")
     return "".join(partes)
 
@@ -371,7 +367,10 @@ p { margin: 0 0 12px; }
 .s3 { stroke: var(--s3); } circle.s3 { fill: var(--s3); }
 .barra.pos { fill: var(--pos); } .barra.neg { fill: var(--neg); }
 
-.leyenda { display: flex; gap: 18px; flex-wrap: wrap; margin-bottom: 8px; font-size: .85rem; color: var(--tinta2); }
+.leyenda {
+  display: flex; gap: 18px; flex-wrap: wrap; margin-bottom: 8px;
+  font-size: .85rem; color: var(--tinta2);
+}
 .clave { display: inline-flex; align-items: center; gap: 7px; }
 .pastilla { width: 14px; height: 3px; border-radius: 2px; display: inline-block; }
 .pastilla.s1 { background: var(--s1); }
@@ -380,9 +379,15 @@ p { margin: 0 0 12px; }
 
 .desliza { overflow-x: auto; }
 table { border-collapse: collapse; width: 100%; font-size: .87rem; }
-th, td { text-align: right; padding: 7px 10px; border-bottom: 1px solid var(--borde); font-variant-numeric: tabular-nums; }
+th, td {
+  text-align: right; padding: 7px 10px; border-bottom: 1px solid var(--borde);
+  font-variant-numeric: tabular-nums;
+}
 th:first-child, td:first-child { text-align: left; font-variant-numeric: normal; }
-th { color: var(--tinta3); font-weight: 600; font-size: .78rem; text-transform: uppercase; letter-spacing: .04em; }
+th {
+  color: var(--tinta3); font-weight: 600; font-size: .78rem;
+  text-transform: uppercase; letter-spacing: .04em;
+}
 td.pos { color: var(--pos); } td.neg { color: var(--neg); }
 
 .avisos { list-style: none; padding: 0; margin: 0; }

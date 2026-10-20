@@ -14,8 +14,8 @@ linea a linea contra su original.
 
 from __future__ import annotations
 
-from functools import cached_property
 from datetime import date
+from functools import cached_property
 from pathlib import Path
 from typing import Literal
 
@@ -86,18 +86,15 @@ class ProveedorDatosCfg(_Base):
         if self.nombre:
             return self.nombre
         raise ValueError(
-            f"no hay fuente para '{tipo}': define proveedor_datos.{tipo} o "
-            f"proveedor_datos.nombre"
+            f"no hay fuente para '{tipo}': define proveedor_datos.{tipo} o proveedor_datos.nombre"
         )
 
     @model_validator(mode="after")
-    def _hay_alguna_fuente(self) -> "ProveedorDatosCfg":
+    def _hay_alguna_fuente(self) -> ProveedorDatosCfg:
         if not self.nombre and not any(
             (self.precios, self.fundamentales, self.divisas, self.sectores)
         ):
-            raise ValueError(
-                "proveedor_datos necesita al menos `nombre` o una fuente por tipo"
-            )
+            raise ValueError("proveedor_datos necesita al menos `nombre` o una fuente por tipo")
         return self
 
 
@@ -174,7 +171,7 @@ class PuntuacionCfg(_Base):
     peso_valoracion: float = Field(ge=0)
 
     @model_validator(mode="after")
-    def _pesos_suman_uno(self) -> "PuntuacionCfg":
+    def _pesos_suman_uno(self) -> PuntuacionCfg:
         total = self.peso_calidad + self.peso_valoracion
         if abs(total - 1.0) > 1e-9:
             raise ValueError(f"peso_calidad + peso_valoracion debe sumar 1, suma {total}")
@@ -217,7 +214,7 @@ class TecnicoCfg(_Base):
     holgura_historial_dias: int = Field(ge=0)
 
     @model_validator(mode="after")
-    def _corta_menor_que_larga(self) -> "TecnicoCfg":
+    def _corta_menor_que_larga(self) -> TecnicoCfg:
         if self.media_corta >= self.media_larga:
             raise ValueError("media_corta debe ser menor que media_larga")
         if self.momentum_excluir_meses >= self.momentum_meses:
@@ -230,7 +227,7 @@ class PesosSeleccionCfg(_Base):
     momentum: float = Field(ge=0)
 
     @model_validator(mode="after")
-    def _pesos_suman_uno(self) -> "PesosSeleccionCfg":
+    def _pesos_suman_uno(self) -> PesosSeleccionCfg:
         total = self.fundamental + self.momentum
         if abs(total - 1.0) > 1e-9:
             raise ValueError(f"seleccion.pesos debe sumar 1, suma {total}")
@@ -335,7 +332,7 @@ class SenalesCfg(_Base):
     horizonte_dias: int = Field(gt=0)
 
     @model_validator(mode="after")
-    def _coherentes(self) -> "SenalesCfg":
+    def _coherentes(self) -> SenalesCfg:
         if not (self.umbral_compra_fuerte > self.umbral_compra):
             raise ValueError("umbral_compra_fuerte tiene que ser mayor que umbral_compra")
         if not (self.umbral_venta > self.umbral_venta_fuerte):
@@ -376,7 +373,7 @@ class Reglas(_Base):
             raise KeyError(f"mercado desconocido: {mercado_id!r}") from exc
 
     @model_validator(mode="after")
-    def _coherencia(self) -> "Reglas":
+    def _coherencia(self) -> Reglas:
         ids = [m.id for m in self.universo.mercados]
         if len(ids) != len(set(ids)):
             raise ValueError("hay ids de mercado repetidos en universo.mercados")
@@ -468,9 +465,7 @@ class ValorUniverso(_Base):
 class Universo(_Base):
     mercados: dict[str, list[ValorUniverso]]
 
-    def tickers(
-        self, mercado_id: str | None = None, incluir_inactivos: bool = False
-    ) -> list[str]:
+    def tickers(self, mercado_id: str | None = None, incluir_inactivos: bool = False) -> list[str]:
         """Tickers del universo; por defecto, solo los que siguen cotizando.
 
         Por defecto solo los activos porque es lo que se puede descargar hoy:
@@ -485,16 +480,12 @@ class Universo(_Base):
 
     def inactivos(self) -> list[ValorUniverso]:
         """Los que ya no cotizan, para que el informe pueda contarlos."""
-        return [
-            v for lista in self.mercados.values() for v in lista if not v.activo
-        ]
+        return [v for lista in self.mercados.values() for v in lista if not v.activo]
 
     @cached_property
     def mercado_de_ticker(self) -> dict[str, str]:
         return {
-            v.ticker: mercado_id
-            for mercado_id, valores in self.mercados.items()
-            for v in valores
+            v.ticker: mercado_id for mercado_id, valores in self.mercados.items() for v in valores
         }
 
     @cached_property
@@ -560,7 +551,7 @@ class Config(_Base):
     impuestos: Impuestos
     dir_config: Path
 
-    def con_fuente_unica(self, nombre: str) -> "Config":
+    def con_fuente_unica(self, nombre: str) -> Config:
         """Copia con una sola fuente sirviendo todos los tipos de dato.
 
         Es lo que hay detras de `--proveedor`: util para los tests y para
@@ -586,7 +577,7 @@ class Config(_Base):
         return self.model_copy(update={"reglas": reglas})
 
     @model_validator(mode="after")
-    def _coherencia_entre_ficheros(self) -> "Config":
+    def _coherencia_entre_ficheros(self) -> Config:
         ids_reglas = set(self.reglas.mercados_por_id)
 
         desconocidos = set(self.universo.mercados) - ids_reglas
@@ -600,17 +591,13 @@ class Config(_Base):
 
         faltan_ref = set(self.reglas.referencias_informe) - set(self.implementacion.referencias)
         if faltan_ref:
-            raise ValueError(
-                f"faltan referencias en implementacion.yaml: {sorted(faltan_ref)}"
-            )
+            raise ValueError(f"faltan referencias en implementacion.yaml: {sorted(faltan_ref)}")
 
         divisas_necesarias = {m.divisa for m in self.reglas.universo.mercados}
         divisas_necesarias |= {r.divisa for r in self.implementacion.referencias.values()}
         faltan_div = divisas_necesarias - set(self.implementacion.divisas)
         if faltan_div:
-            raise ValueError(
-                f"faltan pares de divisa en implementacion.yaml: {sorted(faltan_div)}"
-            )
+            raise ValueError(f"faltan pares de divisa en implementacion.yaml: {sorted(faltan_div)}")
         return self
 
 

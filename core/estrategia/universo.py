@@ -108,7 +108,11 @@ def evaluar(
 
             if not clasificacion.admitido:
                 salida[ticker] = Elegibilidad(
-                    ticker, mercado_id, clasificacion.sector, False, 0.0,
+                    ticker,
+                    mercado_id,
+                    clasificacion.sector,
+                    False,
+                    0.0,
                     clasificacion.motivo,
                 )
                 continue
@@ -116,12 +120,14 @@ def evaluar(
             volumen = volumen_medio_base(ticker, mercado_id, fecha, vista, cfg)
             if volumen < minimo:
                 salida[ticker] = Elegibilidad(
-                    ticker, mercado_id, clasificacion.sector, False, volumen,
+                    ticker,
+                    mercado_id,
+                    clasificacion.sector,
+                    False,
+                    volumen,
                     MotivoRechazo.LIQUIDEZ_INSUFICIENTE,
                 )
                 continue
 
-            salida[ticker] = Elegibilidad(
-                ticker, mercado_id, clasificacion.sector, True, volumen
-            )
+            salida[ticker] = Elegibilidad(ticker, mercado_id, clasificacion.sector, True, volumen)
     return salida

@@ -277,9 +277,7 @@ def construir_fila(
         # una ampliacion de capital a mitad de ano se refleja a medias. Es una
         # aproximacion buena para el EV y conviene saber que lo es.
         "acciones_en_circulacion": (
-            abs(beneficio) / abs(bpa_valor)
-            if beneficio not in (None, 0) and bpa_valor
-            else None
+            abs(beneficio) / abs(bpa_valor) if beneficio not in (None, 0) and bpa_valor else None
         ),
         "divisa_reporte": "BRL",
         "divisa_cotizacion": "BRL",

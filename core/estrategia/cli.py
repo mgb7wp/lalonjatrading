@@ -116,15 +116,22 @@ def _descargar(cfg, nombre_proveedor: str | None, inicio: date, fin: date) -> In
         pd.DataFrame(),
     )
     fundamentales = paso(
-        "fundamentales", f"Descargando fundamentales de {len(tickers)} valores...",
-        lambda: enrutador.fundamentales(tickers, inicio, fin), pd.DataFrame(),
+        "fundamentales",
+        f"Descargando fundamentales de {len(tickers)} valores...",
+        lambda: enrutador.fundamentales(tickers, inicio, fin),
+        pd.DataFrame(),
     )
     fx = paso(
-        "fx", "Descargando tipos de cambio...",
-        lambda: enrutador.fx(divisas, inicio, fin), pd.DataFrame(),
+        "fx",
+        "Descargando tipos de cambio...",
+        lambda: enrutador.fx(divisas, inicio, fin),
+        pd.DataFrame(),
     )
     sectores = paso(
-        "sectores", "Leyendo sectores...", lambda: enrutador.sectores(tickers), {},
+        "sectores",
+        "Leyendo sectores...",
+        lambda: enrutador.sectores(tickers),
+        {},
     )
     for aviso in enrutador.avisos:
         print(f"  aviso: {aviso}")
@@ -132,8 +139,13 @@ def _descargar(cfg, nombre_proveedor: str | None, inicio: date, fin: date) -> In
     # El origen refleja el reparto real, no una sola fuente: si los precios
     # vienen de una y los fundamentales de otra, el informe tiene que decirlo.
     return Instantanea(
-        precios=precios, fundamentales=fundamentales, fx=fx, sectores=sectores,
-        fecha_descarga=date.today(), origen=enrutador.origen, incompletos=incompletos,
+        precios=precios,
+        fundamentales=fundamentales,
+        fx=fx,
+        sectores=sectores,
+        fecha_descarga=date.today(),
+        origen=enrutador.origen,
+        incompletos=incompletos,
     )
 
 
@@ -145,8 +157,7 @@ def _informar_incompletos(inst: Instantanea, destino: Path, conservados: bool) -
     que = ", ".join(inst.incompletos)
     if conservados:
         detalle = (
-            "se conservan los de la descarga anterior donde los habia; donde no, "
-            "quedan vacios"
+            "se conservan los de la descarga anterior donde los habia; donde no, quedan vacios"
         )
     else:
         detalle = "quedan vacios en esta copia"
@@ -180,8 +191,7 @@ def cmd_datos(args, cfg) -> None:
     if "precios" in inst.incompletos:
         # Sin precios no hay nada que guardar: se deja la cache como estaba.
         print(
-            f"\nNo se han podido descargar los precios; la cache de {destino} "
-            f"no se ha tocado.",
+            f"\nNo se han podido descargar los precios; la cache de {destino} no se ha tocado.",
             file=sys.stderr,
         )
         raise SystemExit(1)
@@ -298,9 +308,7 @@ def cmd_diagnostico(args, cfg) -> None:
 
     filas = diagnostico_mod.ejecutar(cfg, inicio, fin)
     auxiliares = diagnostico_mod.comprobar_auxiliares(cfg, inicio, fin)
-    texto = diagnostico_mod.a_texto(
-        filas, cfg, detalle=args.detalle, auxiliares=auxiliares
-    )
+    texto = diagnostico_mod.a_texto(filas, cfg, detalle=args.detalle, auxiliares=auxiliares)
     print(texto)
 
     DIR_RESULTADOS.mkdir(parents=True, exist_ok=True)
@@ -365,9 +373,7 @@ def cmd_validar(args, cfg) -> None:
     sens = validacion_mod.sensibilidad(inst, cfg, inicio, fin, base)
 
     consultas = validacion_mod.RegistroConsultas(RUTA_CONSULTAS).n
-    inf = informe_mod.construir(
-        r, cfg, inst, sensibilidad=sens, consultas_validacion=consultas
-    )
+    inf = informe_mod.construir(r, cfg, inst, sensibilidad=sens, consultas_validacion=consultas)
     texto = informe_mod.a_markdown(inf)
     print("\n" + texto)
     _guardar_informe(inf, texto, args, _nombre_cache(args, cfg))
@@ -412,15 +418,11 @@ def _guardar_informe(inf, texto: str, args, nombre: str) -> None:
         print(f"\nSitio generado en {DIR_SITIO} (index.html y {archivo.name})")
     inf.curva.to_parquet(DIR_RESULTADOS / f"curva_{nombre}.parquet", index=False)
     if not inf.operaciones.empty:
-        inf.operaciones.to_parquet(
-            DIR_RESULTADOS / f"operaciones_{nombre}.parquet", index=False
-        )
+        inf.operaciones.to_parquet(DIR_RESULTADOS / f"operaciones_{nombre}.parquet", index=False)
     if not inf.eventos.empty:
         inf.eventos.to_parquet(DIR_RESULTADOS / f"eventos_{nombre}.parquet", index=False)
     if inf.sensibilidad is not None and not inf.sensibilidad.empty:
-        inf.sensibilidad.to_parquet(
-            DIR_RESULTADOS / f"sensibilidad_{nombre}.parquet", index=False
-        )
+        inf.sensibilidad.to_parquet(DIR_RESULTADOS / f"sensibilidad_{nombre}.parquet", index=False)
 
 
 # --------------------------------------------------------------------------
@@ -438,15 +440,18 @@ def construir_parser() -> argparse.ArgumentParser:
         description="Estrategia mixta (fundamental + tecnica) multi-mercado.",
     )
     p.add_argument(
-        "--config", type=Path, default=None,
+        "--config",
+        type=Path,
+        default=None,
         help="directorio de configuracion (por defecto config/)",
     )
     p.add_argument(
-        "--proveedor", default=None,
+        "--proveedor",
+        default=None,
         help="fuerza UNA sola fuente para todos los tipos de dato, ignorando el "
-             "reparto de reglas.yaml. Sin esta opcion manda reglas.yaml. Comodo "
-             "para trabajar sin red ('sintetico') o para probar una fuente "
-             "concreta.",
+        "reparto de reglas.yaml. Sin esta opcion manda reglas.yaml. Comodo "
+        "para trabajar sin red ('sintetico') o para probar una fuente "
+        "concreta.",
     )
     sub = p.add_subparsers(dest="comando", required=True)
 
@@ -471,15 +476,15 @@ def construir_parser() -> argparse.ArgumentParser:
 
     b = sub.add_parser("backtest", help="corre el backtest")
     b.add_argument(
-        "--periodo", choices=["diseno", "validacion", "todo"], default="diseno",
+        "--periodo",
+        choices=["diseno", "validacion", "todo"],
+        default="diseno",
         help="'validacion' y 'todo' abren el periodo reservado y anotan la consulta",
     )
     b.add_argument("--formato", choices=["md", "html", "ambos"], default="md")
     b.set_defaults(func=cmd_backtest)
 
-    g = sub.add_parser(
-        "diagnostico", help="que resuelve cada fuente y que no, ticker a ticker"
-    )
+    g = sub.add_parser("diagnostico", help="que resuelve cada fuente y que no, ticker a ticker")
     g.add_argument("--fecha", type=_fecha, default=None)
     g.add_argument("--anos", type=float, default=8.0)
     g.add_argument("--detalle", action="store_true")
@@ -493,7 +498,9 @@ def construir_parser() -> argparse.ArgumentParser:
     # Por defecto solo el diseno: el informe se genera y se publica cada semana,
     # y si mostrara la validacion la gastaria sin que nadie lo pidiera.
     i.add_argument(
-        "--periodo", choices=["diseno", "validacion", "todo"], default="diseno",
+        "--periodo",
+        choices=["diseno", "validacion", "todo"],
+        default="diseno",
         help="'validacion' y 'todo' abren el periodo reservado y anotan la consulta",
     )
     i.add_argument("--formato", choices=["md", "html", "ambos"], default="ambos")

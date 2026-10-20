@@ -101,9 +101,7 @@ def serie_periodica(curva: pd.DataFrame, periodicidad: str) -> pd.Series:
     return s.resample("W").last().dropna() if periodicidad == "semanal" else s
 
 
-def sharpe(
-    curva: pd.DataFrame, tasa_libre_riesgo_anual: float, periodicidad: str
-) -> float:
+def sharpe(curva: pd.DataFrame, tasa_libre_riesgo_anual: float, periodicidad: str) -> float:
     """Ratio de Sharpe sobre las rentabilidades del periodo elegido."""
     serie = serie_periodica(curva, periodicidad)
     if len(serie) < 3:
@@ -118,9 +116,7 @@ def sharpe(
     return float(exceso.mean() / exceso.std() * np.sqrt(por_ano))
 
 
-def sortino(
-    curva: pd.DataFrame, tasa_libre_riesgo_anual: float, periodicidad: str
-) -> float:
+def sortino(curva: pd.DataFrame, tasa_libre_riesgo_anual: float, periodicidad: str) -> float:
     """Sortino: como el Sharpe, pero castigando solo la volatilidad a la baja.
 
     La diferencia con el Sharpe no es cosmetica. El Sharpe divide por la
@@ -243,9 +239,7 @@ def resumir(curva: pd.DataFrame, operaciones: pd.DataFrame, cfg: Config) -> Resu
     total = final / inicial - 1.0 if inicial > 0 else 0.0
     anualizada = (final / inicial) ** (1.0 / anos) - 1.0 if inicial > 0 and anos > 0 else 0.0
 
-    ganadoras = (
-        float(operaciones["ganadora"].mean()) if not operaciones.empty else 0.0
-    )
+    ganadoras = float(operaciones["ganadora"].mean()) if not operaciones.empty else 0.0
     return Resumen(
         rentabilidad_total=total,
         rentabilidad_anualizada=anualizada,
@@ -256,9 +250,7 @@ def resumir(curva: pd.DataFrame, operaciones: pd.DataFrame, cfg: Config) -> Resu
         exposicion_media=float(curva["exposicion"].mean()),
         anos=anos,
         periodicidad_sharpe=periodicidad,
-        sortino=sortino(
-            curva, cfg.reglas.metricas.tasa_libre_riesgo_anual, periodicidad
-        ),
+        sortino=sortino(curva, cfg.reglas.metricas.tasa_libre_riesgo_anual, periodicidad),
         profit_factor=profit_factor(operaciones),
         rotacion_anual=rotacion_anual(curva, operaciones),
         dias_medios_en_cartera=dias_medios_en_cartera(operaciones),
@@ -446,9 +438,7 @@ def comparar_con_referencia(
     trozo = curva[curva["fecha"] >= arranque]
     if len(trozo) < 3:
         return None
-    est = pd.Series(
-        trozo["valor"].to_numpy(dtype=float), index=pd.Index(list(trozo["fecha"]))
-    )
+    est = pd.Series(trozo["valor"].to_numpy(dtype=float), index=pd.Index(list(trozo["fecha"])))
     ref = referencia[referencia.index >= arranque]
     if len(ref) < 3:
         return None
@@ -486,9 +476,7 @@ def comparar_con_referencia(
         beta = float(((re_ - rf_periodo).cov(rr - rf_periodo)) / var_ref)
         # Jensen sobre rentabilidades del periodo, anualizado al final para que
         # se lea en las mismas unidades que el resto del informe.
-        alfa_periodo = float(
-            (re_ - rf_periodo).mean() - beta * (rr - rf_periodo).mean()
-        )
+        alfa_periodo = float((re_ - rf_periodo).mean() - beta * (rr - rf_periodo).mean())
         alfa = (1.0 + alfa_periodo) ** por_ano - 1.0
 
     desv = float(re_.std()) * float(rr.std())

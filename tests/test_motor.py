@@ -15,14 +15,13 @@ import datetime as dt
 from pathlib import Path
 
 import pytest
-
 from estrategia import backtest as backtest_mod
 from estrategia import config as config_mod
-from estrategia import metricas as metricas_mod
 from estrategia import tecnico as tecnico_mod
 from estrategia import validacion as validacion_mod
 from estrategia.calendario import Calendarios
 from estrategia.informe import construir
+from pydantic import ValidationError
 
 INICIO = dt.date(2019, 1, 1)
 FIN = dt.date(2024, 12, 31)
@@ -39,7 +38,7 @@ def _con(cfg, *pares):
     `_con(cfg, "cartera.max_posiciones", 2, "cartera.max_por_mercado", 2)`.
     """
     datos = cfg.reglas.model_dump(mode="json")
-    for ruta, valor in zip(pares[::2], pares[1::2]):
+    for ruta, valor in zip(pares[::2], pares[1::2], strict=True):
         partes = ruta.split(".")
         actual = datos
         for p in partes[:-1]:
@@ -66,8 +65,10 @@ def test_la_media_larga_sale_de_la_configuracion(cfg, instantanea):
 
     otra_cfg = _con(cfg, "tecnico.media_larga", 120)
     otra_inst = type(instantanea)(
-        precios=instantanea.precios, fundamentales=instantanea.fundamentales,
-        fx=instantanea.fx, sectores=instantanea.sectores,
+        precios=instantanea.precios,
+        fundamentales=instantanea.fundamentales,
+        fx=instantanea.fx,
+        sectores=instantanea.sectores,
     ).preparar(otra_cfg)
     otra = tecnico_mod.senal("ITX.MC", "es", corte, otra_inst.vista(corte), otra_cfg)
 
@@ -81,8 +82,10 @@ def test_el_periodo_del_atr_sale_de_la_configuracion(cfg, instantanea):
 
     otra_cfg = _con(cfg, "tecnico.atr_periodo", 30)
     otra_inst = type(instantanea)(
-        precios=instantanea.precios, fundamentales=instantanea.fundamentales,
-        fx=instantanea.fx, sectores=instantanea.sectores,
+        precios=instantanea.precios,
+        fundamentales=instantanea.fundamentales,
+        fx=instantanea.fx,
+        sectores=instantanea.sectores,
     ).preparar(otra_cfg)
     otra = tecnico_mod.senal("ITX.MC", "es", corte, otra_inst.vista(corte), otra_cfg)
     assert base.atr != pytest.approx(otra.atr)
@@ -104,9 +107,12 @@ def test_el_maximo_de_posiciones_sale_de_la_configuracion(cfg, instantanea):
     # que los tres bajan en la misma validacion.
     estrecha = _con(
         cfg,
-        "cartera.max_posiciones", 2,
-        "cartera.max_por_sector", 2,
-        "cartera.max_por_mercado", 2,
+        "cartera.max_posiciones",
+        2,
+        "cartera.max_por_sector",
+        2,
+        "cartera.max_por_mercado",
+        2,
     )
     pocas = backtest_mod.ejecutar(instantanea, estrecha, INICIO, fin)
     assert len(pocas.operaciones) < len(base.operaciones)
@@ -116,21 +122,21 @@ def test_una_configuracion_con_una_clave_de_mas_no_carga(cfg):
     """`extra=forbid`: una errata en el YAML falla al arrancar, no a mitad."""
     datos = cfg.reglas.model_dump(mode="json")
     datos["riesgo"]["por_operacon"] = 0.02  # errata a proposito
-    with pytest.raises(Exception):
+    with pytest.raises(ValidationError):
         config_mod.Reglas.model_validate(datos)
 
 
 def test_unos_pesos_que_no_suman_uno_no_cargan(cfg):
     datos = cfg.reglas.model_dump(mode="json")
     datos["seleccion"]["pesos"]["fundamental"] = 0.9
-    with pytest.raises(Exception):
+    with pytest.raises(ValidationError):
         config_mod.Reglas.model_validate(datos)
 
 
 def test_todo_mercado_necesita_su_indice_de_regimen(cfg):
     datos = cfg.reglas.model_dump(mode="json")
     del datos["tecnico"]["indices_regimen"]["br"]
-    with pytest.raises(Exception):
+    with pytest.raises(ValidationError):
         config_mod.Reglas.model_validate(datos)
 
 
@@ -161,9 +167,7 @@ def test_los_tests_no_leen_la_configuracion_del_dueno(cfg):
 def test_una_carpeta_de_configuracion_usa_sus_propios_impuestos(tmp_path):
     """Los impuestos salen de la carpeta cargada, no de `config/` de la raiz."""
     for fichero in (DIR_TESTS / "config_prueba").glob("*.yaml"):
-        (tmp_path / fichero.name).write_text(
-            fichero.read_text(encoding="utf-8"), encoding="utf-8"
-        )
+        (tmp_path / fichero.name).write_text(fichero.read_text(encoding="utf-8"), encoding="utf-8")
     reglas = tmp_path / "reglas.yaml"
     reglas.write_text(
         reglas.read_text(encoding="utf-8").replace(
@@ -288,17 +292,13 @@ def test_no_se_compra_donde_el_regimen_esta_apagado(cfg, instantanea):
     ev = r.eventos_df
     compras = ev[ev["tipo"] == "compra"]
     dentro = compras[
-        (compras["mercado"] == "in")
-        & (compras["fecha"] >= desde)
-        & (compras["fecha"] <= hasta)
+        (compras["mercado"] == "in") & (compras["fecha"] >= desde) & (compras["fecha"] <= hasta)
     ]
     assert dentro.empty, "se compro en India con el regimen apagado"
 
     # Mientras tanto, los demas mercados si operaron.
     otras = compras[
-        (compras["mercado"] != "in")
-        & (compras["fecha"] >= desde)
-        & (compras["fecha"] <= hasta)
+        (compras["mercado"] != "in") & (compras["fecha"] >= desde) & (compras["fecha"] <= hasta)
     ]
     assert not otras.empty, "el regimen de un mercado no debe frenar a los demas"
 
@@ -347,9 +347,7 @@ def test_sin_filtro_fundamental_hay_mas_operaciones(cfg, instantanea):
     """
     fin = dt.date(2022, 12, 31)
     con = backtest_mod.ejecutar(instantanea, cfg, INICIO, fin)
-    sin = backtest_mod.ejecutar(
-        instantanea, _con(cfg, "fundamental.activo", False), INICIO, fin
-    )
+    sin = backtest_mod.ejecutar(instantanea, _con(cfg, "fundamental.activo", False), INICIO, fin)
     assert len(sin.operaciones) > len(con.operaciones)
 
 
@@ -392,9 +390,7 @@ def test_la_division_deja_la_fraccion_pedida_en_diseno(cfg, instantanea):
     d = validacion_mod.dividir(instantanea, cfg)
     fechas = sorted(instantanea.precios["fecha"].unique())
     antes = sum(1 for f in fechas if f <= d.corte)
-    assert antes / len(fechas) == pytest.approx(
-        cfg.reglas.validacion.fraccion_diseno, abs=0.02
-    )
+    assert antes / len(fechas) == pytest.approx(cfg.reglas.validacion.fraccion_diseno, abs=0.02)
     assert d.inicio < d.corte < d.fin
 
 
@@ -415,9 +411,7 @@ def test_la_sensibilidad_genera_variantes_de_los_dos_lados(cfg):
     assert "tecnico.media_larga" in rutas
     assert "riesgo.por_operacion" in rutas
     # Los enteros se desplazan a enteros: 200 pasa a 150 y 250.
-    largas = sorted(
-        c.reglas.tecnico.media_larga for r, _, c in vs if r == "tecnico.media_larga"
-    )
+    largas = sorted(c.reglas.tecnico.media_larga for r, _, c in vs if r == "tecnico.media_larga")
     assert largas == [150, 250]
 
 
@@ -472,7 +466,5 @@ def test_tipos_no_importa_nada_del_paquete():
     """`tipos` es la hoja del grafo; si importa algo, el ciclo vuelve."""
     raiz = Path(__file__).resolve().parents[1] / "core" / "estrategia"
     arbol = ast.parse((raiz / "tipos.py").read_text(encoding="utf-8"))
-    relativas = [
-        n for n in ast.walk(arbol) if isinstance(n, ast.ImportFrom) and n.level > 0
-    ]
+    relativas = [n for n in ast.walk(arbol) if isinstance(n, ast.ImportFrom) and n.level > 0]
     assert not relativas, "tipos.py no debe importar nada del propio paquete"

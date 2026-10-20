@@ -9,7 +9,6 @@ from __future__ import annotations
 import datetime as dt
 
 import pandas as pd
-
 from estrategia.datos.almacen import Instantanea
 
 FIN = dt.date(2024, 12, 31)
@@ -25,10 +24,22 @@ def instantanea_de(
     """Construye una instantanea a medida para un test concreto."""
     vacio_fund = pd.DataFrame(
         columns=[
-            "ticker", "fin_periodo", "periodo", "fecha_publicacion",
-            "origen_fecha_publicacion", "origen_pit", "fecha_descarga", "roe",
-            "margen_operativo", "ventas", "flujo_caja_libre", "deuda_neta",
-            "ebitda", "ebit", "ev", "patrimonio_neto",
+            "ticker",
+            "fin_periodo",
+            "periodo",
+            "fecha_publicacion",
+            "origen_fecha_publicacion",
+            "origen_pit",
+            "fecha_descarga",
+            "roe",
+            "margen_operativo",
+            "ventas",
+            "flujo_caja_libre",
+            "deuda_neta",
+            "ebitda",
+            "ebit",
+            "ev",
+            "patrimonio_neto",
         ]
     )
     inst = Instantanea(

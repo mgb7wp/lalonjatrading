@@ -14,7 +14,7 @@ import datetime as dt
 
 import pandas as pd
 import pytest
-
+from ayudas import serie_precios
 from estrategia import config as config_mod
 from estrategia import fundamental as fundamental_mod
 from estrategia.datos import contrato, registro
@@ -26,9 +26,6 @@ from estrategia.datos.eodhd_proveedor import (
     ticker_eodhd,
 )
 from estrategia.errores import ErrorConfiguracion, ErrorDatos
-
-from ayudas import serie_precios
-
 
 # --------------------------------------------------------------------------
 # Contrato
@@ -189,9 +186,7 @@ def test_una_fuente_sin_precios_no_puede_ser_dueña_de_los_precios(cfg):
         "precios": "eodhd",
         "fundamentales_anos_disponibles": 4,
     }
-    otra = cfg.model_copy(
-        update={"reglas": config_mod.Reglas.model_validate(datos)}
-    )
+    otra = cfg.model_copy(update={"reglas": config_mod.Reglas.model_validate(datos)})
     with pytest.raises(ErrorConfiguracion, match="solo sirve"):
         Enrutador(otra).fuente("precios")
 
@@ -311,15 +306,30 @@ def test_sin_acciones_ni_ev_no_hay_valoracion():
 
 def test_sin_ev_la_valoracion_va_al_peor_percentil(cfg):
     """No saber si esta barata no es lo mismo que estar barata."""
-    filas = pd.DataFrame([{
-        "ticker": "X", "fin_periodo": dt.date(y, 12, 31), "periodo": "anual",
-        "fecha_publicacion": dt.date(2024, 4, 30), "origen_pit": "reconstruido",
-        "roe": 0.2, "margen_operativo": 0.15, "ventas": 1000.0,
-        "flujo_caja_libre": 50.0, "deuda_neta": 100.0, "ebitda": 200.0,
-        "ebit": 150.0, "ev": None, "patrimonio_neto": 500.0,
-        "acciones_en_circulacion": None,
-        "divisa_reporte": "EUR", "divisa_cotizacion": "EUR",
-    } for y in (2020, 2021, 2022, 2023)])
+    filas = pd.DataFrame(
+        [
+            {
+                "ticker": "X",
+                "fin_periodo": dt.date(y, 12, 31),
+                "periodo": "anual",
+                "fecha_publicacion": dt.date(2024, 4, 30),
+                "origen_pit": "reconstruido",
+                "roe": 0.2,
+                "margen_operativo": 0.15,
+                "ventas": 1000.0,
+                "flujo_caja_libre": 50.0,
+                "deuda_neta": 100.0,
+                "ebitda": 200.0,
+                "ebit": 150.0,
+                "ev": None,
+                "patrimonio_neto": 500.0,
+                "acciones_en_circulacion": None,
+                "divisa_reporte": "EUR",
+                "divisa_cotizacion": "EUR",
+            }
+            for y in (2020, 2021, 2022, 2023)
+        ]
+    )
 
     r = fundamental_mod.ratios_de("X", filas, cfg, dt.date(2024, 6, 1), precio_local=10.0)
     assert r is not None
@@ -393,9 +403,7 @@ def _payload_eodhd() -> dict:
 
 def test_eodhd_usa_la_fecha_real_de_presentacion(cfg):
     """Es la razon de ser de esta fuente: no estimar la fecha, saberla."""
-    filas = parsear_fundamentales(
-        _payload_eodhd(), "ITX.MC", "es", cfg, dt.date(2025, 1, 1)
-    )
+    filas = parsear_fundamentales(_payload_eodhd(), "ITX.MC", "es", cfg, dt.date(2025, 1, 1))
     assert len(filas) == 1
     fila = filas[0]
     assert fila["fecha_publicacion"] == dt.date(2024, 3, 13)
@@ -418,16 +426,12 @@ def test_eodhd_deja_el_dato_marcado_como_reconstruido(cfg):
     Las cifras siguen reexpresadas a hoy, asi que `origen_pit` sigue siendo
     reconstruido. Solo la foto semanal lo convierte en capturado.
     """
-    fila = parsear_fundamentales(
-        _payload_eodhd(), "ITX.MC", "es", cfg, dt.date(2025, 1, 1)
-    )[0]
+    fila = parsear_fundamentales(_payload_eodhd(), "ITX.MC", "es", cfg, dt.date(2025, 1, 1))[0]
     assert fila["origen_pit"] == "reconstruido"
 
 
 def test_eodhd_calcula_deuda_neta_y_flujo_libre(cfg):
-    fila = parsear_fundamentales(
-        _payload_eodhd(), "ITX.MC", "es", cfg, dt.date(2025, 1, 1)
-    )[0]
+    fila = parsear_fundamentales(_payload_eodhd(), "ITX.MC", "es", cfg, dt.date(2025, 1, 1))[0]
     # Deuda neta = deuda total - efectivo, aqui negativa: es caja neta.
     assert fila["deuda_neta"] == pytest.approx(6_000_000_000 - 11_000_000_000)
     # El capex viene negativo; el valor absoluto hace que salga bien igual.
@@ -437,9 +441,7 @@ def test_eodhd_calcula_deuda_neta_y_flujo_libre(cfg):
 
 def test_eodhd_aporta_las_piezas_del_ev_pero_no_el_ev(cfg):
     """El EV se calcula despues, con el precio de la fecha de decision."""
-    fila = parsear_fundamentales(
-        _payload_eodhd(), "ITX.MC", "es", cfg, dt.date(2025, 1, 1)
-    )[0]
+    fila = parsear_fundamentales(_payload_eodhd(), "ITX.MC", "es", cfg, dt.date(2025, 1, 1))[0]
     assert fila["ev"] is None
     assert fila["acciones_en_circulacion"] is not None
     assert fila["divisa_reporte"] == "EUR"
@@ -457,8 +459,6 @@ def test_eodhd_saca_el_sector_sin_traducir(cfg):
 
 def test_lo_que_devuelve_eodhd_cumple_el_contrato(cfg):
     """Un adaptador nuevo se valida contra el mismo contrato que los demas."""
-    filas = parsear_fundamentales(
-        _payload_eodhd(), "ITX.MC", "es", cfg, dt.date(2025, 1, 1)
-    )
+    filas = parsear_fundamentales(_payload_eodhd(), "ITX.MC", "es", cfg, dt.date(2025, 1, 1))
     inf = contrato.verificar_fundamentales(pd.DataFrame(filas), "eodhd")
     assert inf.cumple, [str(i) for i in inf.incumplimientos]

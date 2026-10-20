@@ -78,19 +78,11 @@ filterwarnings = ["ignore::DeprecationWarning"]
 
 [tool.ruff]
 line-length = 100
-# El linter entra con el codigo nuevo y no se aplica retroactivamente al motor ni
-# a sus tests. No es dejadez: reformatear 7.600 lineas probadas y sus 92 tests
-# produce un diff enorme cuyo unico efecto es que una herramienta deje de
-# quejarse, y entierra los cambios que si importan. Cuando haya un motivo mejor
-# que "que salga verde", se migran en un commit propio y aislado.
-extend-exclude = [
-    "core/estrategia",
-    "tests/ayudas.py",
-    "tests/test_anti_sesgo.py",
-    "tests/test_estrategia.py",
-    "tests/test_fuentes.py",
-    "tests/test_motor.py",
-]
+# El motor y sus tests estuvieron fuera del linter hasta octubre de 2026, para
+# no enterrar cambios de verdad bajo un diff de formato. Entraron en la
+# limpieza de esa fecha, cuando el linter, pasado a mano, encontro en el motor
+# imports muertos y una variable sin definir: ese era el motivo mejor que "que
+# salga verde". Desde entonces lo cubre todo, sin excepciones.
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "UP", "B"]

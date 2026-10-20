@@ -128,7 +128,6 @@ def sanear_precios(df: pd.DataFrame) -> tuple[pd.DataFrame, int]:
     return (df[~malas].reset_index(drop=True), n) if n else (df, 0)
 
 
-
 def verificar_descartes(descartadas: int, total: int, fuente: str) -> Informe:
     """Rechaza el lote si `sanear_precios` tuvo que descartar demasiadas filas.
 
@@ -147,6 +146,7 @@ def verificar_descartes(descartadas: int, total: int, fuente: str) -> Informe:
             )
         )
     return inf
+
 
 def _faltan_columnas(df: pd.DataFrame, esperadas: list[str]) -> list[str]:
     return [c for c in esperadas if c not in df.columns]
@@ -188,17 +188,17 @@ class Limpieza:
             (self.precios_negativos, "filas con precios negativos o cero apartadas"),
             (self.sesion_en_curso, "filas de la sesion en curso apartadas (aun no ha cerrado)"),
             (self.duplicadas, "filas con fecha repetida apartadas (se queda la ultima)"),
-            (self.ohlc_reparadas, "filas con OHLC incoherente reparadas (maximo y minimo "
-                                  "recalculados con apertura y cierre)"),
-            (self.ohlc_rellenadas, "filas sin apertura, maximo o minimo rellenadas con "
-                                   "el cierre"),
+            (
+                self.ohlc_reparadas,
+                "filas con OHLC incoherente reparadas (maximo y minimo "
+                "recalculados con apertura y cierre)",
+            ),
+            (self.ohlc_rellenadas, "filas sin apertura, maximo o minimo rellenadas con el cierre"),
         ]
         return [f"[{fuente}/{tipo_dato}] {n} {texto}{cola}" for n, texto in partes if n]
 
 
-def limpiar_precios(
-    df: pd.DataFrame, hoy: date | None = None
-) -> tuple[pd.DataFrame, Limpieza]:
+def limpiar_precios(df: pd.DataFrame, hoy: date | None = None) -> tuple[pd.DataFrame, Limpieza]:
     """Repara o aparta las filas malas en lugar de rechazar todo el lote.
 
     Con 140 valores, Yahoo devuelve casi siempre alguna fila rara: una fecha
@@ -475,7 +475,8 @@ def verificar_fx(
     if hasta is not None and antiguedad_maxima_dias is not None:
         ultimas = pd.to_datetime(df["fecha"]).dt.date.groupby(df["divisa"]).max()
         viejas = [
-            f"{d} (ultimo {u})" for d, u in ultimas.items()
+            f"{d} (ultimo {u})"
+            for d, u in ultimas.items()
             if (hasta - u).days > antiguedad_maxima_dias
         ]
         if viejas:
@@ -497,7 +498,8 @@ def huecos_fx(df: pd.DataFrame, antiguedad_maxima_dias: int) -> list[str]:
     for divisa, grupo in df.groupby("divisa", sort=True):
         fechas = pd.Series(sorted(pd.to_datetime(grupo["fecha"]).dt.date))
         saltos = [
-            (a, b) for a, b in zip(fechas[:-1], fechas[1:])
+            (a, b)
+            for a, b in zip(fechas[:-1], fechas[1:], strict=True)
             if (b - a).days > antiguedad_maxima_dias
         ]
         if saltos:

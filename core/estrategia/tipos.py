@@ -201,7 +201,7 @@ class Posicion:
         """El mas alto de los dos stops, como pide el documento."""
         return max(self.stop_inicial_local, self.stop_dinamico_local)
 
-    def con_cierre(self, cierre: float, stop_dinamico_bruto: float) -> "Posicion":
+    def con_cierre(self, cierre: float, stop_dinamico_bruto: float) -> Posicion:
         """Actualiza el trailing con el cierre del dia.
 
         El stop dinamico lleva trinquete: nunca baja, aunque el ATR se dispare
@@ -215,7 +215,7 @@ class Posicion:
             sesiones_sin_datos=0,
         )
 
-    def sin_datos(self) -> "Posicion":
+    def sin_datos(self) -> Posicion:
         return replace(self, sesiones_sin_datos=self.sesiones_sin_datos + 1)
 
 

@@ -12,13 +12,10 @@ import datetime as dt
 
 import pandas as pd
 import pytest
-
+from ayudas import instantanea_de, serie_precios
 from estrategia import backtest as backtest_mod
-from estrategia import fundamental as fundamental_mod
 from estrategia import tecnico as tecnico_mod
 from estrategia.errores import ErrorAnticipacion
-
-from ayudas import instantanea_de, serie_precios
 
 
 def _fila_fundamental(ticker, fin_periodo, publicacion, **extra):
@@ -169,9 +166,7 @@ def test_el_tipo_de_cambio_para_decidir_es_el_de_la_vispera(cfg, instantanea):
 
 def test_la_orden_se_ejecuta_en_la_apertura_siguiente(cfg, instantanea):
     """Nunca se compra al cierre con el que se genero la senal."""
-    r = backtest_mod.ejecutar(
-        instantanea, cfg, dt.date(2019, 1, 1), dt.date(2023, 12, 31)
-    )
+    r = backtest_mod.ejecutar(instantanea, cfg, dt.date(2019, 1, 1), dt.date(2023, 12, 31))
     ev = r.eventos_df
     ordenes = ev[ev["tipo"] == "orden"]
     compras = ev[ev["tipo"] == "compra"]
@@ -180,8 +175,7 @@ def test_la_orden_se_ejecuta_en_la_apertura_siguiente(cfg, instantanea):
     # Cada compra ocurre estrictamente despues de la orden que la origino.
     for _, compra in compras.head(40).iterrows():
         previas = ordenes[
-            (ordenes["ticker"] == compra["ticker"])
-            & (ordenes["fecha"] < compra["fecha"])
+            (ordenes["ticker"] == compra["ticker"]) & (ordenes["fecha"] < compra["fecha"])
         ]
         assert not previas.empty, f"compra de {compra['ticker']} sin orden previa"
 
@@ -200,18 +194,26 @@ def test_el_stop_del_dia_no_usa_el_cierre_del_dia(cfg):
     from estrategia.tipos import Posicion
 
     pos = Posicion(
-        ticker="X", mercado="es", sector="industrial", divisa="EUR", acciones=10,
-        fecha_entrada=dt.date(2023, 1, 2), precio_entrada_local=100.0,
-        precio_entrada_base=100.0, fx_entrada=1.0, atr_entrada=2.0,
-        stop_inicial_local=96.0, maximo_cierre_local=100.0,
-        stop_dinamico_local=94.0, coste_entrada_base=3.0,
-        riesgo_teorico_pct=0.01, riesgo_efectivo_pct=0.008,
+        ticker="X",
+        mercado="es",
+        sector="industrial",
+        divisa="EUR",
+        acciones=10,
+        fecha_entrada=dt.date(2023, 1, 2),
+        precio_entrada_local=100.0,
+        precio_entrada_base=100.0,
+        fx_entrada=1.0,
+        atr_entrada=2.0,
+        stop_inicial_local=96.0,
+        maximo_cierre_local=100.0,
+        stop_dinamico_local=94.0,
+        coste_entrada_base=3.0,
+        riesgo_teorico_pct=0.01,
+        riesgo_efectivo_pct=0.008,
         ultimo_cierre_local=100.0,
     )
     # Sesion que cae hasta 95 (por debajo del stop de 96) y cierra en 110.
-    sesion = pd.Series(
-        {"apertura": 99.0, "maximo": 111.0, "minimo": 95.0, "cierre": 110.0}
-    )
+    sesion = pd.Series({"apertura": 99.0, "maximo": 111.0, "minimo": 95.0, "cierre": 110.0})
     salida = salidas_mod.evaluar_stop(pos, sesion)
     assert salida is not None, "el stop debe saltar aunque el dia cierre al alza"
     assert salida.precio_local == pytest.approx(96.0)

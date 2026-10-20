@@ -78,10 +78,11 @@ def asignar(
 
     for rango, cand in enumerate(candidatas, start=1):
 
-        def rechazar(motivo: MotivoRechazo) -> None:
+        def rechazar(motivo: MotivoRechazo, cand: Candidata = cand, rango: int = rango) -> None:
             rechazos.append(
-                Rechazo(cand.ticker, cand.mercado, cand.sector, rango, motivo,
-                        cand.puntuacion_final)
+                Rechazo(
+                    cand.ticker, cand.mercado, cand.sector, rango, motivo, cand.puntuacion_final
+                )
             )
 
         if cartera.tiene(cand.ticker):
