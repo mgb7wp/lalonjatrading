@@ -21,6 +21,7 @@ fase están en [`docs/`](docs/):
 | [`docs/DATABASE.md`](docs/DATABASE.md) | Las 29 tablas y por qué son así |
 | [`docs/DEPLOYMENT.md`](docs/DEPLOYMENT.md) | Cómo levantarlo |
 | [`docs/GLOSARIO.md`](docs/GLOSARIO.md) | El motor está en español y la plataforma en inglés; aquí se traduce |
+| [`docs/TERCEROS.md`](docs/TERCEROS.md) | Código adaptado de otros proyectos y sus licencias |
 
 La regla que sostiene todo lo demás: **el motor no importa nada de la
 plataforma**. Por eso se puede correr un backtest en un portátil sin levantar

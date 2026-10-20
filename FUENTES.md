@@ -77,6 +77,49 @@ La clave va en `EODHD_API_KEY`, nunca en el repositorio. **No se ha podido
 ejecutar**: se escribió contra la documentación de la API y se probó con
 respuestas grabadas.
 
+### `tiingo`
+
+Precios diarios de EE. UU. con clave gratuita (`TIINGO_API_KEY`). Pensada como
+**respaldo** de yfinance, no como fuente principal: el plan gratuito limita las
+peticiones por hora. No sirve índices, así que el de régimen (`^GSPC`) tiene
+que venir de otra fuente. **No se ha podido ejecutar** sin clave: se escribió a
+partir del cargador de Vibe-Trading y se probó con respuestas en el formato
+documentado.
+
+### `b3`
+
+Los ficheros oficiales de la bolsa de Brasil (COTAHIST): gratis, sin clave y
+**sin ajustar** ni por dividendos ni por splits. Por eso declara
+`precios_ajustados=False` y el enrutador no la acepta como respaldo. Sirve para
+otra cosa: comprobar el precio bruto de yfinance contra el oficial
+(`python scripts/verify_sources.py --fuente b3`), que es como se encuentran
+errores como el de UGPA3.SA antes de 2021 (tarea M4).
+
+## Respaldo de precios
+
+`proveedor_datos.precios_respaldo` es una lista de fuentes, en orden. Si la de
+precios no devuelve un valor, o falla entera, el enrutador se lo pide a la
+primera de la lista que cubra su mercado:
+
+```yaml
+proveedor_datos:
+  nombre: yfinance
+  precios_respaldo: [tiingo]
+```
+
+Tres reglas:
+
+- **Cada valor se pide entero**, nunca los días que falten. Dos proveedores no
+  ajustan igual por dividendos, y una serie cosida tendría un escalón falso.
+- **Cada fila dice de dónde salió** (`fuente`), y `/health/data` publica todas
+  las fuentes del día (`yfinance+tiingo`): un respaldo que entra sin verse es un
+  fallo de la principal que nadie mira.
+- Un respaldo **sin clave o caído se salta** y se anota; uno **sin precios
+  ajustados se rechaza** al arrancar.
+
+La lista está vacía hasta verificar cada fuente con red real. `--proveedor` la
+vacía también: con una fuente forzada no se sale a la red por ningún otro sitio.
+
 ## Cómo se añade una fuente
 
 Cinco pasos, y ninguno toca el motor.

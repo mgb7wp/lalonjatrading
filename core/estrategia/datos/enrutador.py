@@ -25,6 +25,10 @@ hace aqui dos cosas que no se pueden dejar a la buena voluntad de cada adaptador
 2. **Aplica el contrato.** Ningun lote entra en el almacen sin pasar por
    `contrato.py`. Es lo que convierte un mapeo roto en un error ruidoso en vez de
    en media puntuacion fundamental muerta en silencio.
+
+Los precios admiten ademas **fuentes de respaldo** (`precios_respaldo`): lo que
+la fuente de precios no devuelve se pide, valor a valor y entero, a la primera
+de ellas que cubra su mercado. Pasa por el mismo contrato que el resto.
 """
 
 from __future__ import annotations
@@ -35,7 +39,7 @@ from datetime import date, timedelta
 import pandas as pd
 
 from ..config import Config
-from ..errores import ErrorConfiguracion
+from ..errores import ErrorConfiguracion, ErrorDatos
 from . import contrato, registro
 from .proveedor import MAGNITUDES_OPCIONALES, TIPOS_DE_DATO, Capacidades, Fuente
 
@@ -176,14 +180,33 @@ class Enrutador:
 
     def precios(self, tickers: list[str], inicio: date, fin: date) -> pd.DataFrame:
         fuente = self.fuente("precios")
-        df = fuente.precios(tickers, inicio, fin)
+        respaldo = self._cfg.reglas.proveedor_datos.precios_respaldo
+        try:
+            df = fuente.precios(tickers, inicio, fin)
+        except ErrorDatos as exc:
+            # Sin respaldo, el fallo sube como siempre. Con respaldo, se anota y
+            # los valores se piden a las fuentes de respaldo.
+            if not respaldo:
+                raise
+            self.avisos.append(f"[{fuente.nombre}/precios] ha fallado: {exc}")
+            df = pd.DataFrame()
         self._recoger_avisos(fuente)
         df = _estampar(df, fuente.nombre)
+        nombre = fuente.nombre
+        if respaldo:
+            df = self._completar_con_respaldo(df, tickers, inicio, fin, fuente.nombre, respaldo)
+            if df.empty:
+                raise ErrorDatos(
+                    f"ni '{fuente.nombre}' ni el respaldo ({', '.join(respaldo)}) han "
+                    f"devuelto precios"
+                )
+            # El nombre del lote dice todas las fuentes que han puesto filas.
+            nombre = "+".join(sorted(df["fuente"].unique()))
         # Primero se apartan la sesion en curso, las filas sin cierre, los
         # precios no positivos y las fechas repetidas, y se rellenan los huecos
         # de apertura, maximo y minimo con el cierre (`limpiar_precios`).
         df, limpieza = contrato.limpiar_precios(df, self._hoy)
-        self.avisos += limpieza.avisos(fuente.nombre)
+        self.avisos += limpieza.avisos(nombre)
         # Despues, las filas con OHLC imposible se DESCARTAN, no se reparan: con
         # el maximo por debajo del cierre no hay forma de saber cual de los dos
         # precios es el bueno. Unas pocas son ruido de un proveedor gratuito;
@@ -192,12 +215,101 @@ class Enrutador:
         total = len(df)
         df, self.precios_descartados = contrato.sanear_precios(df)
         if self._verificar:
-            informe = contrato.verificar_precios(df, fuente.nombre)
+            informe = contrato.verificar_precios(df, nombre)
             informe.incumplimientos += contrato.verificar_descartes(
-                self.precios_descartados, total, fuente.nombre
+                self.precios_descartados, total, nombre
             ).incumplimientos
             informe.exigir()
         return df
+
+    def _completar_con_respaldo(
+        self,
+        df: pd.DataFrame,
+        tickers: list[str],
+        inicio: date,
+        fin: date,
+        principal: str,
+        respaldo: list[str],
+    ) -> pd.DataFrame:
+        """Pide a las fuentes de respaldo los valores que no han llegado.
+
+        Cada valor que falta se pide ENTERO a la primera fuente de respaldo que
+        cubra su mercado, y queda estampado con el nombre de esa fuente. Nunca
+        se rellenan dias sueltos: dos proveedores no ajustan igual por
+        dividendos, y una serie cosida tendria un escalon falso en la costura.
+
+        Una fuente de respaldo que no esta disponible (le falta la clave, por
+        ejemplo) o que falla se anota y se salta: el respaldo existe para que
+        una caida no deje el dia sin datos, no para anadir otra forma de caerse.
+        """
+        servidos = set(df["ticker"]) if not df.empty else set()
+        faltan = [t for t in dict.fromkeys(tickers) if t not in servidos]
+        lotes = [df] if not df.empty else []
+
+        for nombre in respaldo:
+            if not faltan:
+                break
+            fuente = self._instancia(nombre)
+            cap = fuente.capacidades
+            if not cap.sirve("precios"):
+                raise ErrorConfiguracion(
+                    f"'{nombre}' esta en precios_respaldo pero no sirve precios"
+                )
+            if not cap.precios_ajustados:
+                raise ErrorConfiguracion(
+                    f"'{nombre}' no da precios ajustados por dividendos y no puede ser "
+                    f"respaldo: cada dividendo saldria como una caida"
+                )
+            ok, motivo = fuente.disponible()
+            if not ok:
+                self.avisos.append(f"[respaldo/{nombre}] no disponible: {motivo}")
+                continue
+            suyos = [t for t in faltan if self._cubre(cap, t)]
+            if not suyos:
+                continue
+            try:
+                extra = fuente.precios(suyos, inicio, fin)
+            except ErrorDatos as exc:
+                self.avisos.append(f"[respaldo/{nombre}] ha fallado: {exc}")
+                continue
+            finally:
+                self._recoger_avisos(fuente)
+            if extra is None or extra.empty:
+                continue
+            extra = extra[extra["ticker"].isin(suyos)]
+            nuevos = sorted(set(extra["ticker"]))
+            if not nuevos:
+                continue
+            lotes.append(_estampar(extra, nombre))
+            faltan = [t for t in faltan if t not in nuevos]
+            self.avisos.append(
+                f"[respaldo/{nombre}] {len(nuevos)} valores sin precios en "
+                f"'{principal}' servidos por '{nombre}': {', '.join(nuevos)}"
+            )
+
+        if faltan:
+            self.avisos.append(
+                f"[respaldo] {len(faltan)} valores sin precios en ninguna fuente: "
+                f"{', '.join(faltan)}"
+            )
+        if not lotes:
+            return pd.DataFrame()
+        return pd.concat(lotes, ignore_index=True)
+
+    def _cubre(self, cap: Capacidades, ticker: str) -> bool:
+        """Si una fuente cubre el mercado de un valor.
+
+        Los indices de regimen no estan en el universo, pero si tienen mercado:
+        el de `tecnico.indices_regimen`. Lo que no tiene mercado (las
+        referencias del informe) solo lo cubre una fuente sin restriccion.
+        """
+        if cap.mercados is None:
+            return True
+        mercado = self._cfg.universo.mercado_de_ticker.get(ticker)
+        if mercado is None:
+            por_indice = {i: m for m, i in self._cfg.reglas.tecnico.indices_regimen.items()}
+            mercado = por_indice.get(ticker)
+        return mercado is not None and mercado in cap.mercados
 
     def fundamentales(self, tickers: list[str], inicio: date, fin: date) -> pd.DataFrame:
         """Fundamentales, pidiendo a cada mercado su fuente.

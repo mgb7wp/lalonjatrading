@@ -83,6 +83,18 @@ def anos_antes(fecha: dt.date, anos: int) -> dt.date:
         return fecha.replace(year=fecha.year - anos, day=28)
 
 
+def origen_de(df, por_defecto: str) -> str:
+    """Las fuentes que han puesto filas en un lote, unidas por `+`.
+
+    Normalmente es una sola. Con respaldo de precios (`precios_respaldo`) un dia
+    puede traer valores de dos, y `/health/data` tiene que decirlo: un respaldo
+    que entra sin que se vea es un fallo de la fuente principal que nadie mira.
+    """
+    if df is None or df.empty or "fuente" not in df.columns:
+        return por_defecto
+    return "+".join(sorted(df["fuente"].dropna().unique())) or por_defecto
+
+
 def umbrales_rancio(cfg) -> dict[str, int]:
     """Dias sin dato nuevo tras los cuales cada conjunto se marca rancio."""
     return {**DIAS_PARA_RANCIO, "fundamentales": cfg.reglas.fundamental.antiguedad_maxima_dias}
@@ -400,6 +412,9 @@ def ejecutar(
             with _etapa(sesion, resultados, "precios", mercado_id, dia) as r:
                 simbolos = tickers + ([indices[mercado_id]] if mercado_id in indices else [])
                 df = enrutador.precios(simbolos, inicio, fin)
+                # Con respaldo de precios puede haber filas de mas de una fuente:
+                # la salud de los datos tiene que decirlo (tarea M5).
+                origen = origen_de(df, enrutador.nombre_de("precios"))
                 filas = precios_a_filas(df, mapa, hoy)
                 r.filas = ingest.escribir_precios(sesion, filas).filas
 
@@ -412,7 +427,7 @@ def ejecutar(
                     r.avisos.append(f"{descartadas} filas con OHLC imposible descartadas")
                 _comprobar(
                     sesion,
-                    fuente=enrutador.nombre_de("precios"),
+                    fuente=origen,
                     conjunto="precios",
                     mercado=mercado_id,
                     nombre="ohlc_coherente",
@@ -434,7 +449,7 @@ def ejecutar(
                 ultima = df["fecha"].max() if not df.empty else None
                 _comprobar(
                     sesion,
-                    fuente=enrutador.nombre_de("precios"),
+                    fuente=origen,
                     conjunto="precios",
                     mercado=mercado_id,
                     nombre="cobertura",
@@ -450,7 +465,7 @@ def ejecutar(
                     "precios",
                     mercado_id,
                     ultima,
-                    enrutador.nombre_de("precios"),
+                    origen,
                     cubiertos,
                     len(tickers),
                     hoy,

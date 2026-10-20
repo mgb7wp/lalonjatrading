@@ -276,30 +276,30 @@ def verificar_stooq(cfg, informe: Informe) -> None:
             f"solo {cubiertos}; como respaldo de precios no cubre todo",
         )
 
-    _comparar_ajuste_dividendos(cfg, informe, fuente, inicio, fin)
+    _comparar_ajuste_dividendos(cfg, informe, "stooq", fuente, inicio, fin)
 
 
-def _comparar_ajuste_dividendos(cfg, informe: Informe, stooq, inicio, fin) -> None:
-    """La comprobacion que decide si Stooq puede ser duena de precios.
+def _comparar_ajuste_dividendos(cfg, informe: Informe, nombre: str, fuente, inicio, fin) -> None:
+    """La comprobacion que decide si una fuente puede dar precios al motor.
 
     Se compara con yfinance sobre un valor que reparte dividendo alto. Si los
     dos ajustan igual, la rentabilidad acumulada del periodo coincide salvo
-    redondeo. Si Stooq no ajusta por dividendos, se queda por debajo de forma
-    sistematica, y la diferencia se parece a la rentabilidad por dividendo
-    acumulada del periodo.
+    redondeo. Si la fuente no ajusta por dividendos, se queda por debajo de
+    forma sistematica, y la diferencia se parece a la rentabilidad por
+    dividendo acumulada del periodo.
 
-    Sin esta comprobacion, usar Stooq como fuente principal convierte cada
-    reparto en una caida que el motor leera como senal.
+    Sin esta comprobacion, usarla como duena de precios —o como respaldo—
+    convierte cada reparto en una caida que el motor leera como senal.
     """
     from estrategia.datos.yfinance_proveedor import ProveedorYFinance
 
     yf = ProveedorYFinance(cfg)
     datos = _probar(
         informe,
-        "stooq",
+        nombre,
         "ajuste por dividendos",
         lambda: (
-            stooq.precios([TESTIGO_DIVIDENDO], inicio, fin),
+            fuente.precios([TESTIGO_DIVIDENDO], inicio, fin),
             yf.precios([TESTIGO_DIVIDENDO], inicio, fin),
         ),
     )
@@ -307,7 +307,7 @@ def _comparar_ajuste_dividendos(cfg, informe: Informe, stooq, inicio, fin) -> No
         return
     a, b = datos
     if a.empty or b.empty:
-        informe.anotar("stooq", "ajuste por dividendos", "omitida", "falta una de las dos series")
+        informe.anotar(nombre, "ajuste por dividendos", "omitida", "falta una de las dos series")
         return
 
     def retorno(df):
@@ -318,19 +318,120 @@ def _comparar_ajuste_dividendos(cfg, informe: Informe, stooq, inicio, fin) -> No
     diferencia = rb - ra
     if abs(diferencia) < 0.005:
         informe.anotar(
-            "stooq",
+            nombre,
             "ajuste por dividendos",
             "ok",
             f"coincide con yfinance ({ra:.2%} vs {rb:.2%}): ajusta igual",
         )
     else:
         informe.anotar(
-            "stooq",
+            nombre,
             "ajuste por dividendos",
             "fallo",
             f"{ra:.2%} frente a {rb:.2%} en yfinance (diferencia {diferencia:+.2%}). "
-            f"NO la uses como duena de precios: cada dividendo saldra como una caida",
+            f"NO la uses como duena de precios ni como respaldo: cada dividendo "
+            f"saldra como una caida",
         )
+
+
+def verificar_tiingo(cfg, informe: Informe) -> None:
+    """Respaldo de precios de EE. UU. (M5). Necesita `TIINGO_API_KEY`.
+
+    Lo que tiene que pasar antes de ponerla en `precios_respaldo`: que resuelva
+    los valores de EE. UU., que ajuste por dividendos igual que yfinance y que
+    sus filas cumplan el contrato de precios.
+    """
+    from estrategia.datos import contrato
+    from estrategia.datos.tiingo_proveedor import ProveedorTiingo
+
+    fuente = ProveedorTiingo(cfg)
+    ok, motivo = fuente.disponible()
+    if not ok:
+        informe.anotar("tiingo", "disponibilidad", "omitida", motivo)
+        return
+    informe.anotar("tiingo", "disponibilidad", "ok")
+
+    fin = dt.date.today()
+    inicio = fin - dt.timedelta(days=365)
+    df = _probar(
+        informe, "tiingo", "precios de AAPL", lambda: fuente.precios(["AAPL"], inicio, fin)
+    )
+    if df is None:
+        return
+    if df.empty:
+        informe.anotar("tiingo", "precios de AAPL", "fallo", "sin datos")
+        return
+    informe.anotar("tiingo", "precios de AAPL", "ok", f"{len(df)} sesiones")
+    inf = contrato.verificar_precios(df.assign(fuente="tiingo"), "tiingo")
+    informe.anotar(
+        "tiingo",
+        "contrato de precios",
+        "ok" if inf.cumple else "fallo",
+        "; ".join(str(i) for i in inf.incumplimientos),
+    )
+    _comparar_ajuste_dividendos(cfg, informe, "tiingo", fuente, inicio, fin)
+
+
+#: Valores de Brasil con los que se compara el bruto de yfinance con el oficial.
+#: UGPA3 es uno de los casos conocidos de la tarea M4.
+TESTIGOS_B3 = ["PETR4.SA", "VALE3.SA", "UGPA3.SA"]
+
+#: Diferencia, frente a la mediana del valor, a partir de la cual un dia se da
+#: por discrepante. Por debajo es redondeo; por encima, un precio mal ajustado.
+UMBRAL_DISCREPANCIA_B3 = 0.02
+
+
+def verificar_b3(cfg, informe: Informe) -> None:
+    """Cotizaciones oficiales de la B3 frente al bruto de yfinance (M4).
+
+    La B3 da el precio de cotizacion sin ajustar. El `Close` de yfinance esta
+    ajustado por splits, asi que el cociente entre los dos debe ser constante
+    entre splits. Un dia que se aparta de la mediana del valor es un precio que
+    yfinance tiene mal: es lo que hay que revisar a mano.
+    """
+    from estrategia.datos.b3_proveedor import ProveedorB3
+    from estrategia.datos.yfinance_proveedor import ProveedorYFinance
+
+    fin = dt.date.today()
+    inicio = dt.date(fin.year - 1, 1, 1)
+    datos = _probar(
+        informe,
+        "b3",
+        "descarga de la B3 y de yfinance",
+        lambda: (
+            ProveedorB3(cfg).precios(TESTIGOS_B3, inicio, fin),
+            ProveedorYFinance(cfg).precios(TESTIGOS_B3, inicio, fin),
+        ),
+    )
+    if datos is None:
+        return
+    oficial, yf = datos
+    if oficial.empty:
+        informe.anotar("b3", "descarga de la B3 y de yfinance", "fallo", "la B3 no ha dado nada")
+        return
+    informe.anotar("b3", "descarga de la B3", "ok", f"{len(oficial)} sesiones")
+
+    juntos = oficial.merge(yf, on=["ticker", "fecha"], suffixes=("_b3", "_yf"))
+    for ticker in TESTIGOS_B3:
+        del_valor = juntos[juntos["ticker"] == ticker]
+        if del_valor.empty:
+            informe.anotar("b3", f"{ticker} frente a yfinance", "omitida", "sin sesiones comunes")
+            continue
+        cociente = del_valor["cierre_bruto_yf"] / del_valor["cierre_bruto_b3"]
+        desvio = (cociente / cociente.median() - 1.0).abs()
+        raros = del_valor.loc[desvio > UMBRAL_DISCREPANCIA_B3, "fecha"]
+        if raros.empty:
+            informe.anotar(
+                "b3", f"{ticker} frente a yfinance", "ok", f"{len(del_valor)} sesiones coinciden"
+            )
+        else:
+            informe.anotar(
+                "b3",
+                f"{ticker} frente a yfinance",
+                "aviso",
+                f"{len(raros)} sesiones se apartan mas de un "
+                f"{UMBRAL_DISCREPANCIA_B3:.0%}: de {raros.min()} a {raros.max()}",
+            )
 
 
 def verificar_yfinance(cfg, informe: Informe) -> None:
@@ -479,6 +580,8 @@ VERIFICADORES = {
     "cvm": verificar_cvm,
     "bce": verificar_bce,
     "stooq": verificar_stooq,
+    "tiingo": verificar_tiingo,
+    "b3": verificar_b3,
     "yfinance": verificar_yfinance,
 }
 

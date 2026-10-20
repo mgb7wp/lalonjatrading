@@ -52,12 +52,16 @@ Y el hecho que condiciona el negocio, no el desarrollo:
 |---|---|---|---|---|---|
 | **yfinance** | ES, US, DE, IN, BR | no | 0 € | **EN USO, probado** | Ajustado y bruto. Revisa el pasado hacia atrás: por eso se guarda `fecha_descarga`. Sin deslistadas. Uso no comercial. |
 | ~~**Stooq**~~ | — | no | 0 € | ❌ **DESCARTADA 16/09/2026** | Desafío anti-bot con prueba de trabajo en JavaScript: cero datos en los cinco mercados. |
+| **Tiingo** | US | sí (gratis) | 0 € (cuota por hora) | adaptador escrito, **POR VERIFICAR** | Respaldo de precios de EE. UU. (`tiingo_proveedor.py`). Ajustado (`adj*`) y bruto. Sin índices: el `^GSPC` tiene que venir de otra fuente. |
+| **B3 (COTAHIST)** | BR | no | 0 € | adaptador escrito, **POR VERIFICAR** | Ficheros oficiales de la bolsa de Brasil (`b3_proveedor.py`). **Sin ajustar**: no puede ser respaldo; sirve para comprobar el bruto de yfinance (M4). Cada año es un fichero de decenas de megas. |
 | **Alpha Vantage** | global | sí | 0 € (cuota muy baja) | sin adaptador | La cuota gratuita del plan básico es del orden de decenas de peticiones **al día**. Con 140 valores × 5 mercados no es viable como fuente principal. |
 | **EODHD** | global | sí | ~20-80 €/mes | sin clave | Candidata principal para comercializar. Adaptador ya escrito (`eodhd_proveedor.py`), **nunca ejecutado con clave real**. |
 
-**Recomendación:** yfinance como dueña. **Sin respaldo**, que es el problema:
-Stooq era el previsto y quedó descartado, así que hoy los precios de los cinco
-mercados dependen de una sola fuente no oficial. Ver el punto 6 del plan.
+**Recomendación:** yfinance como dueña. **Respaldo en camino** (tarea M5 de
+`PLAN.md`): el enrutador ya sabe pedir a `proveedor_datos.precios_respaldo` lo
+que yfinance no devuelve, valor a valor y entero. Tiingo cubre EE. UU.; para los
+cinco mercados hace falta otra fuente. La lista sigue vacía hasta verificar
+cada una con red real (`python scripts/verify_sources.py --fuente tiingo`).
 
 ### 2.2 Tipos de cambio
 
@@ -258,7 +262,8 @@ Configurados hoy: `^IBEX`, `^GSPC`, `^GDAXI`, `^NSEI`, `^BVSP`.
 - **Coste:** 0 €. **Límites:** sin cuota documentada; se autolimita con pausas. Se rompe cuando Yahoo cambia.
 - **Fiabilidad:** media. Revisa el pasado hacia atrás.
 - **Legal:** cliente no oficial. **No apto para producto comercial.**
-- **Respaldo: NINGUNO.** Stooq quedó descartada; ver RD-1.
+- **Respaldo:** el mecanismo existe (`precios_respaldo`), pero aún no hay
+  ninguna fuente verificada para activarlo. Stooq quedó descartada; ver RD-1.
 
 > **El fallo que destapó la primera ejecución real.** El adaptador preguntaba
 > `len(tickers) > 1` para decidir si desenvolver las columnas que devuelve
@@ -337,16 +342,17 @@ mercados dependen de una única fuente no oficial y sin SLA. Ver el plan de acci
 | 3 | Adaptador **yfinance** | ✅ **verificado** (y corregido) | Precios y fundamentales básicos de los 5 mercados |
 | 4 | Adaptador **Stooq** | ❌ **descartado** | Desafío anti-bot: no sirve |
 | 5 | Adaptador **SEC EDGAR** | ✅ **verificado** (y corregido dos veces) | PIT real en EE. UU.: 19 ejercicios con cifras de su momento |
-| 6 | **Buscar un respaldo de precios** que sustituya a Stooq | ⏳ **pendiente, es lo siguiente** | Que caiga yfinance y no caiga todo |
+| 6 | **Respaldo de precios** que sustituya a Stooq | 🔧 **mecanismo y Tiingo escritos, por verificar** | Que caiga yfinance y no caiga todo |
 | 7 | Adaptador **CVM** | ✅ **en producción** | PIT real en Brasil: `origen_pit = capturado` en los 26 valores |
 | 8 | Evaluar **EODHD** con clave real | FASE 5 / 8 | España, India, histórico y licencia |
 | 9 | Deslistadas y composición histórica de índices | post-MVP | Sesgo de supervivencia (RD-4) |
 
-El punto 6 es nuevo y no estaba en el plan: apareció al comprobar Stooq. Hoy los
-precios de los cinco mercados cuelgan de una sola fuente no oficial, sin SLA y
-sin alternativa. Candidatas a evaluar: Tiingo (gratis con límites, EE. UU.),
-Twelve Data, Marketstack, o directamente el plan de pago de EODHD, que resolvería
-a la vez el respaldo de precios y los fundamentales de España e India.
+El punto 6 apareció al comprobar Stooq. El mecanismo de respaldo ya está en el
+enrutador, y Tiingo (EE. UU.) escrito a partir del cargador de Vibe-Trading; los
+ficheros oficiales de la B3 sirven para comprobar Brasil, no para rellenar. Para
+España, Alemania e India sigue sin haber candidata gratuita: Twelve Data,
+Marketstack, o el plan de pago de EODHD, que resolvería a la vez el respaldo de
+precios y los fundamentales de España e India.
 
 ## 5. Reglas que no dependen del proveedor
 

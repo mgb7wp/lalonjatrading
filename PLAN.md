@@ -67,15 +67,19 @@ Tests de anticipación como los de `tests/test_anti_sesgo.py`.
 - Se trae el commit `c3018c8` de la rama `blissful-faraday`: `asignar(pendientes=)` y `Orden.reserva_base`.
 
 **M4 🤖 Saltos de precio sin ajustar.**
+- Para Brasil ya hay referencia oficial: `python scripts/verify_sources.py --fuente b3` compara el precio bruto de yfinance con los ficheros de la B3 y señala los días que no cuadran (hecho con M5).
 - Traer el detector `contrato.saltos_sospechosos` del commit `a0afefb`.
 - Arreglar los tres casos conocidos:
   - `TMPV.NS`: la escisión de Tata Motors;
   - `UGPA3.SA`: su histórico antes de 2021-06-28;
   - `EMBR3.SA`, que ahora es `EMBJ3.SA` (también en `config/cvm_empresas.yaml`).
 
-**M5 🤖 Fuente de precios de respaldo.**
-- Hoy los cinco mercados dependen solo de yfinance.
-- Candidatas gratuitas: Tiingo y Twelve Data. EODHD es de pago.
+**M5 🤝 Fuente de precios de respaldo.** La parte de código está hecha para EE. UU. (ver "Hecho"). Falta:
+- 👤 sacar una clave gratuita en tiingo.com, ponerla en `.env` como `TIINGO_API_KEY` y desplegar;
+- 👤🖥️ verificarla en el servidor y pasarle el resultado a Claude (el contenedor `worker` es el que tiene la clave):
+  `docker compose -f docker-compose.yml -f docker-compose.produccion.yml -f docker-compose.tunel.yml exec worker python scripts/verify_sources.py --fuente tiingo`;
+- 🤖 con el resultado en verde, activarla en `config/reglas.yaml` (`precios_respaldo: [tiingo]`);
+- 🤖 España, Alemania e India siguen sin respaldo gratuito: Twelve Data o EODHD (de pago).
 
 **M6 🤝 Fundamentales de España, Alemania e India.**
 - Hoy son 4 ejercicios reexpresados de yfinance.
@@ -217,3 +221,10 @@ Todo esto es necesario antes de cobrar, y no antes:
 - Lo duplicado, en un solo sitio: `backend/api/consultas.py` junta lo que compartían rankings, screener, listas, carteras y la ficha (antes copiado o importado "de prestado"), y el alias `BD` deja de definirse en siete módulos.
 - La documentación de la API publica la versión real del paquete (decía 0.3.0), el 422 usa el nombre nuevo de Starlette (los tests ya no dan avisos), y `docs/` deja de apuntar a rutas que no existían.
 - El motor y sus tests pasan por ruff como el resto, y el typecheck de la web avisa de variables sin usar.
+
+**M5 (código): respaldo de precios (20/10/2026).** Adaptado de Vibe-Trading (licencia MIT, ver `docs/TERCEROS.md`):
+- El enrutador pide a `proveedor_datos.precios_respaldo` lo que la fuente de precios no devuelve: valor a valor y entero, nunca días sueltos, para no coser dos series que ajustan distinto. Un respaldo sin clave o caído se salta y se anota; uno sin precios ajustados se rechaza.
+- Fuente `tiingo` (EE. UU., clave gratuita) y fuente `b3` (ficheros oficiales de Brasil, sin ajustar: solo para comprobar, no para rellenar).
+- `/health/data` dice qué fuentes han puesto los precios del día (`yfinance+tiingo`).
+- `verify_sources.py` gana `--fuente tiingo` y `--fuente b3`.
+- La lista de respaldo queda vacía hasta verificar Tiingo en el servidor (ver M5 arriba).
