@@ -121,6 +121,10 @@ def salud(bd_con_referencia, monkeypatch):
     """
     monkeypatch.setattr(health, "_hoy", lambda: HOY)
     with sa.orm.Session(bd_con_referencia) as s:
+        # Las divisas se comprueban contra un estado exacto: lo que haya dejado
+        # otro test en `fx_rate` (la ingesta carga tipos de cambio) chocaria con
+        # la clave primaria o cambiaria la ultima fecha de cada moneda.
+        s.execute(sa.text("DELETE FROM fx_rate"))
         mv = ModelVersion(name="equilibrado", version=VERSION, kind=ModelKind.RULES.value)
         s.add(mv)
         s.flush()

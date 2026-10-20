@@ -94,7 +94,5 @@ def actualizar_trinquete(
     El trinquete impide que el stop baje aunque el ATR se dispare y el calculo
     en bruto de hoy salga por debajo del de ayer.
     """
-    bruto = stop_dinamico_bruto(
-        max(posicion.maximo_cierre_local, cierre), atr_actual, cfg
-    )
+    bruto = stop_dinamico_bruto(max(posicion.maximo_cierre_local, cierre), atr_actual, cfg)
     return posicion.con_cierre(cierre, bruto)

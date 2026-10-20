@@ -16,24 +16,22 @@ from __future__ import annotations
 
 import datetime as dt
 from functools import lru_cache
-from typing import Annotated, Literal
+from typing import Literal
 
 import pandas as pd
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter
 from pydantic import BaseModel
 from sqlalchemy import distinct, func, select
 from sqlalchemy.orm import Session
 
-from ...config import settings
+from ...config import settings, version
 from ...db import session as db
 from ...db.models import DataFreshness, Score, Security, Signal
 from ...db.models.enums import AssetType
 from ...db.models.market_data import FxRate
-from ...db.session import sesion
+from ..deps import BD
 
 router = APIRouter(prefix="/health", tags=["health"])
-
-BD = Annotated[Session, Depends(sesion)]
 
 Estado = Literal["ok", "degradado", "caido"]
 
@@ -116,7 +114,7 @@ def salud() -> Salud:
     else:
         estado = "degradado"
 
-    return Salud(estado=estado, version=_version(), entorno=cfg.entorno, dependencias=deps)
+    return Salud(estado=estado, version=version(), entorno=cfg.entorno, dependencias=deps)
 
 
 @router.get(
@@ -312,12 +310,3 @@ def _frescura_calculada(db: Session, hoy: dt.date) -> list[Frescura]:
             )
         )
     return salida
-
-
-def _version() -> str:
-    from importlib.metadata import PackageNotFoundError, version
-
-    try:
-        return version("lalonja")
-    except PackageNotFoundError:
-        return "desconocida"

@@ -45,6 +45,7 @@ TRAMOS_BAJISTAS: list[tuple[str, str, str]] = [
     ("br", "2020-02-01", "2020-10-31"),
 ]
 
+
 #: Guion de sucesos por ticker. Cada uno fuerza una rama del motor.
 @dataclass(frozen=True, slots=True)
 class Suceso:
@@ -69,11 +70,11 @@ SUCESOS: list[Suceso] = [
 
 #: Empresas con guion fundamental especifico, para las trampas de signo.
 FUNDAMENTAL_ESPECIAL: dict[str, str] = {
-    "GRF.MC": "ebit_negativo",       # EV/EBIT invertido: no debe salir "barata"
-    "BAYN.DE": "ebitda_negativo",    # deuda/EBITDA cambia de signo: debe fallar
+    "GRF.MC": "ebit_negativo",  # EV/EBIT invertido: no debe salir "barata"
+    "BAYN.DE": "ebitda_negativo",  # deuda/EBITDA cambia de signo: debe fallar
     "TATASTEEL.NS": "patrimonio_negativo",  # ROE positivo por doble negativo
-    "MGLU3.SA": "se_rompe",          # deja de pasar el filtro a mitad
-    "CSNA3.SA": "caja_neta",         # deuda neta negativa: debe pasar
+    "MGLU3.SA": "se_rompe",  # deja de pasar el filtro a mitad
+    "CSNA3.SA": "caja_neta",  # deuda neta negativa: debe pasar
 }
 
 
@@ -182,9 +183,7 @@ class ProveedorSintetico(Proveedor):
                     continue
                 rng = _rng("referencia", ticker)
                 n = len(sesiones)
-                cierres = 50.0 * np.exp(
-                    np.cumsum(rng.normal(0.00028, 0.0068, n))
-                )
+                cierres = 50.0 * np.exp(np.cumsum(rng.normal(0.00028, 0.0068, n)))
                 marco.append(self._ohlcv(ticker, sesiones, cierres, es_indice=True))
                 continue
 
@@ -209,15 +208,19 @@ class ProveedorSintetico(Proveedor):
         if not marco:
             return pd.DataFrame(
                 columns=[
-                    "fecha", "ticker", "apertura", "maximo", "minimo",
-                    "cierre", "cierre_bruto", "volumen",
+                    "fecha",
+                    "ticker",
+                    "apertura",
+                    "maximo",
+                    "minimo",
+                    "cierre",
+                    "cierre_bruto",
+                    "volumen",
                 ]
             )
         return pd.concat(marco, ignore_index=True)
 
-    def _serie_valor(
-        self, ticker: str, mercado_id: str, sesiones: list[date]
-    ) -> np.ndarray:
+    def _serie_valor(self, ticker: str, mercado_id: str, sesiones: list[date]) -> np.ndarray:
         rng = _rng("precio", ticker)
         n = len(sesiones)
         indice = self._serie_indice(mercado_id, sesiones).to_numpy()
@@ -331,12 +334,8 @@ class ProveedorSintetico(Proveedor):
             n = len(dias)
             vol = 0.0055 if divisa == "BRL" else 0.0028
             deriva = 0.00020 if divisa == "BRL" else 0.00002
-            tasa = partida.get(divisa, 1.0) * np.exp(
-                np.cumsum(rng.normal(deriva, vol, n))
-            )
-            filas.append(
-                pd.DataFrame({"fecha": dias, "divisa": divisa, "tasa": tasa})
-            )
+            tasa = partida.get(divisa, 1.0) * np.exp(np.cumsum(rng.normal(deriva, vol, n)))
+            filas.append(pd.DataFrame({"fecha": dias, "divisa": divisa, "tasa": tasa}))
         if not filas:
             return pd.DataFrame(columns=["fecha", "divisa", "tasa"])
         return pd.concat(filas, ignore_index=True)
@@ -366,9 +365,7 @@ class ProveedorSintetico(Proveedor):
             valor = self._cfg.universo.valores_por_ticker.get(t)
             if valor is None:
                 continue
-            salida[t] = "Conglomerates" if t in fuera else inverso.get(
-                valor.sector_declarado
-            )
+            salida[t] = "Conglomerates" if t in fuera else inverso.get(valor.sector_declarado)
         return salida
 
     # -- fundamentales -----------------------------------------------------
@@ -416,7 +413,6 @@ class ProveedorSintetico(Proveedor):
                     # EBIT negativo: un percentil inverso ingenuo la pondria
                     # como la mas barata del mercado.
                     ebit = -abs(ebit) * 0.4
-                    ev = abs(ev)
                 elif especial == "ebitda_negativo" and ano >= ano_ini + 1:
                     # EBITDA negativo: deuda/EBITDA sale negativo y pasaria un
                     # "<= 3.0" ingenuo.

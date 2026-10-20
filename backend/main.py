@@ -11,7 +11,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from .api.v1 import router as router_v1
-from .config import settings
+from .config import settings, version
 
 DESCRIPCION = """
 Analisis cuantitativo de mercados. Los scores salen de un motor deterministico y
@@ -28,7 +28,7 @@ def crear_app() -> FastAPI:
     app = FastAPI(
         title="La Lonja Trading API",
         description=DESCRIPCION,
-        version="0.3.0",
+        version=version(),
         docs_url="/docs",
         openapi_url="/openapi.json",
     )

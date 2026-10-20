@@ -68,7 +68,9 @@ def estimar_fecha_publicacion(
     fin_periodo: date, mercado_id: str, cfg: Config, periodo: str
 ) -> date:
     """Cuando se supone conocido un periodo si el proveedor no lo dice."""
-    dias = cfg.reglas.datos.retraso(mercado_id, "trimestral" if periodo == "trimestral" else "anual")
+    dias = cfg.reglas.datos.retraso(
+        mercado_id, "trimestral" if periodo == "trimestral" else "anual"
+    )
     return fin_periodo + timedelta(days=dias)
 
 
@@ -146,7 +148,8 @@ def deuda_neta_de(balance: pd.DataFrame | None, columna) -> float | None:
     if total is not None:
         caja = _valor(
             _primera_fila(
-                balance, "Cash And Cash Equivalents",
+                balance,
+                "Cash And Cash Equivalents",
                 "Cash Cash Equivalents And Short Term Investments",
             ),
             columna,
@@ -334,9 +337,10 @@ class ProveedorYFinance(Proveedor):
                 t = yf.Ticker(ticker)
                 # Cada estado es una peticion aparte, y cada una puede fallar
                 # por el limite de Yahoo: se reintentan igual que los precios.
-                resultados = self._reintentar(lambda: t.income_stmt)
-                balance = self._reintentar(lambda: t.balance_sheet)
-                caja = self._reintentar(lambda: t.cashflow)
+                # Las lambdas se llaman en esta misma vuelta: `t` no cambia.
+                resultados = self._reintentar(lambda: t.income_stmt)  # noqa: B023
+                balance = self._reintentar(lambda: t.balance_sheet)  # noqa: B023
+                caja = self._reintentar(lambda: t.cashflow)  # noqa: B023
             except Exception:  # noqa: BLE001 - se anota y se sigue con el resto
                 fallidos.append(ticker)
                 continue
@@ -356,7 +360,9 @@ class ProveedorYFinance(Proveedor):
             # puntual, no el numero de acciones de hoy. Con el se calcula el EV
             # en la fecha de decision.
             acciones_f = _primera_fila(
-                balance, "Ordinary Shares Number", "Share Issued",
+                balance,
+                "Ordinary Shares Number",
+                "Share Issued",
                 "Common Stock Shares Outstanding",
             )
 
@@ -370,9 +376,7 @@ class ProveedorYFinance(Proveedor):
 
             for columna in resultados.columns:
                 fin_periodo = pd.Timestamp(columna).date()
-                publicacion = estimar_fecha_publicacion(
-                    fin_periodo, mercado_id, self._cfg, "anual"
-                )
+                publicacion = estimar_fecha_publicacion(fin_periodo, mercado_id, self._cfg, "anual")
                 ventas = _valor(ventas_f, columna)
                 ebit = _valor(ebit_f, columna)
                 ebitda = _valor(ebitda_f, columna)

@@ -65,13 +65,15 @@ class Instantanea:
         self.fundamentales = _normalizar_fundamentales(self.fundamentales)
         self.fx = _normalizar_fx(self.fx)
 
-    def preparar(self, cfg) -> "Instantanea":
+    def preparar(self, cfg) -> Instantanea:
         """Precalcula indicadores e indices. Se hace una vez por backtest."""
         self._series = construir_series(self.precios, cfg)
         self._fx = construir_fx(self.fx)
         self._fund = (
-            {str(t): g.reset_index(drop=True)
-             for t, g in self.fundamentales.groupby("ticker", sort=False)}
+            {
+                str(t): g.reset_index(drop=True)
+                for t, g in self.fundamentales.groupby("ticker", sort=False)
+            }
             if not self.fundamentales.empty
             else {}
         )
@@ -90,7 +92,7 @@ class Instantanea:
             raise ErrorDatos("la instantanea no tiene precios")
         return self.precios["fecha"].min(), self.precios["fecha"].max()
 
-    def vista(self, fecha_corte: date) -> "VistaPuntual":
+    def vista(self, fecha_corte: date) -> VistaPuntual:
         """La vista de lo que se conocia al cierre de `fecha_corte`."""
         if not self._preparada:
             raise ErrorDatos("la instantanea no esta preparada; llama a preparar(cfg)")
@@ -131,12 +133,11 @@ class Instantanea:
         ).to_json(directorio / "manifiesto.json")
 
     @classmethod
-    def cargar(cls, directorio: Path) -> "Instantanea":
+    def cargar(cls, directorio: Path) -> Instantanea:
         directorio = Path(directorio)
         if not (directorio / "precios.parquet").is_file():
-            raise ErrorDatos(
-                f"no hay datos en {directorio}. Ejecuta primero `estrategia datos`."
-            )
+            raise ErrorDatos(f"no hay datos en {directorio}. Ejecuta primero `estrategia datos`.")
+
         def leer(nombre: str) -> pd.DataFrame:
             ruta = directorio / f"{nombre}.parquet"
             return pd.read_parquet(ruta) if ruta.is_file() else pd.DataFrame()
@@ -144,9 +145,7 @@ class Instantanea:
         sectores_df = leer("sectores")
         manifiesto = {}
         if (directorio / "manifiesto.json").is_file():
-            manifiesto = pd.read_json(
-                directorio / "manifiesto.json", typ="series"
-            ).to_dict()
+            manifiesto = pd.read_json(directorio / "manifiesto.json", typ="series").to_dict()
         descarga = str(manifiesto.get("fecha_descarga") or "")
         incompletos = str(manifiesto.get("incompletos") or "")
         return cls(
@@ -154,8 +153,9 @@ class Instantanea:
             fundamentales=leer("fundamentales"),
             fx=leer("fx"),
             sectores=(
-                dict(zip(sectores_df["ticker"], sectores_df["sector"]))
-                if not sectores_df.empty else {}
+                dict(zip(sectores_df["ticker"], sectores_df["sector"], strict=True))
+                if not sectores_df.empty
+                else {}
             ),
             fecha_descarga=date.fromisoformat(descarga) if descarga else None,
             origen=str(manifiesto.get("origen", "desconocido")),
@@ -166,12 +166,11 @@ class Instantanea:
 class VistaPuntual:
     """Lo que se sabia en una fecha. No devuelve nada posterior."""
 
-    __slots__ = ("_inst", "_corte", "_corte_ord", "_maxima")
+    __slots__ = ("_inst", "_corte", "_maxima")
 
     def __init__(self, instantanea: Instantanea, fecha_corte: date) -> None:
         self._inst = instantanea
         self._corte = fecha_corte
-        self._corte_ord = fecha_corte.toordinal()
         self._maxima: date | None = None
 
     @property
@@ -210,15 +209,23 @@ class VistaPuntual:
         """Historico hasta el corte como DataFrame. Comodo, pero lento.
 
         El bucle del backtest no lo usa: va por `serie()` y posiciones. Se
-        mantiene para el panel, los informes y los tests, donde la claridad
-        importa mas que la velocidad.
+        mantiene para los tests, donde la claridad importa mas que la
+        velocidad.
         """
         serie = self.serie(ticker)
         i = self.posicion_hasta(ticker)
         if serie is None or i < 0:
             return pd.DataFrame(
-                columns=["fecha", "ticker", "apertura", "maximo", "minimo",
-                         "cierre", "cierre_bruto", "volumen"]
+                columns=[
+                    "fecha",
+                    "ticker",
+                    "apertura",
+                    "maximo",
+                    "minimo",
+                    "cierre",
+                    "cierre_bruto",
+                    "volumen",
+                ]
             )
         desde = 0 if sesiones is None else max(0, i + 1 - sesiones)
         return pd.DataFrame(
@@ -267,11 +274,6 @@ class VistaPuntual:
             }
         )
 
-    def tickers_con_precio(self) -> list[str]:
-        return sorted(
-            t for t in self._inst.series if self._inst.series[t].posicion(self._corte) >= 0
-        )
-
     # -- fundamentales -----------------------------------------------------
 
     def fundamentales(self, ticker: str) -> pd.DataFrame:
@@ -288,13 +290,6 @@ class VistaPuntual:
             self._anotar(recorte["fecha_publicacion"].max())
         return recorte.reset_index(drop=True)
 
-    def ultimo_fundamental(self, ticker: str, periodo: str = "anual") -> pd.Series | None:
-        df = self.fundamentales(ticker)
-        if df.empty:
-            return None
-        df = df[df["periodo"] == periodo]
-        return None if df.empty else df.iloc[-1]
-
     # -- divisas -----------------------------------------------------------
 
     def fx(self, divisa: str, fecha: date, divisa_base: str = "EUR") -> float:
@@ -307,8 +302,7 @@ class VistaPuntual:
             return 1.0
         if fecha > self._corte:
             raise ErrorAnticipacion(
-                f"se ha pedido el cambio de {divisa} en {fecha}, posterior al "
-                f"corte {self._corte}"
+                f"se ha pedido el cambio de {divisa} en {fecha}, posterior al corte {self._corte}"
             )
         serie = self._inst._fx.get(divisa)
         if serie is None:

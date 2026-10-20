@@ -71,13 +71,6 @@ export type Market = {
   securities: number;
 };
 
-export type Health = {
-  estado: "ok" | "degradado" | "caido";
-  version: string;
-  entorno: string;
-  dependencias: { nombre: string; estado: string; detalle: string }[];
-};
-
 // --- Bloques del analisis (§27) -------------------------------------------
 
 export type Frescura = { as_of: string; dias: number };
@@ -248,8 +241,6 @@ export type RespuestaScreener = {
   total: number;
   filas: FilaScreener[];
 };
-
-export type Filtro = { campo: string; operador: string; valor: unknown };
 
 export function screener(cuerpo: Record<string, unknown>): Promise<RespuestaScreener> {
   return api<RespuestaScreener>("/screener", {

@@ -35,7 +35,6 @@ services:
       REDIS_URL: redis://redis:6379/0
       JWT_SECRET: ${JWT_SECRET:?JWT_SECRET es obligatorio en produccion}
       ENTORNO: produccion
-      DEBUG: "false"
       CORS_ORIGENES: '["https://${DOMINIO}"]'
       SEC_USER_AGENT: ${SEC_USER_AGENT}
       # Opcional: sin clave, las explicaciones con IA se declaran no

@@ -56,7 +56,6 @@ COBERTURA_MINIMA = 0.80
 #: proyecto ya tiene una definicion de "este dato ya no dice nada del presente" y
 #: dos definiciones distintas de lo mismo acabarian divergiendo.
 DIAS_PARA_RANCIO = {"precios": 5, "divisas": 5}
-DIAS_PARA_RANCIO_POR_DEFECTO = 5
 
 #: Anios de historico que se descargan. **Un solo sitio**: lo usan la ingesta,
 #: el planificador y el script de linea de ordenes, y con el valor repartido por
@@ -84,7 +83,8 @@ def anos_antes(fecha: dt.date, anos: int) -> dt.date:
         return fecha.replace(year=fecha.year - anos, day=28)
 
 
-def _umbrales_rancio(cfg) -> dict[str, int]:
+def umbrales_rancio(cfg) -> dict[str, int]:
+    """Dias sin dato nuevo tras los cuales cada conjunto se marca rancio."""
     return {**DIAS_PARA_RANCIO, "fundamentales": cfg.reglas.fundamental.antiguedad_maxima_dias}
 
 
@@ -382,7 +382,7 @@ def ejecutar(
     # Antes de descargar nada: media hora de descarga para acabar rechazando la
     # escritura no le sirve a nadie.
     comprobar_procedencia(sesion, enrutador.nombre_de("precios"))
-    umbrales = _umbrales_rancio(cfg)
+    umbrales = umbrales_rancio(cfg)
     resultados: list[Resultado] = []
 
     indices = cfg.reglas.tecnico.indices_regimen

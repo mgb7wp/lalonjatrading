@@ -21,10 +21,10 @@ distintas, y cruzarla rompe tests.
 
 | Concepto | Qué es | Dónde vive |
 |---|---|---|
-| **Dato** | Hecho objetivo de un proveedor externo | `core/datos/`, tablas `price`, `fundamental_snapshot` |
-| **Indicador** | Cálculo matemático sobre datos | `core/indicadores.py` |
-| **Feature** | Variable preparada para un modelo, con su versión | `ml/features/`, Parquet versionado |
-| **Modelo** | Algoritmo (reglas o estadístico) con versión y parámetros | `core/scoring/`, `ml/models/`, tabla `model_version` |
+| **Dato** | Hecho objetivo de un proveedor externo | `core/estrategia/datos/`, tablas `price`, `fundamental_snapshot` |
+| **Indicador** | Cálculo matemático sobre datos | `core/estrategia/indicadores.py`, `core/estrategia/catalogo.py` |
+| **Feature** | Variable preparada para un modelo, con su versión | `ml/` y tabla `feature_snapshot`; sin construir hasta cumplir D-7 |
+| **Modelo** | Algoritmo (reglas o estadístico) con versión y parámetros | `core/estrategia/scoring.py`, `config/modelos.yaml`, tabla `model_version` |
 | **Score** | Salida cuantitativa del modelo, 0-100 percentil de cohorte | tabla `score` |
 | **Señal** | Interpretación del score con umbrales configurables | tabla `signal` |
 | **Explicación** | Redacción del score en lenguaje natural | tabla `explanation` (cacheada) |

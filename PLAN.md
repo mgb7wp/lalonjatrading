@@ -210,3 +210,10 @@ Todo esto es necesario antes de cobrar, y no antes:
 - R4: rankings, screener, cartera y listas elegían la versión más nueva del modelo aunque no tuviera scores de la fecha pedida; tras un cambio de versión, las consultas de fechas anteriores salían vacías. La ficha comparaba el score con el de otra versión como si fuera un cambio del valor.
 - R5: la cartera valorada a una fecha pasada usaba el precio ajustado por dividendos posteriores en lugar del de mercado.
 - Anotado en S1, S2, S3, S4, O1 y "Aparcado" lo que queda pendiente.
+
+**L: limpieza del código (20/10/2026).** Sin cambiar ningún resultado (un backtest sintético da la misma curva, las mismas operaciones y el mismo informe que antes):
+- Fuera el panel de Streamlit (`panel/app.py`), con su ajuste `panel.modo_publico`, y la guía de despliegue vieja (`DESPLIEGUE.md`, Cloudflare Pages y un túnel hacia el panel). Lo sustituyen la web y `docs/DEPLOYMENT.md`.
+- Fuera el código que no llamaba nadie: en el motor, funciones del calendario y del almacén, dos motivos de rechazo que nunca se emitían, una tabla de `implementacion.yaml` que no se leía y una línea sin efecto del proveedor sintético; en la plataforma, una puerta de plan, un generador de tokens, el enum `Pillar` y los ajustes `DEBUG`, `DATOS_DIR` y `ALPHAVANTAGE_API_KEY`; en la web, tres componentes, dos tipos y las reglas de CSS sin uso.
+- Lo duplicado, en un solo sitio: `backend/api/consultas.py` junta lo que compartían rankings, screener, listas, carteras y la ficha (antes copiado o importado "de prestado"), y el alias `BD` deja de definirse en siete módulos.
+- La documentación de la API publica la versión real del paquete (decía 0.3.0), el 422 usa el nombre nuevo de Starlette (los tests ya no dan avisos), y `docs/` deja de apuntar a rutas que no existían.
+- El motor y sus tests pasan por ruff como el resto, y el typecheck de la web avisa de variables sin usar.

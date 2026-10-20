@@ -231,11 +231,6 @@ textarea {
  * como el propio export.
  */
 
-.envoltorio {
-  max-width: 1240px;
-  margin: 0 auto;
-}
-
 .rejilla {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(230px, 1fr));
@@ -312,48 +307,6 @@ tbody tr:hover {
   font-variant-numeric: tabular-nums;
 }
 
-/* El medidor del score: UN solo tono, del oro tenue al oro pleno. Sigue sin ser
- * un semaforo — un percentil no es un aprobado ni un suspenso. */
-.medidor {
-  display: flex;
-  align-items: center;
-  gap: 9px;
-}
-.medidor-canal {
-  display: block;
-  flex: 1;
-  min-width: 60px;
-  height: 6px;
-  background: var(--borde);
-  border-radius: 3px;
-  overflow: hidden;
-}
-.medidor-relleno {
-  display: block;
-  height: 100%;
-  border-radius: 0 3px 3px 0;
-}
-.medidor-valor {
-  font-family: "IBM Plex Mono", ui-monospace, monospace;
-  font-weight: 500;
-  font-variant-numeric: tabular-nums;
-  min-width: 26px;
-}
-
-.insignia {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  border: 1px solid;
-  border-radius: var(--radio-2);
-  padding: 3px 9px;
-  font-size: 12px;
-  white-space: nowrap;
-}
-.insignia-glifo {
-  font-size: 0.85em;
-}
-
 /* Un dato que falta se declara, con su motivo: nunca un hueco mudo. */
 .bloque-falta {
   color: var(--tinta);
@@ -393,17 +346,7 @@ tbody tr:hover {
   flex-wrap: wrap;
   align-items: flex-end;
 }
-.formulario-vertical {
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-  align-items: stretch;
-}
-.formulario-vertical button {
-  align-self: flex-start;
-}
-.formulario label,
-.formulario-vertical label {
+.formulario label {
   display: flex;
   flex-direction: column;
   gap: 5px;
@@ -501,39 +444,13 @@ section {
   }
 }
 
-/* La portada lleva 48 px de margen lateral fijo, que en un movil de 390 deja
- * 294 de contenido y saca la cabecera de la pantalla. */
-.portada-seccion {
-  padding-left: 48px;
-  padding-right: 48px;
-}
-
-@media (max-width: 760px) {
-  .portada-seccion {
-    padding-left: 18px;
-    padding-right: 18px;
-  }
-  .portada-cabecera {
-    padding-left: 18px !important;
-    padding-right: 18px !important;
-    gap: 12px !important;
-  }
-  .portada-cabecera nav {
-    margin-left: 0 !important;
-    order: 3;
-    width: 100%;
-  }
-}
-
 /* === Armazón y piezas de la v2 ===========================================
  * Traducción de los estilos en línea de «LaLonja Trading v2.dc.html».
  * Escritorio por defecto; por debajo de 768 px, la vista móvil (diseñada a 390 px).
  */
 
-.muted { color: var(--color-neutral-700); }
 .kicker { font-family: var(--font-mono); font-size: 11px; letter-spacing: .14em; color: var(--color-accent-700); }
 .label-mono { font-family: var(--font-mono); font-size: 10px; letter-spacing: .16em; color: var(--color-neutral-700); }
-.small-note { margin: 0; font-size: 11px; color: var(--color-neutral-700); }
 .visually-hidden { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
 .desk-only { display: revert; }
 .mob-only { display: none !important; }
@@ -730,8 +647,6 @@ section {
 .skeleton-rows { display: grid; gap: 8px; }
 .skeleton-rows > div { height: 34px; border-bottom: 1px solid var(--color-divider); background: linear-gradient(90deg, var(--color-neutral-200) 0 30%, transparent 30% 34%, var(--color-neutral-200) 34% 70%, transparent 70%); }
 @media (max-width: 767px) { .skeleton-cells { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
-.unavailable { padding: 14px; font-size: 13px; border: 1px dashed var(--color-neutral-500); background: var(--color-bg); }
-.unavailable strong { font-family: var(--font-mono); font-weight: 600; font-size: 11px; letter-spacing: .1em; margin-right: 6px; }
 .pending { padding: 28px; border: 1px dashed var(--color-neutral-500); max-width: 640px; background: var(--color-bg); font-size: 14px; }
 
 /* ─── medidor, señal, cifra ─── */
@@ -775,7 +690,6 @@ section {
 .panel-box-head h2.sm { font-size: 20px; }
 .panel-box-head a { font-size: 13px; }
 .panel-box .note { padding: 8px 14px; font-size: 11px; color: var(--color-neutral-700); }
-.panel-box .unavailable { margin: 14px; }
 
 .rank-row, .rank-headrow {
   display: grid; grid-template-columns: 24px minmax(0, 1.3fr) 90px 170px 130px 70px; gap: 10px; align-items: center;
@@ -859,12 +773,6 @@ a.seg-opt.is-on { background: var(--color-accent); color: var(--color-bg); }
 .legal-more p { margin: 6px 0 0; max-width: 110ch; color: var(--color-neutral-700); }
 
 /* Piezas v2 usadas por las pantallas antiguas */
-.score-pill { display: inline-grid; grid-template-columns: 24px 60px; gap: 8px; align-items: center; justify-content: end; }
-.score-pill .mono { font-weight: 600; text-align: right; }
-.kpi { display: grid; gap: 8px; align-content: start; padding: 14px; background: var(--color-bg); border: 1px solid var(--color-divider); }
-.kpi.is-accent { border-top: 2px solid var(--color-text); }
-.kpi-n { font-family: var(--font-mono); font-size: 26px; font-weight: 500; line-height: 1.1; letter-spacing: -0.02em; }
-.kpi-note { font-size: 12px; color: var(--color-neutral-700); }
 .panel-box.is-accent { border-top: 2px solid var(--color-text); }
 .delta.sube { color: var(--sube); }
 .delta.baja { color: var(--baja); }

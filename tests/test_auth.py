@@ -308,7 +308,7 @@ def test_los_limites_de_plan_se_leen_de_un_unico_sitio():
     cae al mas restrictivo.
     """
     from backend.db.models.enums import SubscriptionPlan
-    from backend.limites import LIMITES, al_menos, limites_de
+    from backend.limites import LIMITES, limites_de
 
     assert set(LIMITES) == {p.value for p in SubscriptionPlan}
     for plan in SubscriptionPlan:
@@ -316,8 +316,6 @@ def test_los_limites_de_plan_se_leen_de_un_unico_sitio():
 
     assert limites_de("plan-que-no-existe") is LIMITES["free"], "cae al mas restrictivo"
     assert limites_de("free").carteras < limites_de("pro").carteras < limites_de("premium").carteras
-    assert al_menos("premium", SubscriptionPlan.FREE)
-    assert not al_menos("free", SubscriptionPlan.PREMIUM)
 
 
 def test_free_no_gasta_tokens_de_ia():

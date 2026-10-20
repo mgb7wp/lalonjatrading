@@ -159,13 +159,6 @@ referencias_informe:
   - msci_world_eur
   - msci_emerging_markets_eur
 
-# AÑADIDO v0.4: el panel queda accesible desde internet sin autenticación, así
-# que conviene que no ofrezca a un desconocido un botón que lanza treinta
-# backtests en la máquina de uno. En modo público se desactiva ese botón y se
-# ocultan las rutas locales; el análisis sigue disponible por línea de comandos.
-panel:
-  modo_publico: true
-
 # AÑADIDO v0.3: el documento pide el ratio de Sharpe pero no fija ni la tasa
 # libre de riesgo ni la periodicidad. Con cinco calendarios distintos, las
 # posiciones se quedan congeladas en los festivos ajenos, lo que hunde la

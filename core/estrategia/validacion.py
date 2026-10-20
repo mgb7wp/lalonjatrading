@@ -24,7 +24,7 @@ import json
 from dataclasses import dataclass
 from datetime import date, datetime
 from pathlib import Path
-from typing import Any, MutableMapping
+from typing import Any
 
 import pandas as pd
 
@@ -125,28 +125,10 @@ class RegistroConsultas:
     def anotar(self, motivo: str) -> int:
         """Registra una consulta y devuelve cuantas van."""
         consultas = self.leer()
-        consultas.append(
-            {"fecha": datetime.now().isoformat(timespec="seconds"), "motivo": motivo}
-        )
+        consultas.append({"fecha": datetime.now().isoformat(timespec="seconds"), "motivo": motivo})
         self._ruta.parent.mkdir(parents=True, exist_ok=True)
-        self._ruta.write_text(
-            json.dumps(consultas, indent=2, ensure_ascii=False), encoding="utf-8"
-        )
+        self._ruta.write_text(json.dumps(consultas, indent=2, ensure_ascii=False), encoding="utf-8")
         return len(consultas)
-
-    def anotar_una_vez(self, sesion: MutableMapping, clave: str, motivo: str) -> bool:
-        """Anota la consulta si esta sesion no la habia anotado ya.
-
-        El panel se reejecuta entero con cada clic: sin esto, mirar una vez la
-        validacion y mover un filtro contaria como diez consultas. `sesion` es
-        el estado de la sesion (en el panel, `st.session_state`). Devuelve si
-        ha anotado.
-        """
-        if sesion.get(clave):
-            return False
-        self.anotar(motivo)
-        sesion[clave] = True
-        return True
 
 
 # --------------------------------------------------------------------------
@@ -200,13 +182,17 @@ def variantes(cfg: Config) -> list[tuple[str, str, Config]]:
                 # extremo no es una estrategia valida. Se salta y se dice.
                 continue
             salida.append(
-                (ruta, sentido, ConfigCls(
-                    reglas=reglas,
-                    implementacion=cfg.implementacion,
-                    universo=cfg.universo,
-                    impuestos=cfg.impuestos,
-                    dir_config=cfg.dir_config,
-                ))
+                (
+                    ruta,
+                    sentido,
+                    ConfigCls(
+                        reglas=reglas,
+                        implementacion=cfg.implementacion,
+                        universo=cfg.universo,
+                        impuestos=cfg.impuestos,
+                        dir_config=cfg.dir_config,
+                    ),
+                )
             )
     return salida
 
@@ -255,9 +241,7 @@ def sensibilidad(
 
     # Un parametro cuyo desplazamiento no mueve nada estaba inactivo. Decirlo
     # evita leer como robustez lo que era irrelevancia.
-    movimiento = df.groupby("parametro")["delta_anualizada"].apply(
-        lambda s: float(s.abs().max())
-    )
+    movimiento = df.groupby("parametro")["delta_anualizada"].apply(lambda s: float(s.abs().max()))
     df["actividad"] = df["parametro"].map(
         lambda p: "activo" if movimiento.get(p, 0.0) > 1e-6 else "inactivo"
     )

@@ -28,8 +28,6 @@ class MotivoRechazo(enum.StrEnum):
 
     YA_EN_CARTERA = "ya_en_cartera"
     REGIMEN_APAGADO = "regimen_apagado"
-    HISTORIAL_INSUFICIENTE = "historial_insuficiente"
-    FALLA_TECNICO = "falla_tecnico"
     FALLA_FUNDAMENTAL = "falla_fundamental"
     SIN_DATO_FUNDAMENTAL = "sin_dato_fundamental"
     FUNDAMENTAL_CADUCADO = "fundamental_caducado"
@@ -203,7 +201,7 @@ class Posicion:
         """El mas alto de los dos stops, como pide el documento."""
         return max(self.stop_inicial_local, self.stop_dinamico_local)
 
-    def con_cierre(self, cierre: float, stop_dinamico_bruto: float) -> "Posicion":
+    def con_cierre(self, cierre: float, stop_dinamico_bruto: float) -> Posicion:
         """Actualiza el trailing con el cierre del dia.
 
         El stop dinamico lleva trinquete: nunca baja, aunque el ATR se dispare
@@ -217,7 +215,7 @@ class Posicion:
             sesiones_sin_datos=0,
         )
 
-    def sin_datos(self) -> "Posicion":
+    def sin_datos(self) -> Posicion:
         return replace(self, sesiones_sin_datos=self.sesiones_sin_datos + 1)
 
 
@@ -272,8 +270,8 @@ class Operacion:
 class Evento:
     """Una linea del registro estructurado del backtest.
 
-    El informe y el panel se derivan de estos eventos y no de las tripas del
-    motor, para poder reconstruir despues por que una semana hizo lo que hizo.
+    El informe se deriva de estos eventos y no de las tripas del motor, para
+    poder reconstruir despues por que una semana hizo lo que hizo.
     """
 
     fecha: date

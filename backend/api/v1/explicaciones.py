@@ -32,24 +32,21 @@ from sqlalchemy.orm import Session
 from ... import explicaciones as ia
 from ...config import settings
 from ...db.models import Explanation, Security
-from ...db.session import sesion
 from ...limites import gastar_explicacion_ia
-from ..deps import Actual, MisLimites
+from ..consultas import DIAS_VARIACION
+from ..deps import BD, Actual, MisLimites
 from .stocks import (
-    DIAS_CAMBIO,
     Bloque,
     Valor,
-    _bloque_explicacion,
-    _bloque_score,
-    _bloque_senal,
-    _score_en,
+    bloque_explicacion,
+    bloque_score,
+    bloque_senal,
+    score_en,
 )
 
 log = logging.getLogger("explicaciones")
 
 router = APIRouter(prefix="/stocks", tags=["ia"])
-
-BD = Annotated[Session, Depends(sesion)]
 
 
 @lru_cache
@@ -148,20 +145,20 @@ def explicacion(
     def respuesta(bloque: Bloque[ExplicacionIA]) -> RespuestaExplicacion:
         return RespuestaExplicacion(ticker=valor.ticker, fecha_corte=corte, explicacion=bloque)
 
-    puntuacion = _score_en(bd, valor, modelo, corte)
-    score = _bloque_score(puntuacion, modelo, corte)
+    puntuacion = score_en(bd, valor, modelo, corte)
+    score = bloque_score(puntuacion, modelo, corte)
     if puntuacion is None or score.datos is None:
         return respuesta(Bloque.falta("sin score no hay nada que explicar"))
 
-    senal = _bloque_senal(bd, valor, modelo, corte)
-    exp = _bloque_explicacion(bd, valor, puntuacion, modelo, corte)
+    senal = bloque_senal(bd, valor, modelo, corte)
+    exp = bloque_explicacion(bd, valor, puntuacion, modelo, corte)
     entrada = ia.construir_entrada(
         valor=Valor.model_validate(valor).model_dump(),
         score=score.datos.model_dump(),
         explicacion=exp.datos.model_dump() if exp.datos else None,
         senal=senal.datos.model_dump() if senal.datos else None,
         motivo_sin_senal=senal.motivo,
-        dias_cambio=DIAS_CAMBIO,
+        dias_cambio=DIAS_VARIACION,
     )
     clave = ia.hash_entrada(entrada)
 

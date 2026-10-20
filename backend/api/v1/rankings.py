@@ -29,22 +29,23 @@ import datetime as dt
 import enum
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, HTTPException, Query
 from pydantic import BaseModel
-from sqlalchemy import Select, and_, func, select
-from sqlalchemy.orm import Session
+from sqlalchemy import Select, select
 
-from ...db.models import ModelVersion, Price, Score, Security
+from ...db.models import Score, Security
 from ...db.models.enums import AssetType
-from ...db.session import sesion
+from ..consultas import (
+    DIAS_VARIACION,
+    deduplicar,
+    perfil,
+    ultima_fecha_puntuada,
+    version_puntuada,
+    volumenes,
+)
+from ..deps import BD
 
 router = APIRouter(prefix="/rankings", tags=["rankings"])
-
-BD = Annotated[Session, Depends(sesion)]
-
-#: Dias hacia atras para los rankings de variacion, igual que en senales y en
-#: el endpoint de analisis. Un solo numero para "lo que ha cambiado ultimamente".
-DIAS_VARIACION = 30
 
 TOPE_MAXIMO = 100
 
@@ -105,45 +106,6 @@ class RespuestaRanking(BaseModel):
     puestos: list[Puesto]
 
 
-def _version(bd: Session, modelo: str) -> ModelVersion | None:
-    """Si el perfil existe, en cualquier version. Solo decide el 404."""
-    return bd.scalars(
-        select(ModelVersion).where(ModelVersion.name == modelo).order_by(ModelVersion.id.desc())
-    ).first()
-
-
-def version_puntuada(
-    bd: Session, modelo: str, corte: dt.date
-) -> tuple[ModelVersion | None, dt.date | None]:
-    """La version del perfil con los scores mas recientes en o antes del corte, y su fecha.
-
-    No vale "la version mas nueva". `cargar_modelos` da de alta una fila por
-    (nombre, version), asi que conviven varias, y la nueva solo tiene scores
-    desde el dia en que entro: con ella, cualquier consulta de una fecha
-    anterior salia vacia aunque ese dia se hubiera publicado un ranking. Si un
-    mismo dia tiene scores de dos versiones, manda la mas reciente. Es el mismo
-    criterio con el que `workers/pipeline/senales.py` elige version al emitir.
-    """
-    fila = bd.execute(
-        select(ModelVersion, Score.date)
-        .join(Score, Score.model_version_id == ModelVersion.id)
-        .where(ModelVersion.name == modelo, Score.date <= corte)
-        .order_by(Score.date.desc(), ModelVersion.id.desc())
-        .limit(1)
-    ).first()
-    return (None, None) if fila is None else (fila[0], fila[1])
-
-
-def _fecha_datos(bd: Session, version_id: int, corte: dt.date) -> dt.date | None:
-    """Ultima fecha con scores en o antes del corte. Nunca posterior."""
-    return bd.scalars(
-        select(Score.date)
-        .where(Score.model_version_id == version_id, Score.date <= corte)
-        .order_by(Score.date.desc())
-        .limit(1)
-    ).first()
-
-
 def _base(version_id: int, fecha: dt.date, mercado: str | None) -> Select:
     """Scores de esa fecha unidos a su valor, ya sin indices ni bajas."""
     consulta = (
@@ -159,43 +121,6 @@ def _base(version_id: int, fecha: dt.date, mercado: str | None) -> Select:
     if mercado:
         consulta = consulta.where(Security.market_id == mercado)
     return consulta
-
-
-def _volumenes(bd: Session, fecha: dt.date) -> dict[int, float]:
-    """Ultimo volumen conocido de cada valor, para desempatar en la dedup."""
-    ultimo = (
-        select(Price.security_id, func.max(Price.date).label("fecha"))
-        .where(Price.date <= fecha)
-        .group_by(Price.security_id)
-        .subquery()
-    )
-    filas = bd.execute(
-        select(Price.security_id, Price.volume).join(
-            ultimo,
-            and_(Price.security_id == ultimo.c.security_id, Price.date == ultimo.c.fecha),
-        )
-    ).all()
-    return {sid: float(vol or 0) for sid, vol in filas}
-
-
-def _deduplicar(filas: list, volumenes: dict[int, float]) -> list:
-    """Una linea por empresa (D-12).
-
-    Se agrupa por `company_id`. Los valores sin `company_id` no se agrupan entre
-    si: sin identificador comun, meterlos en el mismo saco uniria empresas
-    distintas, que es peor que dejar un duplicado.
-    """
-    mejor: dict[object, tuple] = {}
-    for score, valor in filas:
-        clave = valor.company_id or f"_sin_empresa_{valor.id}"
-        candidato = (
-            1 if valor.is_primary_listing else 0,
-            volumenes.get(valor.id, 0.0),
-        )
-        actual = mejor.get(clave)
-        if actual is None or candidato > actual[0]:
-            mejor[clave] = (candidato, (score, valor))
-    return [v[1] for v in mejor.values()]
 
 
 def _puesto(i: int, score: Score, valor: Security, valor_ordenado, anterior=None) -> Puesto:
@@ -231,7 +156,7 @@ def ranking(
         puestos=[],
     )
 
-    if _version(bd, modelo) is None:
+    if perfil(bd, modelo) is None:
         raise HTTPException(status_code=404, detail=f"no existe el modelo '{modelo}'")
 
     version, dia = version_puntuada(bd, modelo, corte)
@@ -242,11 +167,10 @@ def ranking(
     if not filas:
         return vacio
 
-    volumenes = _volumenes(bd, dia)
-    filas = _deduplicar(filas, volumenes)
+    filas = deduplicar(filas, volumenes(bd, dia))
 
     if tipo in VARIACION:
-        previo_dia = _fecha_datos(bd, version.id, dia - dt.timedelta(days=DIAS_VARIACION))
+        previo_dia = ultima_fecha_puntuada(bd, version.id, dia - dt.timedelta(days=DIAS_VARIACION))
         if previo_dia is None or previo_dia == dia:
             # Sin dos fotos no hay variacion. Devolver el ranking por score seria
             # responder otra pregunta sin avisar.

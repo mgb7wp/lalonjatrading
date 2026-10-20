@@ -139,9 +139,7 @@ def parsear_fundamentales(
         else:
             from .yfinance_proveedor import estimar_fecha_publicacion
 
-            presentacion = estimar_fecha_publicacion(
-                fin_periodo, mercado_id, cfg, "anual"
-            )
+            presentacion = estimar_fecha_publicacion(fin_periodo, mercado_id, cfg, "anual")
             origen_fecha = "estimada_retraso"
 
         ventas = _numero(bloque_res, CAMPOS["ventas"])
@@ -174,9 +172,7 @@ def parsear_fundamentales(
                 "roe": (neto / patrimonio)
                 if neto is not None and patrimonio not in (None, 0)
                 else None,
-                "margen_operativo": (ebit / ventas)
-                if ebit is not None and ventas
-                else None,
+                "margen_operativo": (ebit / ventas) if ebit is not None and ventas else None,
                 "ventas": ventas,
                 "flujo_caja_libre": flujo,
                 "deuda_neta": (deuda - (efectivo or 0.0)) if deuda is not None else None,
@@ -252,9 +248,7 @@ class ProveedorEODHD(ProveedorFundamentales):
             if exc.code == 401:
                 raise ErrorDatos("EODHD ha rechazado la clave de API") from exc
             if exc.code == 402:
-                raise ErrorDatos(
-                    "EODHD dice que el plan actual no cubre esta peticion"
-                ) from exc
+                raise ErrorDatos("EODHD dice que el plan actual no cubre esta peticion") from exc
             if exc.code == 404:
                 raise ErrorDatos(f"EODHD no conoce {ruta}") from exc
             raise ErrorDatos(f"EODHD ha respondido {exc.code} a {ruta}") from exc
@@ -291,9 +285,7 @@ class ProveedorEODHD(ProveedorFundamentales):
             payload = self.ficha(ticker)
             if not payload:
                 continue
-            for fila in parsear_fundamentales(
-                payload, ticker, mercado_id, self._cfg, hoy
-            ):
+            for fila in parsear_fundamentales(payload, ticker, mercado_id, self._cfg, hoy):
                 # Se filtra por fecha de publicacion y no por cierre de periodo:
                 # lo que importa es cuando se supo, no a que ejercicio se refiere.
                 if fila["fecha_publicacion"] <= fin:

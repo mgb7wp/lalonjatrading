@@ -13,7 +13,6 @@ import datetime as dt
 import numpy as np
 import pandas as pd
 import pytest
-
 from estrategia import costes as costes_mod
 from estrategia import fundamental as fundamental_mod
 from estrategia import indicadores as ind_mod
@@ -23,7 +22,6 @@ from estrategia.cartera import Cartera
 from estrategia.ordenes import asignar
 from estrategia.sectores import MapaSectores
 from estrategia.tipos import Candidata, MotivoRechazo, Posicion, SenalTecnica
-
 
 # --------------------------------------------------------------------------
 # Indicadores
@@ -43,9 +41,9 @@ def test_atr_de_wilder_contra_un_caso_calculado_a_mano():
     atr = ind_mod.atr_wilder_vector(maximos, minimos, cierres, periodo=3)
     # Rangos verdaderos: max(H-L, |H-Cprev|, |L-Cprev|)
     rangos = [
-        max(11 - 10, abs(11 - 9.5), abs(10 - 9.5)),       # 1.5
-        max(12 - 10.5, abs(12 - 10.5), abs(10.5 - 10.5)), # 1.5
-        max(11.5 - 10, abs(11.5 - 11.5), abs(10 - 11.5)), # 1.5
+        max(11 - 10, abs(11 - 9.5), abs(10 - 9.5)),  # 1.5
+        max(12 - 10.5, abs(12 - 10.5), abs(10.5 - 10.5)),  # 1.5
+        max(11.5 - 10, abs(11.5 - 11.5), abs(10 - 11.5)),  # 1.5
     ]
     assert atr[3] == pytest.approx(float(np.mean(rangos)))
 
@@ -84,9 +82,15 @@ def test_el_momentum_excluye_el_mes_mas_reciente():
 
 def _ratios(**kwargs):
     base = dict(
-        ticker="X", roe=0.20, margen_operativo=0.15, crecimiento_ventas_3a=0.05,
-        flujo_caja_libre=100.0, deuda_neta_ebitda=1.0, ev_ebit=12.0,
-        fin_periodo=dt.date(2023, 12, 31), fecha_publicacion=dt.date(2024, 4, 30),
+        ticker="X",
+        roe=0.20,
+        margen_operativo=0.15,
+        crecimiento_ventas_3a=0.05,
+        flujo_caja_libre=100.0,
+        deuda_neta_ebitda=1.0,
+        ev_ebit=12.0,
+        fin_periodo=dt.date(2023, 12, 31),
+        fecha_publicacion=dt.date(2024, 4, 30),
         origen_pit="reconstruido",
     )
     base.update(kwargs)
@@ -96,13 +100,27 @@ def _ratios(**kwargs):
 def test_un_ebit_negativo_no_convierte_la_empresa_en_barata(cfg):
     """EV/EBIT con EBIT negativo sale negativo y un percentil inverso ingenuo
     lo leeria como "la mas barata del mercado"."""
-    fila = pd.DataFrame([{
-        "ticker": "X", "fin_periodo": dt.date(2023, 12, 31), "periodo": "anual",
-        "fecha_publicacion": dt.date(2024, 4, 30), "origen_pit": "reconstruido",
-        "roe": 0.2, "margen_operativo": 0.15, "ventas": 1000.0,
-        "flujo_caja_libre": 50.0, "deuda_neta": 100.0, "ebitda": 200.0,
-        "ebit": -150.0, "ev": 1000.0, "patrimonio_neto": 500.0,
-    }] * 4)
+    fila = pd.DataFrame(
+        [
+            {
+                "ticker": "X",
+                "fin_periodo": dt.date(2023, 12, 31),
+                "periodo": "anual",
+                "fecha_publicacion": dt.date(2024, 4, 30),
+                "origen_pit": "reconstruido",
+                "roe": 0.2,
+                "margen_operativo": 0.15,
+                "ventas": 1000.0,
+                "flujo_caja_libre": 50.0,
+                "deuda_neta": 100.0,
+                "ebitda": 200.0,
+                "ebit": -150.0,
+                "ev": 1000.0,
+                "patrimonio_neto": 500.0,
+            }
+        ]
+        * 4
+    )
     fila["fin_periodo"] = [dt.date(y, 12, 31) for y in (2020, 2021, 2022, 2023)]
     r = fundamental_mod.ratios_de("X", fila, cfg, dt.date(2024, 6, 1))
     assert r is not None
@@ -111,13 +129,27 @@ def test_un_ebit_negativo_no_convierte_la_empresa_en_barata(cfg):
 
 def test_un_ebitda_negativo_hace_fallar_el_filtro_de_deuda(cfg):
     """Deuda/EBITDA con EBITDA negativo sale negativo y pasaria un '<= 3.0'."""
-    fila = pd.DataFrame([{
-        "ticker": "X", "fin_periodo": dt.date(y, 12, 31), "periodo": "anual",
-        "fecha_publicacion": dt.date(2024, 4, 30), "origen_pit": "reconstruido",
-        "roe": 0.2, "margen_operativo": 0.15, "ventas": 1000.0,
-        "flujo_caja_libre": 50.0, "deuda_neta": 600.0, "ebitda": -200.0,
-        "ebit": 150.0, "ev": 1000.0, "patrimonio_neto": 500.0,
-    } for y in (2020, 2021, 2022, 2023)])
+    fila = pd.DataFrame(
+        [
+            {
+                "ticker": "X",
+                "fin_periodo": dt.date(y, 12, 31),
+                "periodo": "anual",
+                "fecha_publicacion": dt.date(2024, 4, 30),
+                "origen_pit": "reconstruido",
+                "roe": 0.2,
+                "margen_operativo": 0.15,
+                "ventas": 1000.0,
+                "flujo_caja_libre": 50.0,
+                "deuda_neta": 600.0,
+                "ebitda": -200.0,
+                "ebit": 150.0,
+                "ev": 1000.0,
+                "patrimonio_neto": 500.0,
+            }
+            for y in (2020, 2021, 2022, 2023)
+        ]
+    )
     r = fundamental_mod.ratios_de("X", fila, cfg, dt.date(2024, 6, 1))
     assert r is not None and r.deuda_neta_ebitda is None
     aprueba, motivo = fundamental_mod.aprueba_minimos(r, "industrial", cfg)
@@ -126,13 +158,27 @@ def test_un_ebitda_negativo_hace_fallar_el_filtro_de_deuda(cfg):
 
 def test_un_patrimonio_negativo_invalida_el_roe(cfg):
     """Perdidas divididas por patrimonio negativo dan un ROE positivo."""
-    fila = pd.DataFrame([{
-        "ticker": "X", "fin_periodo": dt.date(y, 12, 31), "periodo": "anual",
-        "fecha_publicacion": dt.date(2024, 4, 30), "origen_pit": "reconstruido",
-        "roe": 0.35, "margen_operativo": 0.15, "ventas": 1000.0,
-        "flujo_caja_libre": 50.0, "deuda_neta": 100.0, "ebitda": 200.0,
-        "ebit": 150.0, "ev": 1000.0, "patrimonio_neto": -400.0,
-    } for y in (2020, 2021, 2022, 2023)])
+    fila = pd.DataFrame(
+        [
+            {
+                "ticker": "X",
+                "fin_periodo": dt.date(y, 12, 31),
+                "periodo": "anual",
+                "fecha_publicacion": dt.date(2024, 4, 30),
+                "origen_pit": "reconstruido",
+                "roe": 0.35,
+                "margen_operativo": 0.15,
+                "ventas": 1000.0,
+                "flujo_caja_libre": 50.0,
+                "deuda_neta": 100.0,
+                "ebitda": 200.0,
+                "ebit": 150.0,
+                "ev": 1000.0,
+                "patrimonio_neto": -400.0,
+            }
+            for y in (2020, 2021, 2022, 2023)
+        ]
+    )
     r = fundamental_mod.ratios_de("X", fila, cfg, dt.date(2024, 6, 1))
     assert r is not None and r.roe is None
     aprueba, _ = fundamental_mod.aprueba_minimos(r, "industrial", cfg)
@@ -144,9 +190,7 @@ def test_la_caja_neta_si_debe_pasar(cfg):
 
     Esta escrito como test para que nadie lo "arregle" pensando que es un fallo.
     """
-    aprueba, _ = fundamental_mod.aprueba_minimos(
-        _ratios(deuda_neta_ebitda=-0.8), "industrial", cfg
-    )
+    aprueba, _ = fundamental_mod.aprueba_minimos(_ratios(deuda_neta_ebitda=-0.8), "industrial", cfg)
     assert aprueba
 
 
@@ -161,13 +205,26 @@ def test_un_fundamental_caducado_deja_de_pasar(cfg):
     """Un dato de hace mas de `antiguedad_maxima_dias` no dice nada de hoy."""
     limite = cfg.reglas.fundamental.antiguedad_maxima_dias
     publicacion = dt.date(2022, 1, 1)
-    fila = pd.DataFrame([{
-        "ticker": "X", "fin_periodo": dt.date(2021, 12, 31), "periodo": "anual",
-        "fecha_publicacion": publicacion, "origen_pit": "reconstruido",
-        "roe": 0.2, "margen_operativo": 0.15, "ventas": 1000.0,
-        "flujo_caja_libre": 50.0, "deuda_neta": 100.0, "ebitda": 200.0,
-        "ebit": 150.0, "ev": 1000.0, "patrimonio_neto": 500.0,
-    }])
+    fila = pd.DataFrame(
+        [
+            {
+                "ticker": "X",
+                "fin_periodo": dt.date(2021, 12, 31),
+                "periodo": "anual",
+                "fecha_publicacion": publicacion,
+                "origen_pit": "reconstruido",
+                "roe": 0.2,
+                "margen_operativo": 0.15,
+                "ventas": 1000.0,
+                "flujo_caja_libre": 50.0,
+                "deuda_neta": 100.0,
+                "ebitda": 200.0,
+                "ebit": 150.0,
+                "ev": 1000.0,
+                "patrimonio_neto": 500.0,
+            }
+        ]
+    )
     tarde = publicacion + dt.timedelta(days=limite + 1)
     r = fundamental_mod.ratios_de("X", fila, cfg, tarde)
     assert r is not None
@@ -267,12 +324,22 @@ def test_un_precio_demasiado_alto_da_cero_acciones(cfg):
 
 def _posicion(**kwargs):
     base = dict(
-        ticker="X", mercado="es", sector="industrial", divisa="EUR", acciones=10,
-        fecha_entrada=dt.date(2023, 1, 2), precio_entrada_local=100.0,
-        precio_entrada_base=100.0, fx_entrada=1.0, atr_entrada=2.0,
-        stop_inicial_local=96.0, maximo_cierre_local=100.0,
-        stop_dinamico_local=94.0, coste_entrada_base=3.0,
-        riesgo_teorico_pct=0.01, riesgo_efectivo_pct=0.008,
+        ticker="X",
+        mercado="es",
+        sector="industrial",
+        divisa="EUR",
+        acciones=10,
+        fecha_entrada=dt.date(2023, 1, 2),
+        precio_entrada_local=100.0,
+        precio_entrada_base=100.0,
+        fx_entrada=1.0,
+        atr_entrada=2.0,
+        stop_inicial_local=96.0,
+        maximo_cierre_local=100.0,
+        stop_dinamico_local=94.0,
+        coste_entrada_base=3.0,
+        riesgo_teorico_pct=0.01,
+        riesgo_efectivo_pct=0.008,
         ultimo_cierre_local=100.0,
     )
     base.update(kwargs)
@@ -373,20 +440,32 @@ def test_los_costes_se_desglosan(cfg):
 
 def _candidata(ticker, mercado, sector, puntuacion, precio=100.0, atr=5.0):
     senal = SenalTecnica(
-        ticker=ticker, mercado=mercado, fecha=dt.date(2023, 6, 16), cierre=precio,
-        media_corta=precio * 0.98, media_larga=precio * 0.95, momentum=0.2,
-        atr=atr, historial_suficiente=True,
+        ticker=ticker,
+        mercado=mercado,
+        fecha=dt.date(2023, 6, 16),
+        cierre=precio,
+        media_corta=precio * 0.98,
+        media_larga=precio * 0.95,
+        momentum=0.2,
+        atr=atr,
+        historial_suficiente=True,
     )
     return Candidata(
-        ticker=ticker, mercado=mercado, sector=sector,
-        fecha_decision=dt.date(2023, 6, 16), puntuacion_fundamental=puntuacion,
-        percentil_momentum=puntuacion, puntuacion_final=puntuacion, senal=senal,
-        n_cohorte=20, cohorte_usada="mercado",
+        ticker=ticker,
+        mercado=mercado,
+        sector=sector,
+        fecha_decision=dt.date(2023, 6, 16),
+        puntuacion_fundamental=puntuacion,
+        percentil_momentum=puntuacion,
+        puntuacion_final=puntuacion,
+        senal=senal,
+        n_cohorte=20,
+        cohorte_usada="mercado",
     )
 
 
 def test_una_candidata_que_no_cabe_se_salta_y_se_sigue_bajando(cfg):
-    """"Mientras queden huecos" significa seguir por la lista, no parar."""
+    """ "Mientras queden huecos" significa seguir por la lista, no parar."""
     cartera = Cartera(efectivo=100_000.0)
     candidatas = [
         _candidata("A", "es", "industrial", 90.0),
@@ -398,8 +477,13 @@ def test_una_candidata_que_no_cabe_se_salta_y_se_sigue_bajando(cfg):
         _candidata("E", "de", "salud", 70.0),
     ]
     a = asignar(
-        dt.date(2023, 6, 16), candidatas, cartera, {"es": True, "de": True},
-        {"EUR": 1.0}, 100_000.0, cfg,
+        dt.date(2023, 6, 16),
+        candidatas,
+        cartera,
+        {"es": True, "de": True},
+        {"EUR": 1.0},
+        100_000.0,
+        cfg,
     )
     comprados = [o.ticker for o in a.ordenes]
     assert "E" in comprados, "se corto en el primer rechazo en vez de seguir"
@@ -410,12 +494,15 @@ def test_una_candidata_que_no_cabe_se_salta_y_se_sigue_bajando(cfg):
 
 def test_se_respeta_el_tope_por_mercado(cfg):
     cartera = Cartera(efectivo=100_000.0)
-    candidatas = [
-        _candidata(f"T{i}", "es", f"sector{i}", 90.0 - i) for i in range(5)
-    ]
+    candidatas = [_candidata(f"T{i}", "es", f"sector{i}", 90.0 - i) for i in range(5)]
     a = asignar(
-        dt.date(2023, 6, 16), candidatas, cartera, {"es": True}, {"EUR": 1.0},
-        100_000.0, cfg,
+        dt.date(2023, 6, 16),
+        candidatas,
+        cartera,
+        {"es": True},
+        {"EUR": 1.0},
+        100_000.0,
+        cfg,
     )
     assert len(a.ordenes) == cfg.reglas.cartera.max_por_mercado
     assert any(r.motivo == MotivoRechazo.TOPE_MERCADO for r in a.rechazos)
@@ -425,8 +512,13 @@ def test_el_regimen_apagado_bloquea_las_compras(cfg):
     cartera = Cartera(efectivo=100_000.0)
     candidatas = [_candidata("A", "es", "industrial", 90.0)]
     a = asignar(
-        dt.date(2023, 6, 16), candidatas, cartera, {"es": False}, {"EUR": 1.0},
-        100_000.0, cfg,
+        dt.date(2023, 6, 16),
+        candidatas,
+        cartera,
+        {"es": False},
+        {"EUR": 1.0},
+        100_000.0,
+        cfg,
     )
     assert not a.ordenes
     assert a.rechazos[0].motivo == MotivoRechazo.REGIMEN_APAGADO

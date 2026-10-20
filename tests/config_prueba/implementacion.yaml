@@ -105,8 +105,3 @@ sectores:
   "Consumer Staples": consumo_basico
   "Healthcare": salud
   "Health Care": salud
-
-# Categorias que excluye `universo.excluir_sectores` de reglas.yaml, y a que
-# categoria corresponde la excepcion `fundamental.excepciones_sector`.
-equivalencias_excepciones:
-  electricas: electricas

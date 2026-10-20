@@ -27,7 +27,6 @@ from __future__ import annotations
 
 import datetime as dt
 import enum
-import secrets
 import uuid
 
 import jwt
@@ -164,8 +163,3 @@ def leer(token: str, proposito: Proposito) -> dict:
         # y uno de reinicio —que viaja por correo— sirve para todo.
         raise TokenInvalido(f"token de proposito '{cuerpo.get('uso')}', se esperaba '{proposito}'")
     return cuerpo
-
-
-def token_opaco() -> str:
-    """Secreto aleatorio para lo que no deba ser un JWT."""
-    return secrets.token_urlsafe(32)

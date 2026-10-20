@@ -55,17 +55,12 @@ from ...db.models import (
     Watchlist,
     WatchlistItem,
 )
+from ..consultas import DIAS_VARIACION, ultima_fecha_puntuada, valor_por_ticker, version_puntuada
 from ..deps import BD, Actual, MisLimites, comprobar_cupo
-from .rankings import version_puntuada
 
 router = APIRouter(prefix="/watchlists", tags=["watchlists"])
 
 MODELO_POR_DEFECTO = "equilibrado"
-
-#: Dias hacia atras de las dos variaciones. El mismo numero que en rankings y en
-#: `/stocks/{ticker}/analysis`: "lo que ha cambiado ultimamente" tiene que
-#: significar lo mismo en toda la API o las tres pantallas no se pueden comparar.
-DIAS_VARIACION = 30
 
 #: Por que no hay probabilidad. Se escribe una vez y se devuelve en cada fila,
 #: para que el motivo viaje con el dato que falta y no en la documentacion.
@@ -162,18 +157,6 @@ def _mia(bd: Session, usuario: User, lista_id: int) -> Watchlist:
     return lista
 
 
-def _valor_por_ticker(bd: Session, ticker: str) -> Security:
-    valor = bd.scalars(
-        select(Security).where(func.upper(Security.ticker) == ticker.upper()).limit(1)
-    ).first()
-    if valor is None:
-        raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-            detail=f"no conozco el valor {ticker!r}",
-        )
-    return valor
-
-
 def _ultimos_precios(
     bd: Session, ids: list[int], corte: dt.date
 ) -> dict[int, tuple[float, dt.date]]:
@@ -206,16 +189,6 @@ def _scores(bd: Session, ids: list[int], version_id: int, dia: dt.date) -> dict[
         )
     ).all()
     return {s.security_id: s for s in filas}
-
-
-def _fecha_con_scores(bd: Session, version_id: int, corte: dt.date) -> dt.date | None:
-    """Ultima fecha puntuada en o antes del corte. Nunca posterior."""
-    return bd.scalars(
-        select(Score.date)
-        .where(Score.model_version_id == version_id, Score.date <= corte)
-        .order_by(Score.date.desc())
-        .limit(1)
-    ).first()
 
 
 def _senales(bd: Session, ids: list[int], version_id: int, corte: dt.date) -> dict[int, Signal]:
@@ -345,7 +318,7 @@ def anadir(
     cuerpo: ValorNuevo,
 ) -> ListaResumen:
     lista = _mia(bd, usuario, lista_id)
-    valor = _valor_por_ticker(bd, cuerpo.ticker)
+    valor = valor_por_ticker(bd, cuerpo.ticker)
 
     cuantos = bd.scalar(
         select(func.count())
@@ -377,7 +350,7 @@ def quitar(
     bd: BD, usuario: Actual, lista_id: Annotated[int, Path()], ticker: Annotated[str, Path()]
 ) -> None:
     lista = _mia(bd, usuario, lista_id)
-    valor = _valor_por_ticker(bd, ticker)
+    valor = valor_por_ticker(bd, ticker)
     fila = bd.scalars(
         select(WatchlistItem).where(
             WatchlistItem.watchlist_id == lista.id, WatchlistItem.security_id == valor.id
@@ -424,7 +397,7 @@ def ver(
     # mediria 37 dias y no 30. La variacion tiene que significar lo mismo
     # siempre.
     dia_previo = (
-        _fecha_con_scores(bd, version, dia - dt.timedelta(days=DIAS_VARIACION))
+        ultima_fecha_puntuada(bd, version, dia - dt.timedelta(days=DIAS_VARIACION))
         if version and dia
         else None
     )

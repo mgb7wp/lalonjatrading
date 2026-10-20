@@ -22,7 +22,6 @@ from __future__ import annotations
 
 import re
 from dataclasses import dataclass, field
-from datetime import date
 from typing import Any
 
 import pandas as pd
@@ -35,7 +34,7 @@ from .tipos import Aviso
 
 @dataclass
 class Informe:
-    """Todo lo que el panel o el HTML necesitan para pintarse."""
+    """Todo lo que el Markdown o el HTML necesitan para pintarse."""
 
     resumen: metricas_mod.Resumen
     por_ano: pd.DataFrame
@@ -129,7 +128,7 @@ def construir(
             comparaciones.append(comp)
 
     avisos = _avisos_permanentes()
-    avisos += _avisos_de_datos(resultado, cfg, instantanea, operaciones, referencias)
+    avisos += _avisos_de_datos(resultado, cfg, instantanea, referencias)
     avisos += _aviso_periodo_muerto(resultado, operaciones, cfg)
     avisos += _aviso_cohortes(eventos, cfg)
     avisos += _avisos_de_suficiencia(operaciones, cfg)
@@ -175,9 +174,7 @@ def construir(
     )
 
 
-def _avisos_de_datos(
-    resultado: Resultado, cfg: Config, instantanea, operaciones, referencias
-) -> list[Aviso]:
+def _avisos_de_datos(resultado: Resultado, cfg: Config, instantanea, referencias) -> list[Aviso]:
     avisos: list[Aviso] = []
 
     # Sesgo de supervivencia: con yfinance salta siempre, porque no da
@@ -449,7 +446,8 @@ def a_markdown(informe: Informe) -> str:
         f"Periodo: {informe.meta['inicio']} a {informe.meta['fin']} "
         f"({r.anos:.1f} años) | Origen de los datos: {informe.meta['origen']} "
         f"| Descarga: {informe.meta['fecha_descarga']}",
-        f"Filtro fundamental: {'activo' if informe.meta['fundamental_activo'] else 'DESACTIVADO (solo pata tecnica)'}",
+        "Filtro fundamental: "
+        + ("activo" if informe.meta["fundamental_activo"] else "DESACTIVADO (solo pata tecnica)"),
         "",
         "## Resumen",
         "",
@@ -476,8 +474,7 @@ def a_markdown(informe: Informe) -> str:
                 f"- Anualizada estrategia: {c.anualizada_estrategia:+.2%}",
                 f"- Anualizada referencia: {c.anualizada_referencia:+.2%}",
                 f"- Exceso anualizado: {c.exceso_anualizado:+.2%}",
-                f"- Alfa de Jensen (anualizada): "
-                f"{metricas_mod.como_texto(c.alfa_jensen * 100)}%",
+                f"- Alfa de Jensen (anualizada): {metricas_mod.como_texto(c.alfa_jensen * 100)}%",
                 f"- Beta: {metricas_mod.como_texto(c.beta)}",
                 f"- Correlacion: {metricas_mod.como_texto(c.correlacion)}",
                 f"- Drawdown máximo estrategia: {c.drawdown_estrategia:.2%}",

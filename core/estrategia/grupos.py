@@ -302,9 +302,8 @@ def puntuar(
     )
 
     for metrica in DIRECCION:
-        marco[f"p_{metrica}"] = (
-            marco.groupby("cohorte_efectiva")[metrica]
-            .transform(lambda s, m=DIRECCION[metrica]: _percentilar(s, m))
+        marco[f"p_{metrica}"] = marco.groupby("cohorte_efectiva")[metrica].transform(
+            lambda s, m=DIRECCION[metrica]: _percentilar(s, m)
         )
 
     pesos = pesos or dict.fromkeys(GRUPOS, 1.0)
@@ -319,9 +318,7 @@ def puntuar(
         )
 
         for grupo, metricas in POR_GRUPO.items():
-            valores = [
-                fila[f"p_{m}"] for m in metricas if not pd.isna(fila.get(f"p_{m}", np.nan))
-            ]
+            valores = [fila[f"p_{m}"] for m in metricas if not pd.isna(fila.get(f"p_{m}", np.nan))]
             nota.metricas_usadas[grupo] = len(valores)
             # Una metrica sin dato no puntua 50: se descarta y el grupo se
             # promedia sobre las que si lo tienen (decision D-8).

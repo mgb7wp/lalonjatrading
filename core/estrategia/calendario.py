@@ -39,8 +39,6 @@ class Calendarios:
 
     def __init__(self, cfg: Config, inicio: date, fin: date) -> None:
         self._cfg = cfg
-        self._inicio = inicio
-        self._fin = fin
         self._cal: dict[str, xc.ExchangeCalendar] = {}
         self._sesiones: dict[str, list[date]] = {}
         self._cierres: dict[str, np.ndarray] = {}
@@ -49,13 +47,10 @@ class Calendarios:
         for mercado_id in cfg.reglas.mercados_por_id:
             codigo = cfg.implementacion.calendarios[mercado_id]
             try:
-                cal = xc.get_calendar(
-                    codigo, start=pd.Timestamp(inicio), end=pd.Timestamp(fin)
-                )
+                cal = xc.get_calendar(codigo, start=pd.Timestamp(inicio), end=pd.Timestamp(fin))
             except Exception as exc:  # pragma: no cover - configuracion invalida
                 raise ErrorCalendario(
-                    f"no se pudo cargar el calendario '{codigo}' del mercado "
-                    f"'{mercado_id}': {exc}"
+                    f"no se pudo cargar el calendario '{codigo}' del mercado '{mercado_id}': {exc}"
                 ) from exc
             self._cal[mercado_id] = cal
             self._sesiones[mercado_id] = [s.date() for s in cal.sessions]
@@ -118,12 +113,6 @@ class Calendarios:
         idx = _primer_indice_mayor(sesiones, fecha)
         return sesiones[idx] if idx < len(sesiones) else None
 
-    def sesion_anterior(self, mercado_id: str, fecha: date) -> date | None:
-        """Ultima sesion de ese mercado estrictamente anterior a `fecha`."""
-        sesiones = self.sesiones(mercado_id)
-        idx = _primer_indice_mayor_igual(sesiones, fecha)
-        return sesiones[idx - 1] if idx > 0 else None
-
     # -- ciclo semanal ----------------------------------------------------
 
     @cached_property
@@ -167,9 +156,7 @@ class Calendarios:
         sesiones = self._sesiones[mercado_id]
         return sesiones[i] if i < len(sesiones) else None
 
-    def sesiones_de_retraso(
-        self, mercado_id: str, decision: date, ejecucion: date
-    ) -> int:
+    def sesiones_de_retraso(self, mercado_id: str, decision: date, ejecucion: date) -> int:
         """Cuantas sesiones median entre decidir y ejecutar.
 
         En una semana normal es 1. Mas de 1 significa que el mercado estuvo

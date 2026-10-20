@@ -29,7 +29,7 @@ from __future__ import annotations
 import datetime as dt
 from typing import Annotated, Generic, TypeVar
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, HTTPException, Query
 from pydantic import BaseModel, ConfigDict
 from sqlalchemy import func, or_, select
 from sqlalchemy.orm import Session
@@ -44,11 +44,10 @@ from ...db.models import (
     TechnicalIndicator,
 )
 from ...db.models.enums import AssetType
-from ...db.session import sesion
+from ..consultas import DIAS_VARIACION
+from ..deps import BD
 
 router = APIRouter(prefix="/stocks", tags=["stocks"])
-
-BD = Annotated[Session, Depends(sesion)]
 
 T = TypeVar("T")
 
@@ -57,9 +56,6 @@ T = TypeVar("T")
 #: encarga el motor de senales— sino de redaccion: que sale en la lista.
 DESTACA_A_FAVOR = 70.0
 DESTACA_EN_CONTRA = 30.0
-
-#: Dias hacia atras para "que ha cambiado", igual que en el motor de senales.
-DIAS_CAMBIO = 30
 
 #: Nombres de pilar y sub-score tal y como los guarda el esquema.
 PILARES = ("fundamental", "technical", "sentiment", "risk")
@@ -383,7 +379,7 @@ def _bloque_tecnico(bd: Session, valor: Security, corte: dt.date) -> Bloque[Tecn
     )
 
 
-def _score_en(
+def score_en(
     bd: Session, valor: Security, modelo: str, corte: dt.date, version_id: int | None = None
 ) -> Score | None:
     """El ultimo score del valor en o antes del corte.
@@ -404,7 +400,7 @@ def _score_en(
     ).first()
 
 
-def _bloque_score(fila: Score | None, modelo: str, corte: dt.date) -> Bloque[Puntuacion]:
+def bloque_score(fila: Score | None, modelo: str, corte: dt.date) -> Bloque[Puntuacion]:
     if fila is None or fila.overall is None:
         return Bloque.falta(f"el valor no está puntuado por el modelo '{modelo}'")
 
@@ -434,7 +430,7 @@ def _bloque_score(fila: Score | None, modelo: str, corte: dt.date) -> Bloque[Pun
     )
 
 
-def _bloque_senal(
+def bloque_senal(
     bd: Session, valor: Security, modelo: str, corte: dt.date
 ) -> Bloque[SenalPublicada]:
     fila = bd.scalars(
@@ -463,7 +459,7 @@ def _bloque_senal(
     )
 
 
-def _bloque_explicacion(
+def bloque_explicacion(
     bd: Session, valor: Security, actual: Score | None, modelo: str, corte: dt.date
 ) -> Bloque[Explicacion]:
     if actual is None:
@@ -485,8 +481,8 @@ def _bloque_explicacion(
 
     # De la MISMA version que el actual: tras un cambio de version, la
     # diferencia con el score viejo solo diria que han cambiado las reglas.
-    previo = _score_en(
-        bd, valor, modelo, actual.date - dt.timedelta(days=DIAS_CAMBIO), actual.model_version_id
+    previo = score_en(
+        bd, valor, modelo, actual.date - dt.timedelta(days=DIAS_VARIACION), actual.model_version_id
     )
     cambio: dict[str, float] = {}
     no_comparable: list[str] = []
@@ -530,7 +526,7 @@ def analisis(
     if valor is None:
         raise HTTPException(status_code=404, detail=f"no existe el valor {ticker}")
 
-    puntuacion = _score_en(bd, valor, modelo, corte)
+    puntuacion = score_en(bd, valor, modelo, corte)
 
     return Analisis(
         ticker=valor.ticker,
@@ -539,9 +535,9 @@ def analisis(
         precio=_bloque_precio(bd, valor, corte),
         fundamental=_bloque_fundamental(bd, valor, corte),
         tecnico=_bloque_tecnico(bd, valor, corte),
-        score=_bloque_score(puntuacion, modelo, corte),
-        senal=_bloque_senal(bd, valor, modelo, corte),
-        explicacion=_bloque_explicacion(bd, valor, puntuacion, modelo, corte),
+        score=bloque_score(puntuacion, modelo, corte),
+        senal=bloque_senal(bd, valor, modelo, corte),
+        explicacion=bloque_explicacion(bd, valor, puntuacion, modelo, corte),
         # D-7 aplaza el modelo estadistico hasta tener universo e historico
         # suficientes. Se declara ausente en lugar de omitir el bloque: quien
         # consume la API tiene que poder ver que existe y por que esta vacio.

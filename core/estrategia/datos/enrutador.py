@@ -118,7 +118,7 @@ class Enrutador:
         unidas por `+` (`bce+cvm+sec+yfinance`) si se mezclan.
 
         Es el origen que queda anotado en la instantanea y tambien el nombre de
-        su carpeta de cache, que es la que lista el panel.
+        su carpeta de cache.
         """
         return "+".join(self.fuentes_usadas)
 

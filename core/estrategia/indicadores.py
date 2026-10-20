@@ -2,8 +2,8 @@
 
 La primera version calculaba medias, ATR y momentum dentro del bucle diario,
 recorriendo el historico entero en cada consulta. Con 140 valores y seis anos de
-sesiones eso es inviable, y ademas hace inutilizables el panel y el analisis de
-sensibilidad, que corren el backtest decenas de veces.
+sesiones eso es inviable, y ademas hace inutilizable el analisis de
+sensibilidad, que corre el backtest decenas de veces.
 
 Aqui cada serie se recorre una sola vez y se deja todo resuelto en vectores
 alineados con las sesiones del valor. El bucle diario pasa a ser una lectura por

@@ -34,7 +34,7 @@ no sostiene.
 from __future__ import annotations
 
 from dataclasses import dataclass
-from datetime import date, timedelta
+from datetime import date
 
 import numpy as np
 import pandas as pd
@@ -81,9 +81,7 @@ def percentiles_hazen(valores: pd.Series) -> pd.Series:
     return (rangos - 0.5) / n * 100.0
 
 
-def valor_empresa(
-    ultimo: pd.Series, precio_local: float | None
-) -> tuple[float | None, str | None]:
+def valor_empresa(ultimo: pd.Series, precio_local: float | None) -> tuple[float | None, str | None]:
     """EV en la fecha de decision, y el motivo si no se ha podido calcular.
 
     El EV no es un dato del ejercicio. El EBIT es anual y mira hacia atras, pero
@@ -166,9 +164,14 @@ def ratios_de(
     # de hace tres anos como si fueran actuales.
     if (fecha - publicacion).days > cfg.reglas.fundamental.antiguedad_maxima_dias:
         return Ratios(
-            roe=None, margen_operativo=None, crecimiento_ventas_3a=None,
-            flujo_caja_libre=None, deuda_neta_ebitda=None, ev_ebit=None,
-            motivo_invalidez=MotivoRechazo.FUNDAMENTAL_CADUCADO, **base,
+            roe=None,
+            margen_operativo=None,
+            crecimiento_ventas_3a=None,
+            flujo_caja_libre=None,
+            deuda_neta_ebitda=None,
+            ev_ebit=None,
+            motivo_invalidez=MotivoRechazo.FUNDAMENTAL_CADUCADO,
+            **base,
         )
 
     patrimonio = _num(ultimo.get("patrimonio_neto"))
@@ -333,9 +336,16 @@ def puntuar(
             ticker = fila["ticker"]
             if not fila["aprueba"]:
                 salida[ticker] = PuntuacionFundamental(
-                    ticker=ticker, mercado=mercado, sector=fila["sector"],
-                    aprueba=False, calidad=None, valoracion=None, puntuacion=None,
-                    n_cohorte=len(cohorte), cohorte_usada=usada, motivo=fila["motivo"],
+                    ticker=ticker,
+                    mercado=mercado,
+                    sector=fila["sector"],
+                    aprueba=False,
+                    calidad=None,
+                    valoracion=None,
+                    puntuacion=None,
+                    n_cohorte=len(cohorte),
+                    cohorte_usada=usada,
+                    motivo=fila["motivo"],
                 )
                 continue
 
@@ -352,9 +362,15 @@ def puntuar(
                 + fcfg.puntuacion.peso_valoracion * valoracion
             )
             salida[ticker] = PuntuacionFundamental(
-                ticker=ticker, mercado=mercado, sector=fila["sector"], aprueba=True,
-                calidad=calidad, valoracion=valoracion, puntuacion=puntuacion,
-                n_cohorte=len(cohorte), cohorte_usada=usada,
+                ticker=ticker,
+                mercado=mercado,
+                sector=fila["sector"],
+                aprueba=True,
+                calidad=calidad,
+                valoracion=valoracion,
+                puntuacion=puntuacion,
+                n_cohorte=len(cohorte),
+                cohorte_usada=usada,
             )
     return salida
 

@@ -39,17 +39,13 @@ class Costes:
         return self.comision + self.deslizamiento + self.impuesto
 
 
-def precio_con_deslizamiento(
-    precio: float, lado: Lado, mercado_id: str, cfg: Config
-) -> float:
+def precio_con_deslizamiento(precio: float, lado: Lado, mercado_id: str, cfg: Config) -> float:
     """Precio realmente pagado o cobrado.
 
     Se compra algo peor que el precio de referencia y se vende algo peor
     tambien; el deslizamiento siempre juega en contra.
     """
-    pct = cfg.reglas.costes.deslizamiento(
-        mercado_id, cfg.reglas.mercado(mercado_id).clasificacion
-    )
+    pct = cfg.reglas.costes.deslizamiento(mercado_id, cfg.reglas.mercado(mercado_id).clasificacion)
     return precio * (1.0 + pct) if lado == "compra" else precio * (1.0 - pct)
 
 
@@ -70,9 +66,7 @@ def calcular(
 
     comision = reglas.comision_fija_eur + reglas.comision_pct * nominal_base
 
-    pct_desliz = reglas.deslizamiento(
-        mercado_id, cfg.reglas.mercado(mercado_id).clasificacion
-    )
+    pct_desliz = reglas.deslizamiento(mercado_id, cfg.reglas.mercado(mercado_id).clasificacion)
     deslizamiento = nominal_base * pct_desliz
 
     impuesto = 0.0

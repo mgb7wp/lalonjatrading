@@ -75,12 +75,19 @@ class Resultado:
         if not self.operaciones:
             return pd.DataFrame()
         from dataclasses import asdict
-        return pd.DataFrame([asdict(o) | {
-            "motivo_salida": str(o.motivo_salida),
-            "ganadora": o.ganadora,
-            "dias": o.dias,
-            "coste_pct_posicion": o.coste_pct_posicion,
-        } for o in self.operaciones])
+
+        return pd.DataFrame(
+            [
+                asdict(o)
+                | {
+                    "motivo_salida": str(o.motivo_salida),
+                    "ganadora": o.ganadora,
+                    "dias": o.dias,
+                    "coste_pct_posicion": o.coste_pct_posicion,
+                }
+                for o in self.operaciones
+            ]
+        )
 
     @property
     def eventos_df(self) -> pd.DataFrame:
@@ -89,8 +96,12 @@ class Resultado:
         return pd.DataFrame(
             [
                 {
-                    "fecha": e.fecha, "tipo": e.tipo, "mercado": e.mercado,
-                    "ticker": e.ticker, "motivo": e.motivo, **e.detalles,
+                    "fecha": e.fecha,
+                    "tipo": e.tipo,
+                    "mercado": e.mercado,
+                    "ticker": e.ticker,
+                    "motivo": e.motivo,
+                    **e.detalles,
                 }
                 for e in self.eventos
             ]
@@ -168,17 +179,34 @@ def ejecutar(
                 sesion = vista.precio_en(ticker, dia)
                 if sesion is None:
                     cartera.actualizar(pos.sin_datos())
-                    if pos.sesiones_sin_datos + 1 >= cfg.reglas.datos.sesiones_sin_datos_cierre_forzoso:
+                    if (
+                        pos.sesiones_sin_datos + 1
+                        >= cfg.reglas.datos.sesiones_sin_datos_cierre_forzoso
+                    ):
                         _cerrar(
-                            cartera, ticker, dia, pos.ultimo_cierre_local or pos.precio_entrada_local,
-                            vista, cfg, MotivoSalida.CIERRE_FORZOSO_SIN_DATOS, eventos, divisa,
+                            cartera,
+                            ticker,
+                            dia,
+                            pos.ultimo_cierre_local or pos.precio_entrada_local,
+                            vista,
+                            cfg,
+                            MotivoSalida.CIERRE_FORZOSO_SIN_DATOS,
+                            eventos,
+                            divisa,
                         )
                     continue
                 salida = salidas_mod.evaluar_stop(pos, sesion)
                 if salida is not None:
                     ext = _cerrar(
-                        cartera, ticker, dia, salida.precio_local, vista, cfg,
-                        salida.motivo, eventos, divisa,
+                        cartera,
+                        ticker,
+                        dia,
+                        salida.precio_local,
+                        vista,
+                        cfg,
+                        salida.motivo,
+                        eventos,
+                        divisa,
                     )
                     impuesto_extrapolado = impuesto_extrapolado or ext
 
@@ -199,13 +227,26 @@ def ejecutar(
                             f"{mercado_id}|{siguiente.isoformat()}", []
                         ).append((ticker, motivo))
                     eventos.append(
-                        Evento(dia, "venta_aplazada", mercado_id, ticker, str(motivo),
-                               {"a": str(siguiente) if siguiente else ""})
+                        Evento(
+                            dia,
+                            "venta_aplazada",
+                            mercado_id,
+                            ticker,
+                            str(motivo),
+                            {"a": str(siguiente) if siguiente else ""},
+                        )
                     )
                     continue
                 ext = _cerrar(
-                    cartera, ticker, dia, float(sesion["apertura"]), vista, cfg,
-                    motivo, eventos, divisa,
+                    cartera,
+                    ticker,
+                    dia,
+                    float(sesion["apertura"]),
+                    vista,
+                    cfg,
+                    motivo,
+                    eventos,
+                    divisa,
                 )
                 impuesto_extrapolado = impuesto_extrapolado or ext
 
@@ -225,8 +266,15 @@ def ejecutar(
                     continue
                 if float(sesion["minimo"]) <= pos.stop_efectivo_local:
                     ext = _cerrar(
-                        cartera, ticker, dia, pos.stop_efectivo_local, vista, cfg,
-                        MotivoSalida.STOP_INTRADIA, eventos, divisa,
+                        cartera,
+                        ticker,
+                        dia,
+                        pos.stop_efectivo_local,
+                        vista,
+                        cfg,
+                        MotivoSalida.STOP_INTRADIA,
+                        eventos,
+                        divisa,
                     )
                     impuesto_extrapolado = impuesto_extrapolado or ext
 
@@ -243,6 +291,7 @@ def ejecutar(
                 atr = pos.atr_entrada
                 if serie is not None and i >= 0:
                     import math
+
                     v = float(serie.atr[i])
                     if not math.isnan(v):
                         atr = v
@@ -255,8 +304,15 @@ def ejecutar(
                 if mid != mercado_id:
                     continue
                 _revisar(
-                    dia, mercado_id, vista, cartera, cfg, mapa,
-                    pendientes_venta, ejecuciones, eventos,
+                    dia,
+                    mercado_id,
+                    vista,
+                    cartera,
+                    cfg,
+                    mapa,
+                    pendientes_venta,
+                    ejecuciones,
+                    eventos,
                     rondas.setdefault(corte, _Ronda()),
                 )
 
@@ -277,10 +333,18 @@ def ejecutar(
             pos = cartera.posiciones[ticker]
             serie = vista.serie(ticker)
             i = vista.posicion_hasta(ticker)
-            precio = float(serie.cierre[i]) if serie is not None and i >= 0 else pos.precio_entrada_local
+            precio = (
+                float(serie.cierre[i]) if serie is not None and i >= 0 else pos.precio_entrada_local
+            )
             ext = _cerrar(
-                cartera, ticker, fin, precio, vista, cfg,
-                MotivoSalida.ABIERTA_AL_FINAL, eventos,
+                cartera,
+                ticker,
+                fin,
+                precio,
+                vista,
+                cfg,
+                MotivoSalida.ABIERTA_AL_FINAL,
+                eventos,
                 cfg.reglas.mercado(pos.mercado).divisa,
             )
             impuesto_extrapolado = impuesto_extrapolado or ext
@@ -382,9 +446,7 @@ def _revisar(
         )
         if salida is not None:
             pendientes_venta.setdefault(clave, []).append((ticker, salida.motivo))
-            eventos.append(
-                Evento(dia, "salida_programada", mercado_id, ticker, str(salida.motivo))
-            )
+            eventos.append(Evento(dia, "salida_programada", mercado_id, ticker, str(salida.motivo)))
 
     regimen = tecnico_mod.regimen_por_mercado(dia, vista, cfg)
     ronda.regimen[mercado_id] = bool(regimen.get(mercado_id, False))
@@ -416,7 +478,10 @@ def _revisar(
             # valoracion tiene que moverse con el precio, no quedarse congelada
             # entre publicaciones de resultados. Es el precio sin ajustar.
             ratios = fundamental_mod.ratios_de(
-                ticker, vista.fundamentales(ticker), cfg, dia,
+                ticker,
+                vista.fundamentales(ticker),
+                cfg,
+                dia,
                 _cierre_bruto(vista, ticker),
             )
             if ratios is not None:
@@ -425,7 +490,9 @@ def _revisar(
     divisa = cfg.reglas.mercado(mercado_id).divisa
     try:
         ronda.fx[divisa] = vista.fx_decision(
-            divisa, dia, cfg.reglas.datos.fx_decision_dia_anterior,
+            divisa,
+            dia,
+            cfg.reglas.datos.fx_decision_dia_anterior,
             cfg.reglas.cartera.divisa_base,
         )
     except ErrorDatos as exc:
@@ -480,57 +547,65 @@ def _repartir(
         mercado_id = orden.mercado
         decision = ronda.decision[mercado_id]
         ejecucion = ronda.ejecucion[mercado_id]
-        pendientes_compra.setdefault(
-            f"{mercado_id}|{ejecucion.isoformat()}", []
-        ).append(orden)
+        pendientes_compra.setdefault(f"{mercado_id}|{ejecucion.isoformat()}", []).append(orden)
         eventos.append(
-            Evento(dia, "orden", mercado_id, orden.ticker, detalles={
-                "acciones": orden.acciones, "rango": orden.rango_asignacion,
-                "puntuacion": round(orden.puntuacion_final, 2),
-                "riesgo_teorico_pct": orden.riesgo_teorico_pct,
-                "riesgo_efectivo_pct": round(orden.riesgo_efectivo_pct, 5),
-                "limitada_por_peso_maximo": orden.limitada_por_peso_maximo,
-                "sesiones_de_retraso": cal.sesiones_de_retraso(mercado_id, decision, ejecucion),
-                "cohorte": str(orden.cohorte_usada),
-                "n_cohorte": orden.n_cohorte,
-            })
+            Evento(
+                dia,
+                "orden",
+                mercado_id,
+                orden.ticker,
+                detalles={
+                    "acciones": orden.acciones,
+                    "rango": orden.rango_asignacion,
+                    "puntuacion": round(orden.puntuacion_final, 2),
+                    "riesgo_teorico_pct": orden.riesgo_teorico_pct,
+                    "riesgo_efectivo_pct": round(orden.riesgo_efectivo_pct, 5),
+                    "limitada_por_peso_maximo": orden.limitada_por_peso_maximo,
+                    "sesiones_de_retraso": cal.sesiones_de_retraso(mercado_id, decision, ejecucion),
+                    "cohorte": str(orden.cohorte_usada),
+                    "n_cohorte": orden.n_cohorte,
+                },
+            )
         )
     for r in asignacion.rechazos:
         eventos.append(
-            Evento(dia, "rechazo", r.mercado, r.ticker, str(r.motivo),
-                   {"rango": r.rango, "puntuacion": round(r.puntuacion_final, 2)})
+            Evento(
+                dia,
+                "rechazo",
+                r.mercado,
+                r.ticker,
+                str(r.motivo),
+                {"rango": r.rango, "puntuacion": round(r.puntuacion_final, 2)},
+            )
         )
 
 
 def _abrir(
-    cartera: Cartera, orden: Orden, dia: date, vista, cfg: Config,
-    eventos: list[Evento], divisa: str,
+    cartera: Cartera,
+    orden: Orden,
+    dia: date,
+    vista,
+    cfg: Config,
+    eventos: list[Evento],
+    divisa: str,
 ) -> bool:
     """Ejecuta una compra a la apertura. Devuelve si el impuesto se extrapolo."""
     sesion = vista.precio_en(orden.ticker, dia)
     if sesion is None:
-        eventos.append(
-            Evento(dia, "rechazo", orden.mercado, orden.ticker, "sin_precio_ejecucion")
-        )
+        eventos.append(Evento(dia, "rechazo", orden.mercado, orden.ticker, "sin_precio_ejecucion"))
         return False
     if cartera.tiene(orden.ticker):
         return False
 
     apertura = float(sesion["apertura"])
-    precio_pagado = costes_mod.precio_con_deslizamiento(
-        apertura, "compra", orden.mercado, cfg
-    )
+    precio_pagado = costes_mod.precio_con_deslizamiento(apertura, "compra", orden.mercado, cfg)
     cambio = vista.fx(divisa, dia, cfg.reglas.cartera.divisa_base)
     nominal_base = orden.acciones * apertura * cambio
-    costes = costes_mod.calcular(
-        orden.ticker, orden.mercado, "compra", nominal_base, dia, cfg
-    )
+    costes = costes_mod.calcular(orden.ticker, orden.mercado, "compra", nominal_base, dia, cfg)
     desembolso = orden.acciones * precio_pagado * cambio + costes.comision + costes.impuesto
 
     if desembolso > cartera.efectivo:
-        eventos.append(
-            Evento(dia, "rechazo", orden.mercado, orden.ticker, "efectivo_insuficiente")
-        )
+        eventos.append(Evento(dia, "rechazo", orden.mercado, orden.ticker, "efectivo_insuficiente"))
         return False
 
     precio_base = precio_pagado * cambio
@@ -548,9 +623,7 @@ def _abrir(
         # El stop se ancla al precio realmente pagado, no al de referencia.
         stop_inicial_local=salidas_mod.stop_inicial(precio_pagado, orden.atr_entrada, cfg),
         maximo_cierre_local=precio_pagado,
-        stop_dinamico_local=salidas_mod.stop_dinamico_bruto(
-            precio_pagado, orden.atr_entrada, cfg
-        ),
+        stop_dinamico_local=salidas_mod.stop_dinamico_bruto(precio_pagado, orden.atr_entrada, cfg),
         coste_entrada_base=costes.total,
         deslizamiento_entrada_base=costes.deslizamiento,
         riesgo_teorico_pct=orden.riesgo_teorico_pct,
@@ -559,39 +632,64 @@ def _abrir(
     )
     cartera.abrir(posicion, desembolso)
     eventos.append(
-        Evento(dia, "compra", orden.mercado, orden.ticker, detalles={
-            "acciones": orden.acciones, "precio_local": round(precio_pagado, 4),
-            "coste_base": round(costes.total, 2),
-        })
+        Evento(
+            dia,
+            "compra",
+            orden.mercado,
+            orden.ticker,
+            detalles={
+                "acciones": orden.acciones,
+                "precio_local": round(precio_pagado, 4),
+                "coste_base": round(costes.total, 2),
+            },
+        )
     )
     return costes.impuesto_extrapolado
 
 
 def _cerrar(
-    cartera: Cartera, ticker: str, dia: date, precio_local: float, vista,
-    cfg: Config, motivo: MotivoSalida, eventos: list[Evento], divisa: str,
+    cartera: Cartera,
+    ticker: str,
+    dia: date,
+    precio_local: float,
+    vista,
+    cfg: Config,
+    motivo: MotivoSalida,
+    eventos: list[Evento],
+    divisa: str,
 ) -> bool:
     """Cierra una posicion. Devuelve si el impuesto se extrapolo."""
     if not cartera.tiene(ticker):
         return False
     pos = cartera.posiciones[ticker]
-    precio_cobrado = costes_mod.precio_con_deslizamiento(
-        precio_local, "venta", pos.mercado, cfg
-    )
+    precio_cobrado = costes_mod.precio_con_deslizamiento(precio_local, "venta", pos.mercado, cfg)
     cambio = vista.fx(divisa, dia, cfg.reglas.cartera.divisa_base)
     nominal_base = pos.acciones * precio_local * cambio
     costes = costes_mod.calcular(ticker, pos.mercado, "venta", nominal_base, dia, cfg)
     ingreso = pos.acciones * precio_cobrado * cambio - costes.comision - costes.impuesto
 
     operacion = cartera.cerrar(
-        ticker, dia, precio_cobrado, cambio, ingreso, costes.total, motivo,
+        ticker,
+        dia,
+        precio_cobrado,
+        cambio,
+        ingreso,
+        costes.total,
+        motivo,
         deslizamiento_salida_base=costes.deslizamiento,
     )
     eventos.append(
-        Evento(dia, "venta", pos.mercado, ticker, str(motivo), {
-            "resultado_base": round(operacion.resultado_base, 2),
-            "dias": operacion.dias,
-        })
+        Evento(
+            dia,
+            "venta",
+            pos.mercado,
+            ticker,
+            str(motivo),
+            {
+                "resultado_base": round(operacion.resultado_base, 2),
+                "dias": operacion.dias,
+            },
+        )
     )
     return costes.impuesto_extrapolado
 

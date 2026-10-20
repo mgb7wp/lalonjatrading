@@ -33,7 +33,6 @@ from estrategia.errores import ErrorAnticipacion, ErrorConfiguracion, ErrorDatos
 from estrategia.tipos import Evento
 
 DIR_CONFIG_PRUEBA = Path(__file__).resolve().parent / "config_prueba"
-RAIZ = Path(__file__).resolve().parents[1]
 
 
 def _con(cfg, *pares):
@@ -374,5 +373,3 @@ def test_los_textos_publicos_llevan_tildes_y_enes(cfg, instantanea):
         assert "Drawdown maximo" not in publico
     assert "Por año" in texto and "Por ano" not in texto
     assert ">Año<" in html or "Año" in html
-    panel = (RAIZ / "panel" / "app.py").read_text(encoding="utf-8")
-    assert '"Señales"' in panel and '"Senales"' not in panel

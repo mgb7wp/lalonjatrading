@@ -87,13 +87,9 @@ def ejecutar(
     fundamentales = enrutador.fundamentales(universo, inicio, fin)
     sectores = enrutador.sectores(universo)
 
-    por_ticker_p = (
-        {t: g for t, g in precios.groupby("ticker")} if not precios.empty else {}
-    )
+    por_ticker_p = {t: g for t, g in precios.groupby("ticker")} if not precios.empty else {}
     por_ticker_f = (
-        {t: g for t, g in fundamentales.groupby("ticker")}
-        if not fundamentales.empty
-        else {}
+        {t: g for t, g in fundamentales.groupby("ticker")} if not fundamentales.empty else {}
     )
 
     filas: list[FilaDiagnostico] = []
@@ -119,9 +115,7 @@ def ejecutar(
         fila.sector_mapeado = clasificacion.sector != SECTOR_DESCONOCIDO
         fila.sector_por_respaldo = fila.sector_mapeado and not fila.sector_proveedor
         if not fila.sector_mapeado:
-            fila.problemas.append(
-                f"sector sin mapear: {fila.sector_proveedor!r}"
-            )
+            fila.problemas.append(f"sector sin mapear: {fila.sector_proveedor!r}")
 
         fund = por_ticker_f.get(ticker)
         if fund is None or fund.empty:
@@ -136,13 +130,10 @@ def ejecutar(
                     (anuales["origen_fecha_publicacion"] == "proveedor").sum()
                 )
             fila.campos_vacios = [
-                c for c in CAMPOS_VIGILADOS
-                if c in anuales.columns and anuales[c].isna().all()
+                c for c in CAMPOS_VIGILADOS if c in anuales.columns and anuales[c].isna().all()
             ]
             if fila.campos_vacios:
-                fila.problemas.append(
-                    f"campos siempre vacios: {', '.join(fila.campos_vacios)}"
-                )
+                fila.problemas.append(f"campos siempre vacios: {', '.join(fila.campos_vacios)}")
 
             ultimo = anuales.iloc[-1] if not anuales.empty else None
             if ultimo is not None:
@@ -228,8 +219,11 @@ def comprobar_auxiliares(
 
     base = cfg.reglas.cartera.divisa_base
     divisas = sorted(
-        ({m.divisa for m in cfg.reglas.universo.mercados}
-         | {r.divisa for r in cfg.implementacion.referencias.values()}) - {base}
+        (
+            {m.divisa for m in cfg.reglas.universo.mercados}
+            | {r.divisa for r in cfg.implementacion.referencias.values()}
+        )
+        - {base}
     )
     fx_filas = [
         FilaAuxiliar("divisa", d, cfg.implementacion.divisas.get(d) or "?") for d in divisas
@@ -251,9 +245,7 @@ def comprobar_auxiliares(
         f.filas = len(serie)
         f.ultima = max(pd.to_datetime(serie["fecha"]).dt.date)
         if (referencia - f.ultima).days > limite:
-            f.problemas.append(
-                f"cambio con mas de {limite} dias de antiguedad (ultimo {f.ultima})"
-            )
+            f.problemas.append(f"cambio con mas de {limite} dias de antiguedad (ultimo {f.ultima})")
         f.notas += contrato.huecos_fx(serie, limite)
     return filas + fx_filas
 
@@ -299,7 +291,7 @@ def yaml_sectores(filas: list[FilaDiagnostico], cfg: Config) -> list[str]:
             propuesta = distintos.pop()
             lineas.append(
                 f'  "{sector}": {propuesta}   # revisa: es lo que declara '
-                f'universo.yaml para {", ".join(declarados)}'
+                f"universo.yaml para {', '.join(declarados)}"
             )
         else:
             detalle = ", ".join(f"{t}={s}" for t, s in declarados.items())
@@ -329,9 +321,7 @@ def a_texto(
         lineas.append("## Indices, referencias y divisas")
         lineas.append("")
         if not malos:
-            lineas.append(
-                f"Los {len(auxiliares)} datos auxiliares llegan completos y al dia."
-            )
+            lineas.append(f"Los {len(auxiliares)} datos auxiliares llegan completos y al dia.")
         else:
             lineas.append(
                 f"**{len(malos)} de {len(auxiliares)} fallan.** Sin el indice de un "
@@ -381,9 +371,7 @@ def a_texto(
         (
             "Divisa de reporte distinta de la de cotizacion",
             lambda f: bool(
-                f.divisa_reporte
-                and f.divisa_cotizacion
-                and f.divisa_reporte != f.divisa_cotizacion
+                f.divisa_reporte and f.divisa_cotizacion and f.divisa_reporte != f.divisa_cotizacion
             ),
         ),
         ("Menos de 4 ejercicios", lambda f: 0 < f.ejercicios < 4),

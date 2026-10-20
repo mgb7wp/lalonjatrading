@@ -31,7 +31,6 @@ PROHIBIDOS_EN_NUCLEO = {
     "alembic",
     "psycopg",
     "redis",
-    "streamlit",
 }
 
 

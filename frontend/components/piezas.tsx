@@ -37,17 +37,6 @@ export function Medidor({ valor }: { valor: number | null }) {
   );
 }
 
-/** Score compacto para tablas: la cifra y un medidor corto. */
-export function PildoraScore({ valor }: { valor: number | null }) {
-  if (valor === null || Number.isNaN(valor)) return <span className="apunte" title="sin score">n/d</span>;
-  return (
-    <span className="score-pill">
-      <span className="mono">{valor.toFixed(0)}</span>
-      <Celdas valor={valor} alto={8} />
-    </span>
-  );
-}
-
 /** Senales: glifo + texto + color, siempre los tres.
  *
  * Una recomendacion de inversion tiene que poder leerse sin interpretar un
@@ -175,23 +164,6 @@ export function Bloque<T>({
   );
 }
 
-/** Lo que el diseno dibuja pero el backend no tiene todavia.
- *
- * Se mantiene el hueco en su sitio, con el motivo escrito, en lugar de
- * rellenarlo con datos de ejemplo o de borrar el bloque. Rellenarlo seria
- * mentir; borrarlo dejaria al usuario preguntandose si la funcion existe. */
-export function Pendiente({ titulo, motivo }: { titulo: string; motivo: string }) {
-  return (
-    <section>
-      <h2>{titulo}</h2>
-      <p className="bloque-falta">
-        <strong>TODAVÍA NO DISPONIBLE</strong>
-        {motivo}
-      </p>
-    </section>
-  );
-}
-
 const NOMBRES: Record<string, string> = {
   overall: "Global",
   fundamental: "Fundamental",
@@ -236,27 +208,6 @@ export function millones(v: number | null | undefined): string {
   if (abs >= 1e9) return `${(v / 1e9).toFixed(2)} MM`;
   if (abs >= 1e6) return `${(v / 1e6).toFixed(1)} M`;
   return numero(v, 0);
-}
-
-/** Tarjeta de cifra (v2): rotulo en mono, cifra grande y de donde sale. */
-export function Tarjeta({
-  rotulo,
-  cifra,
-  apunte,
-  acento = false,
-}: {
-  rotulo: string;
-  cifra: ReactNode;
-  apunte?: ReactNode;
-  acento?: boolean;
-}) {
-  return (
-    <div className={`kpi${acento ? " is-accent" : ""}`}>
-      <div className="label-mono">{rotulo}</div>
-      <div className="kpi-n">{cifra}</div>
-      {apunte ? <div className="kpi-note">{apunte}</div> : null}
-    </div>
-  );
 }
 
 /** Panel (v2): caja de borde fino con cabecera subrayada en tinta. */
