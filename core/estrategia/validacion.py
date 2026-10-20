@@ -16,21 +16,29 @@ porque moverlos no es un ajuste, es otra estrategia.
 Cada parametro se etiqueta ademas como activo o inactivo segun si moverlo
 cambia algo. Es la unica forma de no confundir "la estrategia aguanta este
 parametro" con "este parametro no estaba haciendo nada".
+
+La **robustez estadistica** (`robustez`) mira la misma curva desde otros dos
+lados, sin correr mas backtests: cuanto podria ser suerte el Sharpe (intervalo
+por remuestreo) y si el resultado aguanta tramo a tramo o sale de un solo
+periodo bueno. Las ideas vienen de Vibe-Trading (HKUDS, licencia MIT; ver
+docs/TERCEROS.md); el remuestreo aqui es por bloques, ver `robustez`.
 """
 
 from __future__ import annotations
 
 import json
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import date, datetime
 from pathlib import Path
 from typing import Any
 
+import numpy as np
 import pandas as pd
 
 from . import backtest as backtest_mod
 from . import metricas as metricas_mod
 from .config import Config
+from .constantes import DIAS_POR_ANO
 from .datos.almacen import Instantanea
 from .errores import ErrorConfiguracion
 
@@ -246,3 +254,167 @@ def sensibilidad(
         lambda p: "activo" if movimiento.get(p, 0.0) > 1e-6 else "inactivo"
     )
     return df
+
+
+# --------------------------------------------------------------------------
+# Robustez estadistica
+# --------------------------------------------------------------------------
+
+
+@dataclass(frozen=True)
+class Robustez:
+    """Cuanto podria ser suerte el resultado, y si aguanta tramo a tramo.
+
+    `motivo` no es None cuando no hay datos suficientes para calcularlo; en ese
+    caso el resto de campos no significa nada y el informe lo dice.
+    """
+
+    sharpe: float
+    sharpe_inferior: float
+    sharpe_superior: float
+    prob_sharpe_positivo: float
+    confianza: float
+    muestras: int
+    bloque: int
+    periodos: int
+    tramos: pd.DataFrame = field(default_factory=pd.DataFrame)
+    motivo: str | None = None
+
+    @property
+    def intervalo_incluye_cero(self) -> bool:
+        return self.motivo is None and self.sharpe_inferior <= 0.0 <= self.sharpe_superior
+
+    @property
+    def tramos_positivos(self) -> int:
+        if self.tramos.empty:
+            return 0
+        return int((self.tramos["rentabilidad"] > 0).sum())
+
+
+def _sharpe_muestra(retornos: np.ndarray, rf_periodo: float, por_ano: float) -> float:
+    """El Sharpe de `metricas.sharpe` sobre un vector de rentabilidades.
+
+    Desviacion con `ddof=1`, como la de pandas que usa `metricas.sharpe`: si no,
+    el intervalo saldria desplazado respecto al Sharpe del informe.
+    """
+    if retornos.size < 2 or float(np.std(retornos, ddof=1)) == 0.0:
+        return 0.0
+    exceso = retornos - rf_periodo
+    return float(exceso.mean() / exceso.std(ddof=1) * np.sqrt(por_ano))
+
+
+def remuestreo_por_bloques(rng: np.random.Generator, n: int, bloque: int) -> np.ndarray:
+    """Indices de una muestra de tamano `n` hecha con bloques consecutivos.
+
+    Remuestrear semanas sueltas trata cada una como independiente de la
+    anterior, y no lo son: una racha se parece a si misma. Eso estrecharia el
+    intervalo y lo haria parecer mas seguro de lo que es. Con bloques de
+    semanas consecutivas, cada muestra conserva las rachas de la curva real.
+    """
+    bloque = max(1, min(bloque, n))
+    inicios = rng.integers(0, n - bloque + 1, size=-(-n // bloque))
+    return (inicios[:, None] + np.arange(bloque)).ravel()[:n]
+
+
+def _tramos(curva: pd.DataFrame, operaciones: pd.DataFrame, n: int, cfg: Config) -> pd.DataFrame:
+    """La curva partida en `n` tramos seguidos, con las metricas de cada uno.
+
+    Cada tramo empieza donde acabo el anterior, asi que encadenar sus
+    rentabilidades da la del periodo entero: ningun dia se queda fuera.
+    """
+    tasa = cfg.reglas.metricas.tasa_libre_riesgo_anual
+    periodicidad = cfg.reglas.metricas.periodicidad_sharpe
+    cortes = np.linspace(0, len(curva) - 1, n + 1).round().astype(int)
+    filas = []
+    for i in range(n):
+        desde, hasta = cortes[i], cortes[i + 1]
+        tramo = curva.iloc[desde : hasta + 1]
+        inicial, final = float(tramo["valor"].iloc[0]), float(tramo["valor"].iloc[-1])
+        dia_desde, dia_hasta = tramo["fecha"].iloc[0], tramo["fecha"].iloc[-1]
+        anos = max((dia_hasta - dia_desde).days / DIAS_POR_ANO, 1e-9)
+        rentabilidad = final / inicial - 1.0 if inicial > 0 else 0.0
+        en_tramo = 0
+        if not operaciones.empty and "fecha_entrada" in operaciones:
+            entradas = operaciones["fecha_entrada"]
+            # El dia frontera es del tramo que acaba en el: cada operacion
+            # cuenta en un solo tramo.
+            desde_ok = entradas >= dia_desde if i == 0 else entradas > dia_desde
+            en_tramo = int((desde_ok & (entradas <= dia_hasta)).sum())
+        filas.append(
+            {
+                "tramo": i + 1,
+                "desde": dia_desde,
+                "hasta": dia_hasta,
+                "rentabilidad": rentabilidad,
+                "anualizada": (1.0 + rentabilidad) ** (1.0 / anos) - 1.0 if inicial > 0 else 0.0,
+                "sharpe": metricas_mod.sharpe(tramo, tasa, periodicidad),
+                "drawdown_maximo": metricas_mod.drawdown_maximo(
+                    tramo["valor"].to_numpy(dtype=float)
+                ),
+                "operaciones": en_tramo,
+            }
+        )
+    return pd.DataFrame(filas)
+
+
+def robustez(curva: pd.DataFrame, operaciones: pd.DataFrame, cfg: Config) -> Robustez:
+    """Intervalo de confianza del Sharpe y analisis por tramos de una curva.
+
+    Se aplica al periodo de DISENO, como la sensibilidad: aplicarlo al de
+    validacion seria mirarlo, y cada mirada lo gasta.
+
+    - **Intervalo del Sharpe**: se remuestrean las rentabilidades periodicas
+      (semanales por defecto, las mismas que usa el Sharpe del informe) por
+      bloques consecutivos, `bootstrap_muestras` veces. Si el intervalo incluye
+      el cero, con estos datos no se puede descartar que el resultado sea
+      suerte.
+    - **Tramos**: el periodo se parte en `walk_forward_tramos` tramos seguidos de
+      la misma longitud. Una estrategia que solo gana en uno no es una
+      estrategia: es un periodo bueno.
+    """
+    val = cfg.reglas.validacion
+    tasa = cfg.reglas.metricas.tasa_libre_riesgo_anual
+    periodicidad = cfg.reglas.metricas.periodicidad_sharpe
+    retornos, rf_periodo, por_ano = metricas_mod.rentabilidades_periodicas(
+        curva, tasa, periodicidad
+    )
+    minimo = max(val.bootstrap_bloque_periodos, val.walk_forward_tramos) * 2
+    if len(retornos) < minimo:
+        return Robustez(
+            sharpe=0.0,
+            sharpe_inferior=0.0,
+            sharpe_superior=0.0,
+            prob_sharpe_positivo=0.0,
+            confianza=val.bootstrap_confianza,
+            muestras=0,
+            bloque=val.bootstrap_bloque_periodos,
+            periodos=len(retornos),
+            motivo=(
+                f"hacen falta al menos {minimo} rentabilidades periodicas y hay {len(retornos)}"
+            ),
+        )
+
+    datos = retornos.to_numpy(dtype=float)
+    rng = np.random.default_rng(val.semilla)
+    muestras = np.array(
+        [
+            _sharpe_muestra(
+                datos[remuestreo_por_bloques(rng, datos.size, val.bootstrap_bloque_periodos)],
+                rf_periodo,
+                por_ano,
+            )
+            for _ in range(val.bootstrap_muestras)
+        ]
+    )
+    cola = (1.0 - val.bootstrap_confianza) / 2.0
+    return Robustez(
+        sharpe=metricas_mod.sharpe(curva, tasa, periodicidad),
+        sharpe_inferior=float(np.quantile(muestras, cola)),
+        sharpe_superior=float(np.quantile(muestras, 1.0 - cola)),
+        prob_sharpe_positivo=float(np.mean(muestras > 0.0)),
+        confianza=val.bootstrap_confianza,
+        muestras=val.bootstrap_muestras,
+        bloque=val.bootstrap_bloque_periodos,
+        periodos=int(datos.size),
+        tramos=_tramos(curva, operaciones, val.walk_forward_tramos, cfg),
+    )

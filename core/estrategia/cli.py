@@ -369,11 +369,14 @@ def cmd_validar(args, cfg) -> None:
         f"Base: anualizada {base.rentabilidad_anualizada:+.2%}, "
         f"Sharpe {base.sharpe:.2f}, {base.n_operaciones} operaciones."
     )
+    rob = validacion_mod.robustez(r.curva, r.operaciones_df, cfg)
     print("\nAnalisis de sensibilidad (puede tardar varios minutos)...")
     sens = validacion_mod.sensibilidad(inst, cfg, inicio, fin, base)
 
     consultas = validacion_mod.RegistroConsultas(RUTA_CONSULTAS).n
-    inf = informe_mod.construir(r, cfg, inst, sensibilidad=sens, consultas_validacion=consultas)
+    inf = informe_mod.construir(
+        r, cfg, inst, sensibilidad=sens, consultas_validacion=consultas, robustez=rob
+    )
     texto = informe_mod.a_markdown(inf)
     print("\n" + texto)
     _guardar_informe(inf, texto, args, _nombre_cache(args, cfg))
@@ -490,7 +493,7 @@ def construir_parser() -> argparse.ArgumentParser:
     g.add_argument("--detalle", action="store_true")
     g.set_defaults(func=cmd_diagnostico)
 
-    v = sub.add_parser("validar", help="backtest de diseno mas analisis de sensibilidad")
+    v = sub.add_parser("validar", help="backtest de diseno mas sensibilidad y robustez estadistica")
     v.add_argument("--formato", choices=["md", "html", "ambos"], default="md")
     v.set_defaults(func=cmd_validar)
 

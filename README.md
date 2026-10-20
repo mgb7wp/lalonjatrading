@@ -70,7 +70,7 @@ estrategia --proveedor yfinance senales
 # 4. Backtest sobre el periodo de diseño
 estrategia --proveedor yfinance backtest --periodo diseno
 
-# 5. Backtest más análisis de sensibilidad
+# 5. Backtest más sensibilidad y robustez (intervalo del Sharpe y tramos)
 estrategia --proveedor yfinance validar
 
 # 6. Qué resuelve cada fuente y qué no (hazlo lo primero con datos reales)
@@ -202,7 +202,7 @@ core/estrategia/
   ordenes.py       Reparte los huecos libres entre las candidatas.
   backtest.py      El bucle diario. Único módulo con estado mutable entre días.
   metricas.py      CAGR, drawdown, Sharpe, desgloses.
-  validacion.py    División diseño/validación y sensibilidad.
+  validacion.py    División diseño/validación, sensibilidad y robustez estadística.
   informe.py       Métricas, desgloses y avisos.
   informe_html.py  El informe como página autocontenida, con SVG en línea.
   cli.py           Comandos.

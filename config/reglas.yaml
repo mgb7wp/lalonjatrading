@@ -210,6 +210,17 @@ validacion:
   # AÑADIDO v0.4.9: a partir de estas consultas al periodo de validación, el
   # aviso del informe pasa a importante.
   consultas_para_alarma: 3
+  # AÑADIDO v0.5 (tarea V1): robustez estadística sobre el periodo de diseño,
+  # en `estrategia validar`. El Sharpe se remuestrea por bloques de semanas
+  # consecutivas (una semana se parece a la anterior; remuestrearlas sueltas
+  # estrecharía el intervalo de mentira) y el periodo se parte en tramos
+  # seguidos para ver si el resultado aguanta en cada uno. La semilla fija hace
+  # que dos ejecuciones den el mismo intervalo. Ver SUPUESTOS.md.
+  bootstrap_muestras: 2000
+  bootstrap_bloque_periodos: 4       # periodos de metricas.periodicidad_sharpe
+  bootstrap_confianza: 0.90
+  walk_forward_tramos: 4
+  semilla: 20261020
 
 # ---------------------------------------------------------------------------
 # Señales (§25) y régimen de mercado (§26)

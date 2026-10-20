@@ -311,6 +311,13 @@ class ValidacionCfg(_Base):
     min_operaciones: int = Field(ge=0)
     min_operaciones_por_mercado: int = Field(ge=0)
     consultas_para_alarma: int = Field(ge=0)
+    # Robustez estadistica sobre el periodo de diseno (tarea V1). Ver
+    # `validacion.robustez` y SUPUESTOS.md.
+    bootstrap_muestras: int = Field(gt=0)
+    bootstrap_bloque_periodos: int = Field(gt=0)
+    bootstrap_confianza: float = Field(gt=0, lt=1)
+    walk_forward_tramos: int = Field(gt=1)
+    semilla: int = Field(ge=0)
 
 
 class SenalesCfg(_Base):
