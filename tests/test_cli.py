@@ -85,13 +85,14 @@ def test_con_proveedor_se_fuerza_una_sola_fuente(cfg):
 
 
 # --------------------------------------------------------------------------
-# La carpeta de cache es la misma para el CLI y el panel
+# La carpeta de cache es la misma para todos los comandos
 # --------------------------------------------------------------------------
 
 
 def test_la_cache_se_llama_como_el_origen(cfg):
-    """El panel ofrece una opcion por carpeta de `datos/cache/`: el nombre tiene
-    que ser el origen de los datos, el mismo que se anota en la instantanea."""
+    """Los comandos leen la carpeta de `datos/cache/` que escribe `datos`: el
+    nombre tiene que ser el origen de los datos, el mismo que se anota en la
+    instantanea."""
     assert cli._nombre_cache(_args(), cfg) == "yfinance"
     assert cli._nombre_cache(_args("--proveedor", "sintetico"), cfg) == "sintetico"
 

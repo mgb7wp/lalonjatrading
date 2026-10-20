@@ -3,7 +3,7 @@
 Antes habia un `if/else` en el CLI que conocia los nombres de las fuentes. Con
 dos ya empieza a molestar y con cinco es insostenible, asi que aqui hay un mapa
 de nombre a constructor: **anadir una fuente es registrarla**, y ni el CLI ni el
-panel ni el motor tienen que enterarse.
+motor tienen que enterarse.
 
 Los constructores importan de forma perezosa a proposito. Importar yfinance
 tarda casi un segundo, y el adaptador de una fuente que necesita una libreria que

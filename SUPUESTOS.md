@@ -244,11 +244,6 @@ al registro.
 pedir la validacion sola. El informe que se genera y se publica cada semana
 muestra por defecto solo el periodo de diseno.
 
-**El panel pide confirmacion y anota una vez por sesion** (v0.4.8). Streamlit
-reejecuta el script con cada clic; anotar cada ejecucion inflaria el contador y
-no anotar nada dejaba mirar sin rastro. La vista de senales ensena solo la
-ultima revision, sin historial de ordenes.
-
 **Operar no gasta la validacion.** Para decidir las ordenes de la semana hacen
 falta los datos de hoy, que caen en el periodo de validacion. Usarlos para
 decidir no es consultarlos: lo que gasta la validacion es mirar como le fue al

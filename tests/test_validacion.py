@@ -9,7 +9,8 @@ Tres fugas que gastaban el periodo reservado sin que quedara rastro:
   incluye la validacion, y no anotaba la consulta. Y el informe se genera y
   se publica cada semana.
 - El panel ensenaba la validacion (vistas "todo" y "validacion", y el
-  historial de ordenes de "Senales") sin anotar nada.
+  historial de ordenes de "Senales") sin anotar nada. El panel se retiro
+  despues: lo sustituye la web de la plataforma.
 """
 
 from __future__ import annotations
@@ -148,33 +149,3 @@ def test_backtest_validacion_anota_y_diseno_no(entorno):
     assert _n_consultas(consultas) == 0
     assert cli.main([*base, "backtest", "--periodo", "validacion"]) == 0
     assert _n_consultas(consultas) == 1
-
-
-# --------------------------------------------------------------------------
-# El panel anota una vez por sesion
-# --------------------------------------------------------------------------
-
-
-def test_el_panel_anota_una_sola_vez_por_sesion(tmp_path):
-    """Streamlit reejecuta todo con cada clic: abrir la validacion y mover un
-    filtro no pueden contar como varias consultas."""
-    registro = validacion_mod.RegistroConsultas(tmp_path / "consultas.json")
-    sesion: dict = {}
-    assert registro.anotar_una_vez(sesion, "validacion_abierta:x:todo", "panel --periodo todo")
-    for _ in range(5):
-        assert not registro.anotar_una_vez(sesion, "validacion_abierta:x:todo", "panel")
-    assert registro.n == 1
-
-    # Otra sesion (otro dia, otro navegador) es otra consulta.
-    assert registro.anotar_una_vez({}, "validacion_abierta:x:todo", "panel --periodo todo")
-    assert registro.n == 2
-
-
-def test_el_panel_pide_confirmacion_y_no_muestra_historial_en_senales():
-    """El panel no se puede ejecutar aqui, pero si comprobar su texto: la vista
-    Backtest para si no se ha abierto la validacion, y Senales ya no ensena el
-    historial de ordenes."""
-    codigo = (Path(__file__).resolve().parents[1] / "panel" / "app.py").read_text(encoding="utf-8")
-    assert "toca_validacion(periodo) and not abrir_validacion" in codigo
-    assert "anotar_una_vez(st.session_state" in codigo
-    assert "Historial de ordenes" not in codigo

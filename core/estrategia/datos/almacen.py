@@ -210,8 +210,8 @@ class VistaPuntual:
         """Historico hasta el corte como DataFrame. Comodo, pero lento.
 
         El bucle del backtest no lo usa: va por `serie()` y posiciones. Se
-        mantiene para el panel, los informes y los tests, donde la claridad
-        importa mas que la velocidad.
+        mantiene para los tests, donde la claridad importa mas que la
+        velocidad.
         """
         serie = self.serie(ticker)
         i = self.posicion_hasta(ticker)

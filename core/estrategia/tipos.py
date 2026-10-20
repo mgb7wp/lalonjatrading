@@ -272,8 +272,8 @@ class Operacion:
 class Evento:
     """Una linea del registro estructurado del backtest.
 
-    El informe y el panel se derivan de estos eventos y no de las tripas del
-    motor, para poder reconstruir despues por que una semana hizo lo que hizo.
+    El informe se deriva de estos eventos y no de las tripas del motor, para
+    poder reconstruir despues por que una semana hizo lo que hizo.
     """
 
     fecha: date

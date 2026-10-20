@@ -276,17 +276,6 @@ class CostesCfg(_Base):
             ) from exc
 
 
-class PanelCfg(_Base):
-    """Ajustes del panel interactivo.
-
-    `modo_publico` existe porque el panel se sirve desde la maquina de casa a
-    traves de un tunel y sin autenticacion: cualquiera que de con la URL puede
-    pulsar lo que haya. Lo caro se desactiva y las rutas locales no se ensenan.
-    """
-
-    modo_publico: bool = False
-
-
 class MetricasCfg(_Base):
     tasa_libre_riesgo_anual: float
     periodicidad_sharpe: Literal["diaria", "semanal"]
@@ -372,7 +361,6 @@ class Reglas(_Base):
     riesgo: RiesgoCfg
     costes: CostesCfg
     referencias_informe: list[str]
-    panel: PanelCfg = Field(default_factory=PanelCfg)
     metricas: MetricasCfg
     validacion: ValidacionCfg
     senales: SenalesCfg

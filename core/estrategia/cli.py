@@ -61,7 +61,7 @@ def _nombre_cache(args, cfg) -> str:
 
     Es el origen de los datos (`yfinance`, `eodhd+yfinance`, `sintetico`...), el
     mismo que queda anotado en la instantanea. Asi `datos` escribe justo donde
-    luego leen los demas comandos y el panel, que ofrece una opcion por carpeta.
+    luego leen los demas comandos.
     """
     return _enrutador(cfg, args.proveedor).origen
 

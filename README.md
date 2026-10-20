@@ -40,7 +40,7 @@ con el riesgo y la cartera medidos en euros.
 manda el documento. Los puntos donde el documento admite dos lecturas o no llega
 están resueltos y explicados en [`SUPUESTOS.md`](SUPUESTOS.md). De dónde salen
 los datos y cómo se añade una fuente nueva, en [`FUENTES.md`](FUENTES.md); cómo
-se publica el informe y se expone el panel, en [`DESPLIEGUE.md`](DESPLIEGUE.md).
+se despliega la plataforma, en [`docs/DEPLOYMENT.md`](docs/DEPLOYMENT.md).
 
 > **Esto no es un consejo de inversión.** Los parámetros de `config/reglas.yaml`
 > son un punto de partida razonable, no valores optimizados. Un backtest es una
@@ -49,7 +49,7 @@ se publica el informe y se expone el panel, en [`DESPLIEGUE.md`](DESPLIEGUE.md).
 ### Instalación
 
 ```bash
-pip install -e ".[panel,dev]"        # solo el motor
+pip install -e ".[dev]"        # solo el motor
 ```
 
 Python 3.11 o superior.
@@ -75,18 +75,14 @@ estrategia --proveedor yfinance validar
 # 6. Qué resuelve cada fuente y qué no (hazlo lo primero con datos reales)
 estrategia --proveedor yfinance diagnostico --anos 8 --detalle
 
-# 7. Informe HTML publicable, en sitio/
+# 7. Informe en Markdown y en HTML, este último en sitio/
 estrategia informe --formato ambos   # solo el periodo de diseño
-
-# 8. Panel interactivo
-streamlit run panel/app.py
 ```
 
 Sin `--proveedor`, cada comando usa el reparto de fuentes de `reglas.yaml`
 (`proveedor_datos`). Con `--proveedor {sintetico,yfinance,...}`, que va antes del
 subcomando, se fuerza una sola fuente para todo. Los datos se guardan en
-`datos/cache/<origen>/` (`yfinance`, `eodhd+yfinance`, `sintetico`...), que es lo
-que ofrece el panel. El informe se guarda en `datos/resultados/`; si está hecho
+`datos/cache/<origen>/` (`yfinance`, `eodhd+yfinance`, `sintetico`...). El informe se guarda en `datos/resultados/`; si está hecho
 con datos sintéticos, aunque sea en parte, nunca se copia a `sitio/`.
 
 ### Sin conexión: el proveedor sintético
@@ -207,7 +203,6 @@ core/estrategia/
   informe.py       Métricas, desgloses y avisos.
   informe_html.py  El informe como página autocontenida, con SVG en línea.
   cli.py           Comandos.
-panel/app.py       Panel de Streamlit. Solo lee y pinta.
 ```
 
 Las capas se respetan de arriba abajo y hay un test que lo comprueba recorriendo

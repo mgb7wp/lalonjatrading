@@ -24,7 +24,7 @@ import json
 from dataclasses import dataclass
 from datetime import date, datetime
 from pathlib import Path
-from typing import Any, MutableMapping
+from typing import Any
 
 import pandas as pd
 
@@ -133,20 +133,6 @@ class RegistroConsultas:
             json.dumps(consultas, indent=2, ensure_ascii=False), encoding="utf-8"
         )
         return len(consultas)
-
-    def anotar_una_vez(self, sesion: MutableMapping, clave: str, motivo: str) -> bool:
-        """Anota la consulta si esta sesion no la habia anotado ya.
-
-        El panel se reejecuta entero con cada clic: sin esto, mirar una vez la
-        validacion y mover un filtro contaria como diez consultas. `sesion` es
-        el estado de la sesion (en el panel, `st.session_state`). Devuelve si
-        ha anotado.
-        """
-        if sesion.get(clave):
-            return False
-        self.anotar(motivo)
-        sesion[clave] = True
-        return True
 
 
 # --------------------------------------------------------------------------

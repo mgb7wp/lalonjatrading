@@ -35,7 +35,7 @@ from .tipos import Aviso
 
 @dataclass
 class Informe:
-    """Todo lo que el panel o el HTML necesitan para pintarse."""
+    """Todo lo que el Markdown o el HTML necesitan para pintarse."""
 
     resumen: metricas_mod.Resumen
     por_ano: pd.DataFrame
