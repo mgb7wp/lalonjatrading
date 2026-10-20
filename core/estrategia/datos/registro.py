@@ -95,6 +95,12 @@ def _tiingo(cfg: Config) -> Fuente:
     return ProveedorTiingo(cfg)
 
 
+def _yahoo(cfg: Config) -> Fuente:
+    from .yahoo_proveedor import ProveedorYahoo
+
+    return ProveedorYahoo(cfg)
+
+
 def _b3(cfg: Config) -> Fuente:
     from .b3_proveedor import ProveedorB3
 
@@ -110,3 +116,4 @@ registrar("stooq", _stooq)
 registrar("cvm", _cvm)
 registrar("tiingo", _tiingo)
 registrar("b3", _b3)
+registrar("yahoo", _yahoo)
