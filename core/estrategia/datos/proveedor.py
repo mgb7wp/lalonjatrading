@@ -118,6 +118,12 @@ class Capacidades:
     incluye_deslistadas: bool = False
     mercados: tuple[str, ...] | None = None
     necesita_clave: bool = False
+    #: Si `cierre`, `apertura`, `maximo` y `minimo` vienen ajustados por
+    #: dividendos y splits, como pide el contrato. Una fuente que solo tiene el
+    #: precio de cotizacion (los ficheros oficiales de la B3, por ejemplo) sirve
+    #: para comprobar el bruto de otra, pero no puede rellenar el hueco de una
+    #: fuente ajustada: cada dividendo saldria como una caida.
+    precios_ajustados: bool = True
     #: Cuales de las magnitudes opcionales sirve esta fuente. No es adorno: el
     #: contrato exige que lo declarado venga con dato, asi que apuntarse una de
     #: mas convierte un mapeo roto en un error ruidoso en vez de en una columna

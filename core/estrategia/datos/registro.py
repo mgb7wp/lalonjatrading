@@ -89,6 +89,18 @@ def _stooq(cfg: Config) -> Fuente:
     return ProveedorStooq(cfg)
 
 
+def _tiingo(cfg: Config) -> Fuente:
+    from .tiingo_proveedor import ProveedorTiingo
+
+    return ProveedorTiingo(cfg)
+
+
+def _b3(cfg: Config) -> Fuente:
+    from .b3_proveedor import ProveedorB3
+
+    return ProveedorB3(cfg)
+
+
 registrar("sintetico", _sintetico)
 registrar("yfinance", _yfinance)
 registrar("eodhd", _eodhd)
@@ -96,3 +108,5 @@ registrar("sec", _sec)
 registrar("bce", _bce)
 registrar("stooq", _stooq)
 registrar("cvm", _cvm)
+registrar("tiingo", _tiingo)
+registrar("b3", _b3)

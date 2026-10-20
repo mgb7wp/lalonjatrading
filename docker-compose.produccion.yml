@@ -50,6 +50,8 @@ services:
       REDIS_URL: redis://redis:6379/0
       ENTORNO: produccion
       SEC_USER_AGENT: ${SEC_USER_AGENT}
+      # Opcional: respaldo de precios de EE. UU. (tarea M5).
+      TIINGO_API_KEY: ${TIINGO_API_KEY:-}
 
   web:
     build:

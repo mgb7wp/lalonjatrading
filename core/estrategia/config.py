@@ -74,6 +74,20 @@ class ProveedorDatosCfg(_Base):
     #: error: es informacion que la API declara.
     fundamentales_por_mercado: dict[str, str] = Field(default_factory=dict)
 
+    #: Fuentes de RESPALDO para los precios, en orden de preferencia. Si la
+    #: fuente de precios no devuelve nada de un valor —o falla entera—, se le
+    #: pide ese valor a la primera de estas que cubra su mercado. Hoy los cinco
+    #: mercados cuelgan de yfinance, que es un cliente no oficial y se rompe
+    #: cada vez que Yahoo cambia algo (tarea M5 de PLAN.md).
+    #:
+    #: Se pide el valor ENTERO, nunca los dias que falten: dos proveedores no
+    #: ajustan igual por dividendos, y una serie cosida de los dos tendria un
+    #: escalon falso en la costura que el motor leeria como movimiento.
+    #:
+    #: Vacio por defecto: ninguna fuente entra en el pipeline sin pasar antes
+    #: por `scripts/verify_sources.py` con red de verdad.
+    precios_respaldo: list[str] = Field(default_factory=list)
+
     def fuente_de(self, tipo: str, mercado: str | None = None) -> str:
         """Que fuente sirve ese tipo de dato, opcionalmente en un mercado."""
         if tipo == "fundamentales" and mercado:
@@ -95,6 +109,14 @@ class ProveedorDatosCfg(_Base):
             (self.precios, self.fundamentales, self.divisas, self.sectores)
         ):
             raise ValueError("proveedor_datos necesita al menos `nombre` o una fuente por tipo")
+        repetidas = {n for n in self.precios_respaldo if self.precios_respaldo.count(n) > 1}
+        if repetidas:
+            raise ValueError(f"precios_respaldo repite fuentes: {sorted(repetidas)}")
+        if (self.precios or self.nombre) in self.precios_respaldo:
+            raise ValueError("la fuente de precios no puede ser a la vez su propio respaldo")
+        if "sintetico" in self.precios_respaldo:
+            # Rellenaria con precios inventados los huecos de una descarga real.
+            raise ValueError("el proveedor sintetico no puede ser respaldo de datos reales")
         return self
 
 
@@ -570,6 +592,10 @@ class Config(_Base):
                         # fundamentales de EE. UU. a la SEC y los de Brasil a la
                         # CVM, por la red (riesgo RT-6 de docs/PROJECT_PLAN.md).
                         "fundamentales_por_mercado": {},
+                        # Lo mismo con el respaldo de precios: con una sola
+                        # fuente forzada no se sale a la red por ningun otro
+                        # sitio.
+                        "precios_respaldo": [],
                     }
                 )
             }

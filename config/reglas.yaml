@@ -20,6 +20,12 @@ proveedor_datos:
     us: sec
     br: cvm
 
+  # AÑADIDO v0.5 (tarea M5): fuentes de respaldo de los precios, en orden. Lo
+  # que la fuente de precios no devuelve se pide, valor a valor y entero, a la
+  # primera que cubra su mercado. Vacío hasta verificar cada fuente en el
+  # servidor (`python scripts/verify_sources.py --fuente tiingo`); ver FUENTES.md.
+  precios_respaldo: []
+
 cartera:
   divisa_base: EUR
   capital_inicial_eur: 10000

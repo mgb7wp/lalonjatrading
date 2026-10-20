@@ -369,6 +369,44 @@ def test_la_ingesta_carga_precios_y_fundamentales(bd_ingesta, cfg):
         assert s.execute(text("SELECT count(*) FROM fundamental_snapshot")).scalar() > 0
 
 
+def test_la_salud_dice_que_fuentes_han_puesto_los_precios(bd_ingesta, cfg):
+    """Con respaldo de precios (M5) un dia puede traer valores de dos fuentes.
+
+    `/health/data` lee `data_freshness.source`: si dijera solo la principal, un
+    respaldo que entra todos los dias pasaria por un dia normal.
+    """
+    import sqlalchemy as sa
+    from estrategia.datos.enrutador import Enrutador
+
+    from workers.pipeline import ingesta
+
+    cfg_uno = cfg.con_fuente_unica("sintetico")
+    enrutador = Enrutador(cfg_uno)
+    original = enrutador.precios
+
+    def con_respaldo(tickers, inicio, fin):
+        df = original(tickers, inicio, fin)
+        df.loc[df["ticker"] == tickers[0], "fuente"] = "tiingo"
+        return df
+
+    enrutador.precios = con_respaldo
+    with sa.orm.Session(bd_ingesta) as s:
+        ingesta.ejecutar(s, cfg_uno, enrutador, mercados=["es"], anos=2)
+        origen = s.execute(
+            text("SELECT source FROM data_freshness WHERE dataset = 'precios' AND market_id = 'es'")
+        ).scalar()
+    assert origen == "sintetico+tiingo"
+
+
+def test_el_origen_de_un_lote_sin_columna_de_fuente_es_la_principal():
+    import pandas as pd
+
+    from workers.pipeline.ingesta import origen_de
+
+    assert origen_de(pd.DataFrame(), "yfinance") == "yfinance"
+    assert origen_de(pd.DataFrame({"fuente": ["yfinance", "yfinance"]}), "x") == "yfinance"
+
+
 def test_ejecutarla_dos_veces_no_cambia_una_sola_fila(bd_ingesta, cfg):
     """El criterio de aceptacion de la FASE 3, comprobado y no prometido.
 
