@@ -93,7 +93,7 @@ def main(argv: list[str] | None = None) -> int:
             anos=args.anos or ingesta.ANOS_HISTORICO,
             forzar=args.forzar,
         )
-        rancios = ingesta.marcar_rancios(sesion, ingesta._umbrales_rancio(cfg))
+        rancios = ingesta.marcar_rancios(sesion, ingesta.umbrales_rancio(cfg))
 
         # Siempre despues de la descarga y en la misma ejecucion. Un indicador
         # es una derivacion determinista de los precios: si estos se actualizan

@@ -96,7 +96,7 @@ def ejecutar_mercado(mercado_id: str, codigo_calendario: str) -> None:
             con_divisas=False,
         )
         calculados = indicadores.ejecutar(sesion, cfg, mercados=[mercado_id])
-        ingesta.marcar_rancios(sesion, ingesta._umbrales_rancio(cfg))
+        ingesta.marcar_rancios(sesion, ingesta.umbrales_rancio(cfg))
 
     for r in resultados:
         log.info("%s", r)

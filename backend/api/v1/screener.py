@@ -22,21 +22,18 @@ from __future__ import annotations
 
 import datetime as dt
 import enum
-from typing import Annotated, Any
+from typing import Any
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, Field
 from sqlalchemy import select
-from sqlalchemy.orm import Session
 
 from ...db.models import Score, Security, Signal
 from ...db.models.enums import AssetType
-from ...db.session import sesion
-from .rankings import _deduplicar, _version, _volumenes, version_puntuada
+from ..consultas import deduplicar, perfil, version_puntuada, volumenes
+from ..deps import BD
 
 router = APIRouter(prefix="/screener", tags=["screener"])
-
-BD = Annotated[Session, Depends(sesion)]
 
 TOPE_MAXIMO = 200
 
@@ -154,7 +151,7 @@ def _condicion(f: Filtro):
 def filtrar(peticion: Peticion, bd: BD) -> Respuesta:
     corte = peticion.fecha or dt.date.today()
 
-    if _version(bd, peticion.modelo) is None:
+    if perfil(bd, peticion.modelo) is None:
         raise HTTPException(status_code=404, detail=f"no existe el modelo '{peticion.modelo}'")
 
     if peticion.orden not in CAMPOS:
@@ -185,7 +182,7 @@ def filtrar(peticion: Peticion, bd: BD) -> Respuesta:
 
     filas = [(s, v) for s, v in bd.execute(consulta).all()]
     if peticion.deduplicar:
-        filas = _deduplicar(filas, _volumenes(bd, dia))
+        filas = deduplicar(filas, volumenes(bd, dia))
 
     columna = CAMPOS[peticion.orden].key
     conocidos = [(s, v) for s, v in filas if getattr(s, columna) is not None]

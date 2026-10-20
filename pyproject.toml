@@ -31,7 +31,11 @@ dependencies = [
 # La plataforma SaaS. Se instala aparte para que quien solo quiera el motor no
 # arrastre un servidor web ni un driver de Postgres.
 backend = [
-    "fastapi>=0.110,<1",
+    "fastapi>=0.117,<1",
+    # Starlette viene con FastAPI, pero se declara por un nombre: el 422 se
+    # escribe `HTTP_422_UNPROCESSABLE_CONTENT`, que llego en la 0.48. El nombre
+    # anterior sigue funcionando con un aviso de obsoleto y desaparecera.
+    "starlette>=0.48",
     "uvicorn[standard]>=0.27",
     "pydantic-settings>=2.2,<3",
     "sqlalchemy>=2.0,<3",

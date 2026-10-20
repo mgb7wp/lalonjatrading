@@ -57,20 +57,6 @@ class CorporateActionType(enum.StrEnum):
     DELISTING = "delisting"
 
 
-class Pillar(enum.StrEnum):
-    """Los cuatro pilares ortogonales que agregan al score global.
-
-    Los sub-scores (crecimiento, calidad, valoracion, momentum...) descomponen
-    un pilar y se publican, pero NO suman aparte: hacerlo contaria el momentum
-    dentro de `technical` y otra vez por su cuenta. Decision D-3.
-    """
-
-    FUNDAMENTAL = "fundamental"
-    TECHNICAL = "technical"
-    SENTIMENT = "sentiment"
-    RISK = "risk"
-
-
 class Cohort(enum.StrEnum):
     """Sobre que conjunto se percentilo una puntuacion.
 

@@ -70,8 +70,8 @@ from ...db.models import (
 )
 from ...db.models.enums import TransactionType
 from ...db.models.market_data import FxRate
+from ..consultas import valor_por_ticker, version_puntuada
 from ..deps import BD, Actual, MisLimites, comprobar_cupo
-from .rankings import version_puntuada
 
 router = APIRouter(prefix="/portfolios", tags=["carteras"])
 
@@ -230,18 +230,6 @@ def _mia(bd: Session, usuario: User, cartera_id: int) -> Portfolio:
     return cartera
 
 
-def _valor_por_ticker(bd: Session, ticker: str) -> Security:
-    valor = bd.scalars(
-        select(Security).where(func.upper(Security.ticker) == ticker.upper()).limit(1)
-    ).first()
-    if valor is None:
-        raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-            detail=f"no conozco el valor {ticker!r}",
-        )
-    return valor
-
-
 def _fx_del_dia(bd: Session, divisa: str, base: str, fecha: dt.date) -> Decimal | None:
     """Cambio `divisa -> base` en esa fecha, arrastrando el ultimo conocido.
 
@@ -333,14 +321,14 @@ def _resolver(
     bd: Session, cartera: Portfolio, cuerpo: TransaccionNueva
 ) -> tuple[Security, str, Decimal]:
     """Valor, divisa y cambio congelado de una transaccion que entra."""
-    valor = _valor_por_ticker(bd, cuerpo.ticker)
+    valor = valor_por_ticker(bd, cuerpo.ticker)
     divisa = (cuerpo.divisa or valor.currency_code).upper()
     if cuerpo.fx is not None:
         return valor, divisa, cuerpo.fx
     fx = _fx_del_dia(bd, divisa, cartera.base_currency, cuerpo.fecha)
     if fx is None:
         raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
             detail=(
                 f"no hay tipo de cambio {divisa} → {cartera.base_currency} en o antes de "
                 f"{cuerpo.fecha}; pasa el tuyo en `fx` (el del extracto del bróker)"
@@ -612,7 +600,7 @@ def fijar_objetivo(
     suma = sum(cuerpo.pesos.values())
     if cuerpo.pesos and not (0.99 <= suma <= 1.01):
         raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
             detail=f"los pesos objetivo suman {suma:.4f} y tienen que sumar 1",
         )
 
@@ -622,10 +610,10 @@ def fijar_objetivo(
     for ticker, peso in cuerpo.pesos.items():
         if not 0 <= peso <= 1:
             raise HTTPException(
-                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
                 detail=f"el peso objetivo de {ticker} está fuera de [0, 1]",
             )
-        valor = _valor_por_ticker(bd, ticker)
+        valor = valor_por_ticker(bd, ticker)
         bd.add(
             PortfolioPosition(
                 portfolio_id=cartera.id,

@@ -15,18 +15,14 @@ acabaria con una clave de API en el repositorio.
 from __future__ import annotations
 
 from functools import lru_cache
-from pathlib import Path
 
 from pydantic_settings import BaseSettings, SettingsConfigDict
-
-RAIZ = Path(__file__).resolve().parents[1]
 
 
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8", extra="ignore")
 
     entorno: str = "desarrollo"
-    debug: bool = False
 
     database_url: str = "postgresql+psycopg://lalonja:lalonja@localhost:5432/lalonja"
     redis_url: str = "redis://localhost:6379/0"
@@ -39,10 +35,6 @@ class Settings(BaseSettings):
 
     cors_origenes: list[str] = ["http://localhost:3000"]
 
-    # Directorio de datos del nucleo (Parquet). El nucleo lo gestiona; la API
-    # solo necesita saber donde esta para informar de frescura en /health/data.
-    datos_dir: Path = RAIZ / "datos"
-
     # Capa LLM (FASE 16). Sin clave, la API arranca igual y las explicaciones se
     # declaran no disponibles: un despliegue sin IA es un despliegue valido, no
     # uno roto. El modelo se puede cambiar sin tocar codigo.
@@ -53,6 +45,19 @@ class Settings(BaseSettings):
     @property
     def es_produccion(self) -> bool:
         return self.entorno == "produccion"
+
+
+def version() -> str:
+    """La version instalada del paquete (`pyproject.toml`). La publican la
+    documentacion de la API y `/health`; antes la primera llevaba un numero
+    escrito a mano que se habia quedado dos versiones atras."""
+    from importlib.metadata import PackageNotFoundError
+    from importlib.metadata import version as version_de
+
+    try:
+        return version_de("lalonja")
+    except PackageNotFoundError:
+        return "desconocida"
 
 
 @lru_cache

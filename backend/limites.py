@@ -33,10 +33,6 @@ from .db.models.enums import SubscriptionPlan
 
 log = logging.getLogger("limites")
 
-#: Orden de los planes. Lo usa la puerta de plan para "este endpoint pide PRO o
-#: mas", que es lo que se quiere decir casi siempre.
-ORDEN_PLANES = (SubscriptionPlan.FREE, SubscriptionPlan.PRO, SubscriptionPlan.PREMIUM)
-
 
 @dataclass(frozen=True, slots=True)
 class Limites:
@@ -93,13 +89,6 @@ def limites_de(plan: str) -> Limites:
     return LIMITES.get(plan, LIMITES[SubscriptionPlan.FREE.value])
 
 
-def al_menos(plan_usuario: str, minimo: SubscriptionPlan) -> bool:
-    try:
-        return ORDEN_PLANES.index(SubscriptionPlan(plan_usuario)) >= ORDEN_PLANES.index(minimo)
-    except ValueError:
-        return False
-
-
 # ---------------------------------------------------------------------------
 # Limitador de peticiones
 # ---------------------------------------------------------------------------
@@ -112,7 +101,9 @@ class _SinRedis(RuntimeError):
 _cliente = None
 
 
-def _redis():
+def cliente_redis():
+    """El cliente de Redis, uno por proceso. Lo comparten el limitador y la
+    lista negra de tokens de `api/v1/auth.py`."""
     global _cliente
     if _cliente is None:
         import redis
@@ -130,7 +121,7 @@ def _contar(clave: str, ventana: int) -> int:
     por minuto, eso son 10 intentos en un instante, no una barra libre.
     """
     try:
-        r = _redis()
+        r = cliente_redis()
         cubo = int(time.time()) // ventana
         k = f"limite:{clave}:{cubo}"
         tuberia = r.pipeline()

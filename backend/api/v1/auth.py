@@ -37,8 +37,9 @@ from sqlalchemy import func, select
 from ...config import settings
 from ...db.models import User
 from ...db.models.enums import SubscriptionPlan
-from ...limites import limitar
+from ...limites import cliente_redis, limitar
 from ...seguridad import (
+    LONGITUD_MINIMA,
     ContrasenaDebil,
     Proposito,
     TokenInvalido,
@@ -68,20 +69,16 @@ def _revocar(jti: str, segundos: int) -> None:
     Si Redis no responde, esto REVIENTA en lugar de seguir: un cierre de sesion
     que no revoca nada pero dice que si es peor que uno que falla.
     """
-    from ...limites import _redis
-
-    _redis().setex(f"{_REVOCADOS}{jti}", max(segundos, 1), "1")
+    cliente_redis().setex(f"{_REVOCADOS}{jti}", max(segundos, 1), "1")
 
 
 def _esta_revocado(jti: str) -> bool:
-    from ...limites import _redis
-
-    return bool(_redis().exists(f"{_REVOCADOS}{jti}"))
+    return bool(cliente_redis().exists(f"{_REVOCADOS}{jti}"))
 
 
 class Registro(BaseModel):
     email: EmailStr
-    contrasena: str = Field(min_length=12, max_length=200)
+    contrasena: str = Field(min_length=LONGITUD_MINIMA, max_length=200)
 
 
 class Credenciales(BaseModel):
@@ -106,7 +103,7 @@ class SolicitudReinicio(BaseModel):
 
 class ConfirmacionReinicio(BaseModel):
     token: str
-    contrasena: str = Field(min_length=12, max_length=200)
+    contrasena: str = Field(min_length=LONGITUD_MINIMA, max_length=200)
 
 
 def _emitir_par(usuario: User) -> Tokens:
@@ -127,7 +124,7 @@ def registrar(datos: Registro, bd: BD) -> Tokens:
         hash_ = cifrar(datos.contrasena)
     except ContrasenaDebil as exc:
         raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(exc)
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT, detail=str(exc)
         ) from exc
 
     # `citext` no esta activado, asi que la unicidad se comprueba en minusculas
@@ -261,7 +258,7 @@ def confirmar_reinicio(datos: ConfirmacionReinicio, bd: BD) -> Tokens:
         usuario.password_hash = cifrar(datos.contrasena)
     except ContrasenaDebil as exc:
         raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(exc)
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT, detail=str(exc)
         ) from exc
 
     # Un solo uso: se gasta en cuanto sirve.

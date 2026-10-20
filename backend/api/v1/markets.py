@@ -11,22 +11,18 @@ referencia, no un despliegue.
 
 from __future__ import annotations
 
-from typing import Annotated
-
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, ConfigDict
 from sqlalchemy import func, select
-from sqlalchemy.orm import Session
 
 from ...db.models import Market as MarketRow
 from ...db.models import Security
 from ...db.models.enums import AssetType
-from ...db.session import sesion
+from ..deps import BD
 
 router = APIRouter(prefix="/markets", tags=["markets"])
 
 #: Una sesion por peticion, inyectada por FastAPI.
-BD = Annotated[Session, Depends(sesion)]
 
 
 class Market(BaseModel):
