@@ -182,6 +182,8 @@ que es más fiable que buscar números en el código.
 ```
 core/estrategia/
   tipos.py         Estructuras y enumeraciones compartidas. No importa nada del paquete.
+  constantes.py    Constantes del dominio, que no son parámetros de la estrategia.
+  errores.py       Errores propios, con mensajes que el CLI enseña sin traza.
   config.py        Carga y valida los cuatro YAML. Único sitio que lee configuración.
   indicadores.py   Medias, ATR de Wilder y momentum, precalculados por valor.
   calendario.py    Sesiones por mercado y corte semanal. Único sitio que habla con exchange_calendars.
@@ -203,6 +205,12 @@ core/estrategia/
   informe.py       Métricas, desgloses y avisos.
   informe_html.py  El informe como página autocontenida, con SVG en línea.
   cli.py           Comandos.
+
+Lo que el motor da a la plataforma (scores, señales e indicadores de la web):
+  catalogo.py      Catálogo de indicadores técnicos, con registro.
+  grupos.py        Los cinco grupos fundamentales y su normalización.
+  scoring.py       De los factores a los pilares y al score global.
+  senales.py       Señales y régimen de mercado.
 ```
 
 Las capas se respetan de arriba abajo y hay un test que lo comprueba recorriendo
