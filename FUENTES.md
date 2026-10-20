@@ -86,6 +86,15 @@ que venir de otra fuente. **No se ha podido ejecutar** sin clave: se escribió a
 partir del cargador de Vibe-Trading y se probó con respuestas en el formato
 documentado.
 
+### `yahoo`
+
+El gráfico v8 de Yahoo Finance pedido directamente, **sin la librería
+yfinance**: los cinco mercados, los índices de régimen y las referencias del
+informe, con el mismo ajuste por dividendos que el adaptador de yfinance. Es
+**respaldo** para cuando la librería se rompe —ya ha pasado al cambiar Yahoo
+algo—, no para cuando Yahoo bloquea: es el mismo servidor, y si da 429 a uno se
+lo da al otro. Adaptado del cliente de Vibe-Trading.
+
 ### `b3`
 
 Los ficheros oficiales de la bolsa de Brasil (COTAHIST): gratis, sin clave y
@@ -104,8 +113,12 @@ primera de la lista que cubra su mercado:
 ```yaml
 proveedor_datos:
   nombre: yfinance
-  precios_respaldo: [tiingo]
+  precios_respaldo: [tiingo, yahoo]
 ```
+
+Con esa lista, si yfinance falla, las acciones de EE. UU. salen de Tiingo, y el
+resto (los otros cuatro mercados, el `^GSPC` que Tiingo no tiene y las
+referencias) del gráfico de Yahoo.
 
 Tres reglas:
 

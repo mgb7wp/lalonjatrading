@@ -53,15 +53,17 @@ Y el hecho que condiciona el negocio, no el desarrollo:
 | **yfinance** | ES, US, DE, IN, BR | no | 0 € | **EN USO, probado** | Ajustado y bruto. Revisa el pasado hacia atrás: por eso se guarda `fecha_descarga`. Sin deslistadas. Uso no comercial. |
 | ~~**Stooq**~~ | — | no | 0 € | ❌ **DESCARTADA 16/09/2026** | Desafío anti-bot con prueba de trabajo en JavaScript: cero datos en los cinco mercados. |
 | **Tiingo** | US | sí (gratis) | 0 € (cuota por hora) | adaptador escrito, **POR VERIFICAR** | Respaldo de precios de EE. UU. (`tiingo_proveedor.py`). Ajustado (`adj*`) y bruto. Sin índices: el `^GSPC` tiene que venir de otra fuente. |
+| **Yahoo directo** | ES, US, DE, IN, BR | no | 0 € | adaptador escrito, **POR VERIFICAR** | El gráfico v8 sin la librería yfinance (`yahoo_proveedor.py`). Mismo servidor que yfinance: respalda si se rompe la librería, no si Yahoo bloquea. |
 | **B3 (COTAHIST)** | BR | no | 0 € | adaptador escrito, **POR VERIFICAR** | Ficheros oficiales de la bolsa de Brasil (`b3_proveedor.py`). **Sin ajustar**: no puede ser respaldo; sirve para comprobar el bruto de yfinance (M4). Cada año es un fichero de decenas de megas. |
 | **Alpha Vantage** | global | sí | 0 € (cuota muy baja) | sin adaptador | La cuota gratuita del plan básico es del orden de decenas de peticiones **al día**. Con 140 valores × 5 mercados no es viable como fuente principal. |
 | **EODHD** | global | sí | ~20-80 €/mes | sin clave | Candidata principal para comercializar. Adaptador ya escrito (`eodhd_proveedor.py`), **nunca ejecutado con clave real**. |
 
 **Recomendación:** yfinance como dueña. **Respaldo en camino** (tarea M5 de
 `PLAN.md`): el enrutador ya sabe pedir a `proveedor_datos.precios_respaldo` lo
-que yfinance no devuelve, valor a valor y entero. Tiingo cubre EE. UU.; para los
-cinco mercados hace falta otra fuente. La lista sigue vacía hasta verificar
-cada una con red real (`python scripts/verify_sources.py --fuente tiingo`).
+que yfinance no devuelve, valor a valor y entero. Tiingo cubre EE. UU. con un
+servidor distinto; el Yahoo directo cubre los cinco mercados, pero desde el
+mismo servidor que yfinance. La lista sigue vacía hasta verificar cada una con
+red real (`python scripts/verify_sources.py --fuente tiingo` y `--fuente yahoo`).
 
 ### 2.2 Tipos de cambio
 

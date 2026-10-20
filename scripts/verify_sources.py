@@ -372,6 +372,52 @@ def verificar_tiingo(cfg, informe: Informe) -> None:
     _comparar_ajuste_dividendos(cfg, informe, "tiingo", fuente, inicio, fin)
 
 
+def verificar_yahoo(cfg, informe: Informe) -> None:
+    """Respaldo de precios de los cinco mercados sin la libreria yfinance (M5).
+
+    Tiene que resolver un valor de cada mercado, los indices de regimen y las
+    referencias del informe, ajustar por dividendos igual que yfinance y cumplir
+    el contrato de precios. Es el mismo servidor que yfinance: si este da 429,
+    esta fuente tambien, y eso no dice nada de ella.
+    """
+    from estrategia.datos import contrato
+    from estrategia.datos.yahoo_proveedor import ProveedorYahoo
+
+    fuente = ProveedorYahoo(cfg)
+    fin = dt.date.today()
+    inicio = fin - dt.timedelta(days=365)
+    simbolos = {f"valor de {m}": t for m, t in MUESTRA.items()}
+    simbolos |= {f"indice de {m}": t for m, t in cfg.reglas.tecnico.indices_regimen.items()}
+    simbolos |= {f"referencia {n}": r.ticker for n, r in cfg.implementacion.referencias.items()}
+
+    lotes = []
+    for prueba, ticker in simbolos.items():
+        df = _probar(
+            informe,
+            "yahoo",
+            f"{prueba} ({ticker})",
+            lambda t=ticker: fuente.precios([t], inicio, fin),
+        )
+        if df is None:
+            continue
+        if df.empty:
+            informe.anotar("yahoo", f"{prueba} ({ticker})", "fallo", "sin datos")
+        else:
+            informe.anotar("yahoo", f"{prueba} ({ticker})", "ok", f"{len(df)} sesiones")
+            lotes.append(df)
+    if lotes:
+        import pandas as pd
+
+        inf = contrato.verificar_precios(pd.concat(lotes, ignore_index=True), "yahoo")
+        informe.anotar(
+            "yahoo",
+            "contrato de precios",
+            "ok" if inf.cumple else "fallo",
+            "; ".join(str(i) for i in inf.incumplimientos),
+        )
+    _comparar_ajuste_dividendos(cfg, informe, "yahoo", fuente, inicio, fin)
+
+
 #: Valores de Brasil con los que se compara el bruto de yfinance con el oficial.
 #: UGPA3 es uno de los casos conocidos de la tarea M4.
 TESTIGOS_B3 = ["PETR4.SA", "VALE3.SA", "UGPA3.SA"]
@@ -581,6 +627,7 @@ VERIFICADORES = {
     "bce": verificar_bce,
     "stooq": verificar_stooq,
     "tiingo": verificar_tiingo,
+    "yahoo": verificar_yahoo,
     "b3": verificar_b3,
     "yfinance": verificar_yfinance,
 }

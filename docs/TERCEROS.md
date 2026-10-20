@@ -12,6 +12,7 @@ cita aquí con su licencia, y en el propio fichero adaptado.
 | Fichero de La Lonja | Origen en Vibe-Trading | Qué se tomó |
 |---|---|---|
 | `core/estrategia/datos/tiingo_proveedor.py` | `agent/backtest/loaders/tiingo_loader.py` | Formato de la respuesta de Tiingo y la regla de no mezclar barras ajustadas con barras sin ajustar en una misma serie |
+| `core/estrategia/datos/yahoo_proveedor.py` | `agent/backtest/loaders/yahoo_client.py` | La petición al gráfico v8 de Yahoo y el ajuste por dividendos con `adjclose / close` |
 | `core/estrategia/datos/b3_proveedor.py` | `agent/src/br_data/cotahist.py` | Posiciones de los campos del fichero COTAHIST de la B3 y reglas de lectura (decimales implícitos, factor de cotización, solo reales) |
 
 El código se ha reescrito sobre el contrato de fuentes de este proyecto
